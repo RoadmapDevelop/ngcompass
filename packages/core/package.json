@@ -28,7 +28,10 @@
         "clean": "rimraf dist"
     },
     "dependencies": {
-        "@ngcompass/common": "workspace:*"
+        "@ngcompass/common": "workspace:*",
+        "cacache": "^20.0.3",
+        "lru-cache": "^11.2.5",
+        "write-file-atomic": "^7.0.0"
     },
     "keywords": [
         "angular",
@@ -36,5 +39,10 @@
         "core"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "@types/cacache": "^20.0.0",
+        "@types/lru-cache": "^7.10.10",
+        "@types/write-file-atomic": "^4.0.3"
+    }
 }
