@@ -1,0 +1,41 @@
+{
+  "name": "ngcompass",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
+  "scripts": {
+    "build": "pnpm -r --filter './packages/*' run build",
+    "test": "pnpm -r --filter './packages/*' run test",
+    "lint": "pnpm -r --filter './packages/*' run lint",
+    "clean": "pnpm -r --filter './packages/*' run clean && rm -rf node_modules",
+    "dev": "pnpm -r --parallel --filter './packages/*' run dev",
+    "typecheck": "pnpm -r --filter './packages/*' run typecheck"
+  },
+  "keywords": [
+    "angular",
+    "linter",
+    "static-analysis",
+    "code-quality",
+    "architecture",
+    "performance",
+    "ssr"
+  ],
+  "author": "ngcompass",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "devDependencies": {
+    "@jest/globals": "^30.2.0",
+    "@types/jest": "^30.0.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "jest": "^30.2.0",
+    "prettier": "^3.8.1",
+    "rimraf": "^6.1.2",
+    "ts-jest": "^29.4.6",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3"
+  }
+}
