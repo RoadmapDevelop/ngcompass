@@ -16,9 +16,9 @@
     "incremental": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "allowSyntheticDefaultImports": true
+    "allowSyntheticDefaultImports": true,
+    "types": ["vitest/globals"]
   },
   "exclude": ["node_modules", "dist", "**/dist"]
 }

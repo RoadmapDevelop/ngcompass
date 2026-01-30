@@ -3,13 +3,20 @@
   "version": "0.0.0",
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
+  "type": "module",
   "scripts": {
-    "build": "pnpm -r --filter './packages/*' run build",
-    "test": "pnpm -r --filter './packages/*' run test",
-    "lint": "pnpm -r --filter './packages/*' run lint",
-    "clean": "pnpm -r --filter './packages/*' run clean && rm -rf node_modules",
-    "dev": "pnpm -r --parallel --filter './packages/*' run dev",
-    "typecheck": "pnpm -r --filter './packages/*' run typecheck"
+    "build": "pnpm -r run build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest run --coverage",
+    "lint": "pnpm -r run lint",
+    "clean": "pnpm -r run clean && rimraf node_modules",
+    "dev": "pnpm -r --parallel run dev",
+    "typecheck": "pnpm -r run typecheck",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm run build && changeset publish"
   },
   "keywords": [
     "angular",
@@ -27,15 +34,18 @@
     "pnpm": ">=8.0.0"
   },
   "devDependencies": {
-    "@jest/globals": "^30.2.0",
-    "@types/jest": "^30.0.0",
+    "@changesets/cli": "^2.29.8",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
+    "@vitest/coverage-v8": "^4.0.18",
+    "@vitest/ui": "^4.0.18",
+    "eslint": "^8.57.1",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
-    "jest": "^30.2.0",
     "prettier": "^3.8.1",
     "rimraf": "^6.1.2",
-    "ts-jest": "^29.4.6",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
   }
 }

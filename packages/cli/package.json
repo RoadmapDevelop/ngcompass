@@ -1,0 +1,49 @@
+{
+    "name": "@ngcompass/cli",
+    "version": "0.0.1",
+    "description": "Command line interface for ngcompass",
+    "bin": {
+        "ngcompass": "./dist/index.js"
+    },
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "test": "vitest run --passWithNoTests",
+        "test:watch": "vitest --passWithNoTests",
+        "test:ui": "vitest --ui --passWithNoTests",
+        "test:coverage": "vitest run --coverage --passWithNoTests",
+        "lint": "eslint src --ext .ts",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "dependencies": {
+        "@ngcompass/common": "workspace:*",
+        "@ngcompass/core": "workspace:*",
+        "@ngcompass/rules": "workspace:*",
+        "@ngcompass/reporters": "workspace:*",
+        "commander": "^11.0.0",
+        "chalk": "^5.0.0",
+        "ora": "^7.0.0"
+    },
+    "keywords": [
+        "angular",
+        "analysis",
+        "cli"
+    ],
+    "author": "ngcompass",
+    "license": "MIT"
+}

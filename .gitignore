@@ -8,7 +8,6 @@ dist
 
 # Testing
 coverage
-.jest-cache
 
 # IDE
 .vscode/*

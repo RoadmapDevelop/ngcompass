@@ -1,0 +1,46 @@
+{
+    "name": "@ngcompass/common",
+    "version": "0.0.1",
+    "description": "Common types and utilities for Angular Analyzer",
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "devDependencies": {
+        "@types/jest": "^30.0.0",
+        "eslint": "^8.57.0",
+        "jest": "^30.2.0",
+        "rimraf": "^6.1.2",
+        "ts-jest": "^29.4.6",
+        "tsup": "^8.5.1",
+        "typescript": "^5.9.3"
+    },
+    "scripts": {
+        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "test": "vitest run --passWithNoTests",
+        "test:watch": "vitest --passWithNoTests",
+        "test:ui": "vitest --ui --passWithNoTests",
+        "test:coverage": "vitest run --coverage --passWithNoTests",
+        "lint": "eslint src --ext .ts",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist"
+    },
+    "keywords": [
+        "angular",
+        "analyzer",
+        "common"
+    ],
+    "author": "ngcompass",
+    "license": "MIT"
+}
