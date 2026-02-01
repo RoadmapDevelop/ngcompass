@@ -6,9 +6,7 @@
 
 // Core types
 export * from './constants';
-export * from './utils';
 export * from './interfaces';
 export * from './errors';
 export * from './types';
-
-
+export * from './ast/utils';
