@@ -27,6 +27,7 @@ export interface SyncDriver<T> {
  */
 export interface MemoryDriverConfig {
     maxItems?: number;
+    maxSize?: number; // Maximum size in bytes
     ttl?: number;
 }
 

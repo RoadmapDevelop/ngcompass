@@ -3,7 +3,7 @@
     "version": "0.0.1",
     "description": "Command line interface for ngcompass",
     "bin": {
-        "ngcompass": "./dist/index.js"
+        "compass": "./dist/index.js"
     },
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
@@ -20,7 +20,7 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+        "build": "tsup src/index.ts src/bin/ngcompass.ts --format cjs,esm --dts --clean",
         "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
@@ -33,10 +33,10 @@
     "dependencies": {
         "@ngcompass/common": "workspace:*",
         "@ngcompass/core": "workspace:*",
-        "@ngcompass/rules": "workspace:*",
         "@ngcompass/reporters": "workspace:*",
-        "commander": "^11.0.0",
+        "@ngcompass/rules": "workspace:*",
         "chalk": "^5.0.0",
+        "commander": "^11.0.0",
         "ora": "^7.0.0"
     },
     "keywords": [
@@ -45,5 +45,8 @@
         "cli"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^25.1.0"
+    }
 }

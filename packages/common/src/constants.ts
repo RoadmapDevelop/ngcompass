@@ -3,7 +3,8 @@
  */
 
 export const TOOL_NAME = 'ngcompass';
-
+export const PACKAGE_VERSION = "v0.0.0";
+export const CACHE_VERSION = '1.0.0';
 export const CONFIG_FILE_NAMES = [
     `.${TOOL_NAME}rc.json`,
     `.${TOOL_NAME}rc.js`,
