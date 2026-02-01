@@ -1,2 +1,2 @@
-export const cli = '@ngcompass/cli';
+export { run } from './bin/ngcompass.js';
 // TODO: Implement CLI entry point

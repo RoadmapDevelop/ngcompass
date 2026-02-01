@@ -28,7 +28,8 @@
         "clean": "rimraf dist"
     },
     "dependencies": {
-        "@ngcompass/common": "workspace:*"
+        "@ngcompass/common": "workspace:*",
+        "picocolors": "^1.1.1"
     },
     "keywords": [
         "angular",
@@ -36,5 +37,8 @@
         "reporters"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^25.1.0"
+    }
 }
