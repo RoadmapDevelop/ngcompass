@@ -10,6 +10,15 @@ export const createMemoryDriver = <T>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cache = new LRUCache<string, any>({
         max: config.maxItems ?? 500,
+        maxSize: config.maxSize ?? 50 * 1024 * 1024, // Default 50MB
+        sizeCalculation: (value) => {
+            // Rough estimate using JSON length. Fast enough for writes.
+            try {
+                return JSON.stringify(value).length;
+            } catch {
+                return 1000; // Fallback for circular/non-serializable
+            }
+        },
         ttl: config.ttl,
     });
 

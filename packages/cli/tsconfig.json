@@ -6,7 +6,10 @@
     "composite": false,
     "incremental": false,
     "moduleResolution": "bundler",
-    "module": "esnext"
+    "module": "esnext",
+    "types": ["vitest/globals" , "node"],
+    "skipLibCheck": true,
+    "lib": ["ESNext"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
