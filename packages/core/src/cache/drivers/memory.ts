@@ -36,5 +36,10 @@ export const createMemoryDriver = <T>(
         },
 
         clear: (): void => cache.clear(),
+
+        getStats: () => ({
+            entries: cache.size,
+            size: cache.calculatedSize
+        }),
     };
 };

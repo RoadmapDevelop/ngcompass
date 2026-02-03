@@ -21,7 +21,7 @@ export async function validateConfig(options: ValidateConfigOptions = {}): Promi
             report: {
                 valid: false,
                 issues: [{
-                    code: "ERR_CONF_SEMANTIC",
+                    code: "error-conf-semantic",
                     message: error.message,
                     path: [],
                     severity: "error"

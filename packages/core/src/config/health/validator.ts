@@ -33,14 +33,14 @@ async function validateSingleBlock(
     const result = AnalyzerConfigSchema.safeParse(config);
 
     if (!result.success) {
-        // Map Zod issues directly to ConfigIssue with retrieved information
         const schemaIssues: ConfigIssue[] = result.error.issues.map(issue => ({
-            code: issue.code.replace(/_/g, "-"),
+            code: issue.code.replace(/_/g, '-'),
             message: issue.message,
             path: [...basePath, ...issue.path] as (string | number)[],
-            severity: "error",
+            severity: 'error',
             file: filePath
         }));
+
         allIssues.push(...schemaIssues);
 
         // Best effort: continue with partial validation if possible

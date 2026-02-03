@@ -1,6 +1,7 @@
 import cacache from 'cacache';
 import v8 from 'node:v8';
 import { AsyncDriver, DiskDriverConfig } from './types.js';
+import { getDirectoryStats } from '../utils/fs.js';
 
 /**
  * Creates an asynchronous disk storage driver backed by cacache.
@@ -62,6 +63,14 @@ export const createDiskDriver = <T>(
         prune: async (): Promise<void> => {
             // cleans up old/unused entries
             await cacache.verify(cachePath);
+        },
+
+        getStats: async () => {
+            // cacache stores content in content-addressable blobs.
+            // Counting entries is hard without listing keys.
+            // Ideally we'd use cacache.ls() but that's slow.
+            // For "size", getting the folder size is accurate enough for user consumption.
+            return getDirectoryStats(cachePath);
         }
     };
 };

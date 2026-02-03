@@ -8,6 +8,19 @@ import { createResultCache, ResultCache } from './services/result-cache.js';
 import { createConfigCache, ConfigCache } from './services/config-cache.js';
 import { CacheConfig } from './drivers/types.js';
 import { computeCompositeHash } from './services/hashing.js';
+import { CACHE_VERSION } from './constants.js';
+
+export interface CacheInfo {
+    ast: {
+        l1: { entries: number; maxEntries: number; size: number };
+        l2: { entries: number; size: number };
+    };
+    config: { entries: number; size: number };
+    results: { entries: number; size: number };
+    totalSize: number;
+    location: string;
+    version: string;
+}
 
 export interface CacheContext {
     sources: SourceCache;
@@ -26,6 +39,18 @@ export interface CacheContext {
      * Clears all caches
      */
     clear: () => Promise<void>;
+    /**
+     * Clear specific cache type
+     */
+    clearType: (type: 'ast' | 'config' | 'results' | 'all') => Promise<void>;
+    /**
+     * Get cache statistics and info
+     */
+    getInfo: () => Promise<CacheInfo>;
+    /**
+     * Get absolute path to cache directory
+     */
+    getCachePath: () => string;
 }
 
 /**
@@ -80,6 +105,48 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
             await astL2.clear();
             await resultDriver.clear();
             await configDriver.clear();
+        },
+        clearType: async (type) => {
+            switch (type) {
+                case 'ast':
+                    astL1.clear();
+                    await astL2.clear();
+                    break;
+                case 'config':
+                    await configDriver.clear();
+                    break;
+                case 'results':
+                    await resultDriver.clear();
+                    break;
+                case 'all':
+                    sourceDriver.clear();
+                    astL1.clear();
+                    await astL2.clear();
+                    await resultDriver.clear();
+                    await configDriver.clear();
+                    break;
+            }
+        },
+        getCachePath: () => defaultBaseDir,
+        getInfo: async () => {
+            const astL1Stats = astL1.getStats();
+            const astL2Stats = await astL2.getStats(); // Async disk
+            const configStats = await configDriver.getStats();
+            const resultStats = await resultDriver.getStats();
+
+            const totalSize = astL1Stats.size + astL2Stats.size + configStats.size + resultStats.size;
+
+            return {
+                ast: {
+                    l1: { entries: astL1Stats.entries, maxEntries: 200, size: astL1Stats.size },
+                    l2: { entries: astL2Stats.entries, size: astL2Stats.size }
+                },
+                config: { entries: configStats.entries, size: configStats.size },
+                results: { entries: resultStats.entries, size: resultStats.size },
+                totalSize,
+                location: config.disk?.path ?? defaultBaseDir,
+                version: CACHE_VERSION
+            };
         }
     };
 };

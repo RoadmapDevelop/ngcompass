@@ -2,6 +2,7 @@ import writeFileAtomic from 'write-file-atomic';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { AsyncDriver, DiskDriverConfig } from './types.js';
+import { getDirectoryStats } from '../utils/fs.js';
 
 /**
  * Creates a storage driver that writes each key as a separate file.
@@ -77,6 +78,10 @@ export const createAtomicDriver = <T>(
             } catch {
                 // Ignore
             }
+        },
+
+        getStats: async () => {
+            return getDirectoryStats(cacheDir);
         }
     };
 };

@@ -13,7 +13,7 @@ export const DEFAULT_CACHE_OPTIONS: Required<CacheOptions> = {
     enabled: true,
     location: 'node_modules/.cache/ngcompass',
     strategy: 'local',
-    ttl: 0, // 0 = default (usually handled by driver, e.g. 24h)
+    ttl: 86400000, // 24 hours (in milliseconds)
 };
 
 /**
