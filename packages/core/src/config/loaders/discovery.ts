@@ -2,6 +2,7 @@ import { lilconfig } from 'lilconfig';
 import { createJiti } from 'jiti';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import { debug, time, timeEnd } from '@ngcompass/common';
 
 const MODULE_NAME = 'ngcompass';
 
@@ -46,6 +47,9 @@ export interface ConfigDiscoveryResult {
  * Finds and loads the configuration file.
  */
 export const findAndLoadConfig = async (cwd: string = process.cwd()): Promise<ConfigDiscoveryResult | null> => {
+    time('config-discovery');
+    debug('discovery', `Searching for config in: ${cwd}`);
+
     const explorer = lilconfig(MODULE_NAME, {
         searchPlaces: SEARCH_PLACES,
         loaders: {
@@ -59,15 +63,25 @@ export const findAndLoadConfig = async (cwd: string = process.cwd()): Promise<Co
     const result = await explorer.search(cwd);
 
     if (!result) {
+        debug('discovery', 'No config file found');
+        timeEnd('config-discovery');
         return null;
     }
 
+    debug('discovery', `Found config: ${result.filepath}`);
+
     let content = '';
     let contentHash = '';
+    time('content-hash');
     try {
         content = fs.readFileSync(result.filepath, 'utf-8');
         contentHash = crypto.createHash('sha1').update(content).digest('hex');
+        const hashTime = timeEnd('content-hash');
+        debug('discovery', `Content hash: ${contentHash.substring(0, 8)}... (${hashTime.toFixed(1)}ms)`);
     } catch { /* ignore read error */ }
+
+    const discoveryTime = timeEnd('config-discovery');
+    debug('discovery', `Discovery complete: ${discoveryTime.toFixed(1)}ms`);
 
     return {
         config: result.config,

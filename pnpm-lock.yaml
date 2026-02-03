@@ -179,12 +179,20 @@ importers:
       '@ngcompass/core':
         specifier: workspace:*
         version: link:../core
+    devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
 
   packages/testing:
     dependencies:
       '@ngcompass/common':
         specifier: workspace:*
         version: link:../common
+    devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
 
 packages:
 
