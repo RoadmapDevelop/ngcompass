@@ -9,11 +9,19 @@ export function validateRules(
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
 
+    // Skip "no rules" warning if extends is present (rules come from preset)
+    const hasExtends = config.extends && (
+        (typeof config.extends === 'string' && config.extends.length > 0) ||
+        (Array.isArray(config.extends) && config.extends.length > 0)
+    );
+
     if (!config.rules || Object.keys(config.rules).length === 0) {
-        issues.push({
-            ...MESSAGES.NO_RULES_CONFIGURED(),
-            path: [...basePath, "rules"]
-        });
+        if (!hasExtends) {
+            issues.push({
+                ...MESSAGES.NO_RULES_CONFIGURED(),
+                path: [...basePath, "rules"]
+            });
+        }
     }
 
     for (const [ruleName, ruleConfig] of Object.entries(config.rules || {})) {

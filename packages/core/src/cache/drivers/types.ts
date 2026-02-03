@@ -8,6 +8,7 @@ export interface AsyncDriver<T> {
     has(key: string): Promise<boolean>;
     delete(key: string): Promise<void>;
     clear(): Promise<void>;
+    getStats(): Promise<DriverStats>;
 }
 
 /**
@@ -20,6 +21,12 @@ export interface SyncDriver<T> {
     has(key: string): boolean;
     delete(key: string): void;
     clear(): void;
+    getStats(): DriverStats;
+}
+
+export interface DriverStats {
+    entries: number;
+    size: number; // Bytes
 }
 
 /**
