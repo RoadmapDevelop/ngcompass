@@ -52,13 +52,10 @@ export function validateConfigBlock(
     // Cache TTL validation
     if (block.cache) {
         const path = [...basePath, "cache", "ttl"];
-        if (block.cache.ttl !== undefined) {
-            if (block.cache.ttl < 0) {
-                issues.push({ ...MESSAGES.NEGATIVE_CACHE_TTL(block.cache.ttl), path });
-            } else if (block.cache.ttl === 0) {
-                issues.push({ ...MESSAGES.CACHE_TTL_ZERO(), path });
-            }
+        if (block.cache.ttl !== undefined && block.cache.ttl < 0) {
+            issues.push({ ...MESSAGES.NEGATIVE_CACHE_TTL(block.cache.ttl), path });
         }
+        // Note: ttl === 0 is valid (means use driver default), so no warning
     }
 
     return { issues };

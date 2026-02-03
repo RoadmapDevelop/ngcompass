@@ -173,6 +173,7 @@ export interface ConfigIssue {
     file?: string;
     line?: number;
     column?: number;
+    suggestion?: string;
 }
 
 /**

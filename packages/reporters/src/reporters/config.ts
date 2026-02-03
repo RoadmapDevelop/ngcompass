@@ -12,7 +12,15 @@ const formatIssue = (issue: ConfigIssue): string => {
     const path = formatPath(issue.path);
     const pathInfo = path ? ` ${pc.gray(`at ${path}`)}` : '';
     const codeInfo = pc.dim(issue.code);
-    return `${label} ${issue.message}${pathInfo} ${codeInfo}`;
+
+    let output = `${label} ${issue.message}${pathInfo} ${codeInfo}`;
+
+    // Add suggestion if available
+    if (issue.suggestion) {
+        output += `\n          ${pc.cyan('→')} ${pc.dim(issue.suggestion)}`;
+    }
+
+    return output;
 };
 
 const renderHeader = () => {
