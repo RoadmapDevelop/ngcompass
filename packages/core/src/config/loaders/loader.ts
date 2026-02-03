@@ -5,28 +5,42 @@ import type { ConfigValidationResult } from '@ngcompass/common';
 import process from 'node:process';
 import { ValidateConfigOptions } from '../actions/healthcheck.js';
 import { CacheContext } from '../../cache/index.js';
+import { debug, time, timeEnd } from '@ngcompass/common';
 
 /**
  * Resolves the configuration by searching, merging profiles, and performing full validation.
  */
 export const resolveConfig = async (options: ValidateConfigOptions): Promise<ConfigValidationResult> => {
+    time('config-resolution');
     const { cwd = process.cwd(), profile, cache } = options;
+
+    debug('loader', `Starting config resolution (cwd: ${cwd}, profile: ${profile || 'none'})`);
 
     const loaded = await findAndLoadConfig(cwd);
 
     // Cache Lookup
     const { hash, cachedResult } = await tryLoadFromCache(loaded, profile, cache);
     if (cachedResult) {
+        const resolutionTime = timeEnd('config-resolution');
+        debug('loader', `Cache HIT - returning cached result (${resolutionTime.toFixed(1)}ms)`);
         return cachedResult;
     }
+
+    debug('loader', 'Cache MISS - running validation');
 
     // Validation
     const result = await runValidation(loaded, profile, cache);
 
+    debug('loader', `Validation complete: ${result.report.valid ? 'valid' : `invalid (${result.report.issues.length} issues)`}`);
+
     // Cache Persistence
     if (cache && hash) {
         await cache.configs.set(hash, result);
+        debug('loader', `Cached validation result: key=${hash.substring(0, 8)}...`);
     }
+
+    const resolutionTime = timeEnd('config-resolution');
+    debug('loader', `Config resolution complete: ${resolutionTime.toFixed(1)}ms`);
 
     return result;
 };
@@ -46,6 +60,8 @@ async function tryLoadFromCache(
     });
 
     const hash = cache.computeHash(hashInput);
+    debug('loader', `Cache lookup: key=${hash.substring(0, 8)}...`);
+
     const cachedResult = await cache.configs.get(hash);
 
     return { hash, cachedResult };

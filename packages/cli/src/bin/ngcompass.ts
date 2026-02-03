@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createCacheContext } from '@ngcompass/core';
+import { enableDebug } from '@ngcompass/common';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -35,7 +36,15 @@ export async function run() {
     program
         .name('compass')
         .description(packageJson.description || 'Angular Analysis Toolkit')
-        .version(packageJson.version);
+        .version(packageJson.version)
+        .option('--debug', 'Enable debug output (all namespaces)')
+        .option('--verbose', 'Enable verbose output (alias for --debug)')
+        .hook('preAction', (thisCommand) => {
+            const opts = thisCommand.opts();
+            if (opts.debug || opts.verbose) {
+                enableDebug('debug', 'all');
+            }
+        });
 
     // Initialize shared cache context
     const cache = createCacheContext();

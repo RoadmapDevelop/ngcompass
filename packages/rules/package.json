@@ -37,5 +37,8 @@
         "rules"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^25.1.0"
+    }
 }

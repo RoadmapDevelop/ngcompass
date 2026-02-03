@@ -7,7 +7,7 @@
     "incremental": false,
     "moduleResolution": "bundler",
     "module": "esnext",
-    "types": ["node"],
+    "types": ["vitest/globals", "node"],
     "skipLibCheck": true
   },
   "include": ["src/**/*"],
