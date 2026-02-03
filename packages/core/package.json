@@ -29,8 +29,10 @@
     },
     "dependencies": {
         "@ngcompass/common": "workspace:*",
+        "fast-glob": "^3.3.3",
         "cacache": "^20.0.3",
         "defu": "^6.1.4",
+        "ignore": "^7.0.3",
         "jiti": "^2.6.1",
         "lilconfig": "^3.1.3",
         "lru-cache": "^11.2.5",
