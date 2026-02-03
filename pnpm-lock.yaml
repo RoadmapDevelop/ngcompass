@@ -114,6 +114,12 @@ importers:
       defu:
         specifier: ^6.1.4
         version: 6.1.4
+      fast-glob:
+        specifier: ^3.3.3
+        version: 3.3.3
+      ignore:
+        specifier: ^7.0.3
+        version: 7.0.5
       jiti:
         specifier: ^2.6.1
         version: 2.6.1
