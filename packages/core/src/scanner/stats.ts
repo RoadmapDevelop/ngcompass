@@ -22,8 +22,8 @@ export const groupFilesByExtension = (
     files.reduce((map, file) => {
         const ext = path.extname(file) || '.no-extension';
         const count = map.get(ext) ?? 0;
-        // Create new Map to maintain immutability
-        return new Map(map).set(ext, count + 1);
+        map.set(ext, count + 1);
+        return map;
     }, new Map<string, number>());
 
 /**
