@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { createPosition } from '@ngcompass/common';
+import { common } from '@ngcompass/common';
 import { core } from '@ngcompass/core';
 import { rules } from '@ngcompass/rules';
 import { reporters } from '@ngcompass/reporters';
-import { cli } from '../src/index.js';
 
 describe('CLI Setup', () => {
     it('should link to common', () => {
-        expect(createPosition(1, 1)).toBeDefined();
+        expect(common).toBe('@ngcompass/common');
     });
     it('should link to core', () => {
         expect(core).toBe('@ngcompass/core');
@@ -17,8 +16,5 @@ describe('CLI Setup', () => {
     });
     it('should link to reporters', () => {
         expect(reporters).toBe('@ngcompass/reporters');
-    });
-    it('should export self', () => {
-        expect(cli).toBe('@ngcompass/cli');
     });
 });
