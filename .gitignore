@@ -32,3 +32,6 @@ pnpm-debug.log*
 # Cache
 .cache
 .eslintcache
+
+#Turbo
+.turbo  
