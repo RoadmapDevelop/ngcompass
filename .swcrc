@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json.schemastore.org/swcrc",
+  "jsc": {
+    "parser": {
+      "syntax": "typescript",
+      "decorators": true,
+      "dynamicImport": true
+    },
+    "transform": {
+      "legacyDecorator": true,
+      "decoratorMetadata": true
+    },
+    "target": "es2022",
+    "externalHelpers": true,
+    "loose": false,
+    "minify": {
+      "compress": {
+        "unused": true,
+        "dead_code": true,
+        "drop_console": false,
+        "drop_debugger": true,
+        "keep_classnames": false,
+        "keep_fnames": false,
+        "passes": 2
+      },
+      "mangle": {
+        "toplevel": false,
+        "keep_classnames": false,
+        "keep_fnames": false,
+        "safari10": false
+      }
+    }
+  },
+  "module": {
+    "type": "es6",
+    "strict": true,
+    "strictMode": true,
+    "lazy": false,
+    "noInterop": false
+  },
+  "sourceMaps": true,
+  "inlineSourcesContent": false
+}
