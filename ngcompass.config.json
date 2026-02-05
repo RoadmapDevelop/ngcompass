@@ -1,0 +1,8 @@
+{
+    "include": [
+        "packages/core/src/planner/*.ts"
+    ],
+    "rules": {
+        "no-console": "moderate"
+    }
+}

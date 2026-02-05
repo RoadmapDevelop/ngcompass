@@ -1,0 +1,75 @@
+/**
+ * Planner Module
+ *
+ * Phase 1.75: Build Execution Map
+ * Maps discovered files + resolved rules → executable tasks with indexes
+ *
+ * @module planner
+ */
+
+// Main builder
+export { buildExecutionPlan, buildFileUnit, validateExecutionPlan, getExecutionPlanSummary } from './builder.js';
+
+// Types
+export type {
+    ExecutionPlanOutput,
+    ExecutionPlan,
+    ExecutionIndexes,
+    ExecutionStats,
+    FileAnalysisUnit,
+    FileInfo,
+    FileType,
+    RuleTask,
+    TaskInputs,
+    FileInput,
+    ResourceType,
+    ExecutionPlanOptions,
+    Result,
+} from './types.js';
+
+export { Ok, Err } from './types.js';
+
+// Utilities
+export {
+    detectFileType,
+    isTypeScriptFile,
+    isTemplateFile,
+    isStyleFile,
+    isSpecFile,
+    isComponentFile,
+    getBaseName,
+} from './file-type.js';
+
+export {
+    discoverResources,
+    resourceExists,
+    getStyleFiles,
+    getTemplateFile,
+    getSpecFile,
+} from './resources.js';
+
+export {
+    shouldApplyRule,
+    buildRuleTask,
+    buildTasksForFile,
+    generateCacheKey,
+    filterRulesByAstRequirement,
+    groupRulesByDependencyType,
+} from './task-builder.js';
+
+export {
+    computeHash,
+    hashFile,
+    hashFiles,
+    hashRules,
+    calculateFileHash,
+    hashTaskInputs,
+    hashFileStats,
+} from './hashing.js';
+
+export {
+    buildIndexes,
+    getFilesForRules,
+    getTotalTasks,
+    getTasksCountBySeverity,
+} from './indexes.js';
