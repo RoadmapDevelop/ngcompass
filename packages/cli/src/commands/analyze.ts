@@ -37,7 +37,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
 
                 if (!configResult.report.valid) {
                     spinner.fail('Configuration validation failed');
-                    configResult.report.issues.forEach((issue: { path: any[]; severity: string; message: any; }) => {
+                    configResult.report.issues.forEach((issue) => {
                         const pathString = issue.path?.join('.') || 'root';
                         console.error(`  [${issue.severity.toUpperCase()}] ${pathString}: ${issue.message}`);
                     });
