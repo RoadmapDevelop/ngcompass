@@ -26,9 +26,9 @@ export const executeGlob = async (
     options: { readonly followSymlinks: boolean }
 ): Promise<Result<RawFileList>> => {
     try {
-        const files = await fg(patterns.include, {
+        const files = await fg([...patterns.include], {
             cwd: rootDir,
-            ignore: patterns.ignore,
+            ignore: [...patterns.ignore],
             absolute: true,
             followSymbolicLinks: options.followSymlinks,
             onlyFiles: true,

@@ -19,7 +19,8 @@ export type Namespace =
     | 'watch'
     | 'autofix'
     | 'init'
-    | 'config';
+    | 'config'
+    | 'planner';
 
 interface LoggerConfig {
     enabled: boolean;
