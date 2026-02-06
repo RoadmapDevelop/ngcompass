@@ -20,7 +20,10 @@ export type Namespace =
     | 'autofix'
     | 'init'
     | 'config'
-    | 'planner';
+    | 'planner'
+    | 'incremental'
+    | 'dry-run'
+    | 'mock-executor';
 
 interface LoggerConfig {
     enabled: boolean;

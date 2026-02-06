@@ -17,6 +17,8 @@ export type Result<T, E = Error> =
 export const Ok = <T>(data: T): Result<T> => ({ ok: true, data });
 export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 
+import type { CacheContext } from '../cache/index.js';
+
 /**
  * Option type for nullable values
  */
@@ -32,6 +34,8 @@ export interface ScanOptions {
     readonly ignorePatterns?: ReadonlyArray<string>;
     readonly respectGitignore?: boolean;
     readonly followSymlinks?: boolean;
+    readonly debug?: boolean;
+    readonly cache?: CacheContext;
 }
 
 /**
@@ -83,10 +87,24 @@ export interface ScanStatistics {
 /**
  * Complete scan result
  */
+/**
+ * Scan timing breakdown (for debugging)
+ */
+export interface ScanTimings {
+    readonly normalization: number;
+    readonly discovery: number; // git or glob
+    readonly filtering: number;
+    readonly total: number;
+}
+
+/**
+ * Complete scan result
+ */
 export interface ScanResult {
     readonly files: ReadonlyArray<string>;
     readonly stats: ScanStatistics;
     readonly timestamp: number;
+    readonly timings?: ScanTimings;
 }
 
 /**

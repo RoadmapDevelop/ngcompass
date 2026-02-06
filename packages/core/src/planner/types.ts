@@ -6,6 +6,7 @@
  */
 
 import type { RuleSeverity, ResolvedRule } from '../rules/types.js';
+import type { CacheContext } from '../cache/index.js';
 
 // ==============================================================================
 // EXECUTION PLAN OUTPUT
@@ -273,6 +274,83 @@ export interface ExecutionPlanOptions {
 
     /** Root directory for resolving relative paths */
     readonly rootDir: string;
+
+    /** Optional cache context for persistent optimizations */
+    readonly cache?: CacheContext;
+
+    /** Debug mode for detailed timing logging */
+    readonly debug?: boolean;
+}
+
+// ==============================================================================
+// PHASE 2.0: INCREMENTAL ANALYSIS
+// ==============================================================================
+
+/**
+ * Incremental execution plan with cache-based filtering
+ *
+ * @since Phase 2.0 - Incremental Analysis
+ */
+export interface IncrementalPlan {
+    /** Tasks with results in cache (can be skipped) */
+    readonly cached: ReadonlyArray<Task>;
+
+    /** Tasks without cache entries (must be executed) */
+    readonly pending: ReadonlyArray<Task>;
+
+    /** Pre-loaded cached results (taskId → result) */
+    readonly cachedResults: ReadonlyMap<string, unknown>;
+
+    /** Cache statistics */
+    readonly stats: CacheFilterStats;
+}
+
+/**
+ * Cache filtering statistics
+ */
+export interface CacheFilterStats {
+    /** Total tasks in execution plan */
+    readonly totalTasks: number;
+
+    /** Tasks found in cache */
+    readonly cachedTasks: number;
+
+    /** Tasks not in cache (need execution) */
+    readonly pendingTasks: number;
+
+    /** Cache hit rate (0.0 to 1.0) */
+    readonly cacheHitRate: number;
+
+    /** Estimated time saved (percentage) */
+    readonly timeSavedEstimate: number;
+}
+
+/**
+ * Options for incremental filtering
+ */
+export interface IncrementalFilterOptions {
+    /** Force re-execution even if cached */
+    readonly forceRerun?: boolean;
+
+    /** Load cached results into memory */
+    readonly loadCachedResults?: boolean;
+
+    /** Maximum age of cached results (ms) */
+    readonly maxCacheAge?: number;
+}
+
+/**
+ * Options for cache pruning
+ */
+export interface CachePruneOptions {
+    /** Maximum age of cache entries (ms) */
+    readonly maxAge?: number;
+
+    /** Maximum number of entries to keep */
+    readonly maxEntries?: number;
+
+    /** Minimum hit count to keep */
+    readonly minHits?: number;
 }
 
 // ==============================================================================

@@ -16,9 +16,20 @@ export const createDiskDriver = <T>(
     return {
         get: async (key: string): Promise<T | undefined> => {
             try {
+                const tReadStart = performance.now();
                 const result = await cacache.get(cachePath, key);
-                // cacache returns a Buffer. We deserialize it using V8.
-                return v8.deserialize(result.data) as T;
+                const tReadEnd = performance.now();
+
+                const tDeserStart = performance.now();
+                const deserialized = v8.deserialize(result.data) as T;
+                const tDeserEnd = performance.now();
+
+                // Optional: debug logging for cache driver timing
+                if (process.env.DEBUG_CACHE) {
+                    console.log(`[disk-driver] read: ${(tReadEnd - tReadStart).toFixed(2)}ms, deser: ${(tDeserEnd - tDeserStart).toFixed(2)}ms, size: ${(result.data.length / 1024).toFixed(1)}KB`);
+                }
+
+                return deserialized;
             } catch (err: unknown) {
                 const code = typeof err === 'object' && err !== null && 'code' in err ? (err as { code: unknown }).code : undefined;
 
