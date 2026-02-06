@@ -12,6 +12,7 @@ export { buildExecutionPlan, buildFileUnit, validateExecutionPlan, getExecutionP
 
 // Types
 export type {
+    // Phase 1.75
     ExecutionPlanOutput,
     ExecutionPlan,
     ExecutionIndexes,
@@ -20,11 +21,17 @@ export type {
     FileInfo,
     FileType,
     RuleTask,
+    Task,
     TaskInputs,
     FileInput,
     ResourceType,
     ExecutionPlanOptions,
     Result,
+    // Phase 2.0
+    IncrementalPlan,
+    CacheFilterStats,
+    IncrementalFilterOptions,
+    CachePruneOptions,
 } from './types.js';
 
 export { Ok, Err } from './types.js';
@@ -73,3 +80,11 @@ export {
     getTotalTasks,
     getTasksCountBySeverity,
 } from './indexes.js';
+
+// Phase 2.0: Incremental Analysis
+export {
+    filterCachedTasks,
+    areAllTasksCached,
+    getCacheHitRate,
+    pruneStaleCache,
+} from './incremental.js';

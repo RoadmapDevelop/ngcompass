@@ -5,7 +5,7 @@
  * Uses Result type for error handling (no exceptions)
  */
 
-import fg from 'fast-glob';
+import { glob } from 'tinyglobby';
 import type { ExpandedPatterns, RawFileList, Result } from './types.js';
 import { Ok, Err } from './types.js';
 
@@ -26,14 +26,13 @@ export const executeGlob = async (
     options: { readonly followSymlinks: boolean }
 ): Promise<Result<RawFileList>> => {
     try {
-        const files = await fg([...patterns.include], {
+        const files = await glob([...patterns.include], {
             cwd: rootDir,
             ignore: [...patterns.ignore],
             absolute: true,
             followSymbolicLinks: options.followSymlinks,
             onlyFiles: true,
             dot: false, // Skip hidden files
-            suppressErrors: true, // Don't throw on permission errors
         });
 
         return Ok({ files });
