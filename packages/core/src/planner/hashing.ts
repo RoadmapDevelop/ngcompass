@@ -7,17 +7,85 @@
 
 import crypto from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { stat } from 'node:fs/promises';
+import xxhash from 'xxhash-wasm';
 import type { TaskInputs } from './types.js';
 import type { ResolvedRule } from '../rules/types.js';
+import type { MetaCache } from '../cache/index.js';
+
+let h64: ((input: string) => string) | undefined;
 
 /**
- * Computes SHA-256 hash of a string.
+ * Initializes the xxhash hasher.
+ */
+export const initHasher = async (): Promise<void> => {
+    if (h64) return;
+    const { h64: hasher } = await xxhash();
+    h64 = (input: string) => hasher(input).toString(16);
+};
+
+/**
+ * Computes a fast hash of a string using xxhash if initialized,
+ * falling back to SHA-256 otherwise.
  *
  * @param content - Content to hash
  * @returns Hex-encoded hash
  */
 export const computeHash = (content: string): string => {
+    if (h64) {
+        return h64(content);
+    }
+    // Fallback for safety, though we should always initialize
     return crypto.createHash('sha256').update(content).digest('hex');
+};
+
+/**
+ * Warms up the in-memory hash cache using persistent metadata (Stat-First Hashing).
+ * Parallelizes stat() and metaCache.get() to minimize I/O overhead.
+ *
+ * @param filePaths - Files to warm up
+ * @param metaCache - Persistent meta cache
+ * @param hashCache - In-memory hash cache to populate
+ */
+export const warmupHashCache = async (
+    filePaths: string[],
+    metaCache: MetaCache,
+    hashCache: Map<string, string>
+): Promise<void> => {
+    // Use a pool to avoid overwhelming the OS with thousands of stats at once
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
+        const batch = filePaths.slice(i, i + BATCH_SIZE);
+        await Promise.all(
+            batch.map(async (filePath) => {
+                if (hashCache.has(filePath)) return;
+
+                try {
+                    // 1. Get file stats
+                    const stats = await stat(filePath);
+                    const mtime = stats.mtimeMs;
+                    const size = stats.size;
+
+                    // 2. Check persistent cache
+                    const cachedMeta = await metaCache.get(filePath);
+
+                    if (cachedMeta && cachedMeta.mtime === mtime && cachedMeta.size === size) {
+                        // HIT: Reuse cached hash without reading file
+                        hashCache.set(filePath, cachedMeta.hash);
+                    } else {
+                        // MISS: Read, hash, and update persistent cache
+                        const content = readFileSafe(filePath);
+                        const hash = computeHash(content);
+
+                        hashCache.set(filePath, hash);
+                        await metaCache.set(filePath, { mtime, size, hash });
+                    }
+                } catch (err) {
+                    // Handle missing files by allowing them to be handled by normal pipeline
+                }
+            })
+        );
+    }
 };
 
 /**
@@ -38,22 +106,46 @@ const readFileSafe = (filePath: string): string => {
  * Calculates hash for a single file.
  *
  * @param filePath - File path
+ * @param cache - Optional hash cache
  * @returns Content hash
  */
-export const hashFile = (filePath: string): string => {
+export const hashFile = (filePath: string, cache?: Map<string, string>): string => {
+    if (cache?.has(filePath)) {
+        return cache.get(filePath)!;
+    }
+
     const content = readFileSafe(filePath);
-    return computeHash(content);
+    const hash = computeHash(content);
+
+    if (cache) {
+        cache.set(filePath, hash);
+    }
+
+    return hash;
 };
 
 /**
  * Calculates hash for multiple files combined.
  *
  * @param filePaths - Array of file paths
+ * @param cache - Optional hash cache
  * @returns Combined hash
  */
-export const hashFiles = (filePaths: ReadonlyArray<string>): string => {
+export const hashFiles = (
+    filePaths: ReadonlyArray<string>,
+    cache?: Map<string, string>
+): string => {
     const combinedContent = filePaths
-        .map((path) => readFileSafe(path))
+        .map((path) => {
+            if (cache?.has(path)) {
+                // We can't use the hash here directly as we need the content for combined hash
+                // BUT we can cache the result of this entire combined hash if we wanted.
+                // For now, let's just use the cached content if we had a content cache.
+                // However, the bottleneck is SHA-256 on the same files.
+                return readFileSafe(path);
+            }
+            return readFileSafe(path);
+        })
         .join('\n---FILE-BOUNDARY---\n');
     return computeHash(combinedContent);
 };
@@ -79,10 +171,13 @@ export const hashRules = (rules: ReadonlyArray<ResolvedRule>): string => {
 };
 
 /**
- * Calculates combined hash for a file and its resources.
- * Hash = hash(tsContent + templateContent + stylesContent + rulesConfig)
+ * Calculates combined hash for a file and its resources using existing hashes.
+ * Hash = hash(tsHash + templateHash + stylesHashes + specHash + rulesHash)
  *
- * @param inputs - Task inputs (all resources)
+ * This version is optimized for P2/P3 to reuse hashes already computed during
+ * task building, effectively eliminating a second full pass of disk I/O.
+ *
+ * @param inputs - Task inputs (all resources with hashes)
  * @param applicableRules - Rules that apply to this file
  * @returns Combined content hash
  */
@@ -90,31 +185,31 @@ export const calculateFileHash = (
     inputs: TaskInputs,
     applicableRules: ReadonlyArray<ResolvedRule>
 ): string => {
-    const filePaths: string[] = [];
+    const parts: string[] = [];
 
-    // Collect all file paths
-    filePaths.push(inputs.typescript.path);
+    // Combine input hashes
+    parts.push(inputs.typescript.hash);
 
     if (inputs.template) {
-        filePaths.push(inputs.template.path);
+        parts.push(inputs.template.hash);
     }
 
     if (inputs.styles) {
-        filePaths.push(...inputs.styles.map((s) => s.path));
+        // Collect and sort style hashes for determinism
+        const styleHashes = inputs.styles.map((s) => s.hash).sort();
+        parts.push(...styleHashes);
     }
 
     if (inputs.spec) {
-        filePaths.push(inputs.spec.path);
+        parts.push(inputs.spec.hash);
     }
-
-    // Hash all files
-    const filesHash = hashFiles(filePaths);
 
     // Hash rules configuration
     const rulesHash = hashRules(applicableRules);
+    parts.push(rulesHash);
 
-    // Combine file hash + rules hash
-    return computeHash(`${filesHash}::${rulesHash}`);
+    // Combine all parts and hash
+    return computeHash(parts.join('::'));
 };
 
 /**
@@ -165,10 +260,11 @@ export const hashFileStats = (filePath: string): string => {
  * Returns empty string if file doesn't exist.
  *
  * @param filePath - File path
+ * @param cache - Optional hash cache
  * @returns Content hash or empty string
  */
-export const hashFileInput = (filePath: string): string => {
-    return hashFile(filePath);
+export const hashFileInput = (filePath: string, cache?: Map<string, string>): string => {
+    return hashFile(filePath, cache);
 };
 
 /**
@@ -220,4 +316,32 @@ export const calculateTaskId = (
 
     // Combine all parts and hash
     return computeHash(parts.join('::'));
+};
+
+/**
+ * Calculates a global hash for the entire project state.
+ * Used for caching the complete ExecutionPlanOutput.
+ *
+ * @param files - All discovered files
+ * @param rules - All resolved rules
+ * @param hashCache - Current hash cache
+ * @returns Global state hash
+ */
+export const calculateGlobalHash = (
+    files: ReadonlyArray<string>,
+    rules: ReadonlyMap<string, ResolvedRule>,
+    hashCache: Map<string, string>
+): string => {
+    const parts: string[] = [];
+
+    // 1. Add all file paths and their content hashes (sorted for determinism)
+    const fileHashes = files
+        .map((f) => `${f}:${hashCache.get(f) || ''}`)
+        .sort();
+    parts.push(...fileHashes);
+
+    // 2. Add rules hash
+    parts.push(hashRules(Array.from(rules.values())));
+
+    return computeHash(parts.join('||'));
 };

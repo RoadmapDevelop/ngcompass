@@ -6,6 +6,9 @@ import { createSourceCache, SourceCache, SourceEntry } from './services/source-c
 import { createAstCache, AstCache, AstEntry } from './services/ast-cache.js';
 import { createResultCache, ResultCache } from './services/result-cache.js';
 import { createConfigCache, ConfigCache } from './services/config-cache.js';
+import { createMetaCache, MetaCache, FileMeta } from './services/meta-cache.js';
+import { createPlanCache, PlanCache } from './services/plan-cache.js';
+import { createFileCache, FileCache } from './services/file-cache.js';
 import { CacheConfig } from './drivers/types.js';
 import { computeCompositeHash } from './services/hashing.js';
 import { CACHE_VERSION } from './constants.js';
@@ -27,6 +30,9 @@ export interface CacheContext {
     asts: AstCache;
     results: ResultCache;
     configs: ConfigCache;
+    metas: MetaCache;
+    plans: PlanCache;
+    files: FileCache;
     /**
      * Computes a hash suitable for caching keys
      */
@@ -84,17 +90,36 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         path: path.join(config.disk?.path ?? defaultBaseDir, 'config')
     });
 
+    const metaDriver = createDiskDriver<FileMeta>({
+        path: path.join(config.disk?.path ?? defaultBaseDir, 'meta')
+    });
+
+    // Use regular disk driver for plan cache
+    const planDriver = createDiskDriver<any>({
+        path: path.join(config.disk?.path ?? defaultBaseDir, 'plans'),
+    });
+
+    const fileDriver = createDiskDriver<any>({
+        path: path.join(config.disk?.path ?? defaultBaseDir, 'files'),
+    });
+
     // 2. Services
     const sources = createSourceCache(sourceDriver);
     const asts = createAstCache(astL1, astL2);
     const results = createResultCache(resultDriver);
     const configs = createConfigCache(configDriver);
+    const metas = createMetaCache(metaDriver);
+    const plans = createPlanCache(planDriver);
+    const files = createFileCache(fileDriver);
 
     return {
         sources,
         asts,
         results,
         configs,
+        metas,
+        plans,
+        files,
         computeHash: computeCompositeHash,
         prune: async () => {
             await astL2.prune();
@@ -105,6 +130,9 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
             await astL2.clear();
             await resultDriver.clear();
             await configDriver.clear();
+            await metaDriver.clear();
+            await planDriver.clear();
+            await fileDriver.clear();
         },
         clearType: async (type) => {
             switch (type) {
@@ -124,10 +152,13 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
                     await astL2.clear();
                     await resultDriver.clear();
                     await configDriver.clear();
+                    await metaDriver.clear();
+                    await planDriver.clear();
+                    await fileDriver.clear();
                     break;
             }
         },
-        getCachePath: () => defaultBaseDir,
+        getCachePath: () => config.disk?.path ?? defaultBaseDir,
         getInfo: async () => {
             const astL1Stats = astL1.getStats();
             const astL2Stats = await astL2.getStats(); // Async disk
@@ -169,3 +200,6 @@ export * from './services/source-cache.js';
 export * from './services/ast-cache.js';
 export * from './services/result-cache.js';
 export * from './services/config-cache.js';
+export * from './services/meta-cache.js';
+export * from './services/plan-cache.js';
+export * from './services/file-cache.js';
