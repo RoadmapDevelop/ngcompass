@@ -12,6 +12,14 @@ import { hashFileInput, calculateTaskId } from './hashing.js';
 import { debug } from '@ngcompass/common';
 
 /**
+ * Context for task building to enable memoization/caching.
+ */
+export interface TaskBuilderContext {
+    hashCache?: Map<string, string>;
+    resourceCache?: Map<string, TaskInputs>;
+}
+
+/**
  * Checks if a rule should be applied to a file type.
  *
  * Rule application logic:
@@ -56,13 +64,15 @@ export const shouldApplyRule = (rule: ResolvedRule, fileType: FileType): boolean
  * @param fileType - File type
  * @param rule - Resolved rule
  * @param cacheKey - Cache key for this task
+ * @param context - Optional builder context
  * @returns RuleTask or null if rule doesn't apply
  */
 export const buildRuleTask = (
     filePath: string,
     fileType: FileType,
     rule: ResolvedRule,
-    cacheKey: string
+    cacheKey: string,
+    context?: TaskBuilderContext
 ): RuleTask | null => {
     // Check if rule applies to this file type
     if (!shouldApplyRule(rule, fileType)) {
@@ -85,23 +95,54 @@ export const buildRuleTask = (
     const needsCssAst = requires.cssAst ?? false;
     const needsSpecAst = requires.specAst ?? false;
 
-    // Discover resources based on dependency type
-    const inputs = discoverResources(
-        filePath,
-        needsTsAst,
-        needsHtmlAst && (dependencyType === 'component' || dependencyType === 'styles'),
-        needsCssAst && dependencyType === 'styles',
-        needsSpecAst
-    );
+    // Discover resources (memoize discovery to avoid redundant existsSync calls)
+    let inputs: TaskInputs;
+    if (context?.resourceCache?.has(filePath)) {
+        inputs = context.resourceCache.get(filePath)!;
+    } else {
+        inputs = discoverResources(
+            filePath,
+            true, // Always discover if it exists for the cache
+            true,
+            true,
+            true
+        );
+        if (context?.resourceCache) {
+            context.resourceCache.set(filePath, inputs);
+        }
+    }
+
+    // Adjust needsAst purely for this task (RuleTask)
+    const taskInputs: TaskInputs = {
+        typescript: { ...inputs.typescript, needsAst: needsTsAst },
+    };
+
+    if (inputs.template) {
+        taskInputs.template = {
+            ...inputs.template,
+            needsAst: needsHtmlAst && (dependencyType === 'component' || dependencyType === 'styles'),
+        };
+    }
+
+    if (inputs.styles) {
+        taskInputs.styles = inputs.styles.map((s) => ({
+            ...s,
+            needsAst: needsCssAst && dependencyType === 'styles',
+        }));
+    }
+
+    if (inputs.spec) {
+        taskInputs.spec = { ...inputs.spec, needsAst: needsSpecAst };
+    }
 
     return {
         ruleName: rule.name,
         severity: rule.severity,
         options: rule.options,
         cacheKey,
-        inputs,
+        inputs: taskInputs,
     };
-};
+}
 
 /**
  * Builds all applicable tasks for a file.
@@ -109,12 +150,14 @@ export const buildRuleTask = (
  * @param filePath - File path
  * @param fileType - File type
  * @param rules - All resolved rules
+ * @param context - Optional builder context
  * @returns Array of tasks
  */
 export const buildTasksForFile = (
     filePath: string,
     fileType: FileType,
-    rules: ReadonlyMap<string, ResolvedRule>
+    rules: ReadonlyMap<string, ResolvedRule>,
+    context?: TaskBuilderContext
 ): ReadonlyArray<RuleTask> => {
     const tasks: RuleTask[] = [];
 
@@ -122,7 +165,7 @@ export const buildTasksForFile = (
         // Generate cache key: file path + rule name
         const cacheKey = generateCacheKey(filePath, ruleName);
 
-        const task = buildRuleTask(filePath, fileType, rule, cacheKey);
+        const task = buildRuleTask(filePath, fileType, rule, cacheKey, context);
         if (task) {
             tasks.push(task);
         }
@@ -167,6 +210,45 @@ export const filterRulesByAstRequirement = (
 };
 
 /**
+ * Groups rules by the file types they can match.
+ * Optimized for P3: Skip checking irrelevant rules for specific file types.
+ */
+export interface RuleGroups {
+    allTs: ResolvedRule[]; // standalone + imports
+    component: ResolvedRule[]; // component + styles
+    directive: ResolvedRule[]; // component only
+}
+
+/**
+ * Pre-calculates rule groups for faster lookup.
+ *
+ * @param rules - All enabled rules
+ * @returns Grouped rules
+ */
+export const getRulesByFileType = (rules: ReadonlyMap<string, ResolvedRule>): RuleGroups => {
+    const groups: RuleGroups = {
+        allTs: [],
+        component: [],
+        directive: [],
+    };
+
+    for (const rule of rules.values()) {
+        const { dependencyType } = rule.metadata;
+
+        if (dependencyType === 'standalone' || dependencyType === 'imports') {
+            groups.allTs.push(rule);
+        } else if (dependencyType === 'component') {
+            groups.component.push(rule);
+            groups.directive.push(rule);
+        } else if (dependencyType === 'styles') {
+            groups.component.push(rule);
+        }
+    }
+
+    return groups;
+};
+
+/**
  * Groups rules by dependency type.
  *
  * @param rules - All resolved rules
@@ -199,9 +281,14 @@ export const groupRulesByDependencyType = (
  *
  * @param filePath - Main file path
  * @param rule - Resolved rule with metadata
+ * @param context - Optional builder context for caching
  * @returns TaskInputs with hashed files
  */
-const buildTaskInputsWithHashes = (filePath: string, rule: ResolvedRule): TaskInputs => {
+const buildTaskInputsWithHashes = (
+    filePath: string,
+    rule: ResolvedRule,
+    context?: TaskBuilderContext
+): TaskInputs => {
     const { requires, dependencyType } = rule.metadata;
 
     // Determine AST requirements
@@ -210,21 +297,29 @@ const buildTaskInputsWithHashes = (filePath: string, rule: ResolvedRule): TaskIn
     const needsCssAst = requires.cssAst ?? false;
     const needsSpecAst = requires.specAst ?? false;
 
-    // Discover resources based on dependency type
-    const discoveredInputs = discoverResources(
-        filePath,
-        needsTsAst,
-        needsHtmlAst && (dependencyType === 'component' || dependencyType === 'styles'),
-        needsCssAst && dependencyType === 'styles',
-        needsSpecAst
-    );
+    // Discover resources (memoize discovery to avoid redundant existsSync calls)
+    let discoveredInputs: TaskInputs;
+    if (context?.resourceCache?.has(filePath)) {
+        discoveredInputs = context.resourceCache.get(filePath)!;
+    } else {
+        discoveredInputs = discoverResources(
+            filePath,
+            true, // Always discover if it exists for the cache
+            true,
+            true,
+            true
+        );
+        if (context?.resourceCache) {
+            context.resourceCache.set(filePath, discoveredInputs);
+        }
+    }
 
-    // Build inputs with content hashes
+    // Build inputs with content hashes (memoize hashing to avoid redundant SHA-256)
     const inputs: TaskInputs = {
         typescript: {
             path: discoveredInputs.typescript.path,
-            hash: hashFileInput(discoveredInputs.typescript.path),
-            needsAst: discoveredInputs.typescript.needsAst,
+            hash: hashFileInput(discoveredInputs.typescript.path, context?.hashCache),
+            needsAst: needsTsAst,
         },
     };
 
@@ -232,8 +327,8 @@ const buildTaskInputsWithHashes = (filePath: string, rule: ResolvedRule): TaskIn
     if (discoveredInputs.template) {
         inputs.template = {
             path: discoveredInputs.template.path,
-            hash: hashFileInput(discoveredInputs.template.path),
-            needsAst: discoveredInputs.template.needsAst,
+            hash: hashFileInput(discoveredInputs.template.path, context?.hashCache),
+            needsAst: needsHtmlAst && (dependencyType === 'component' || dependencyType === 'styles'),
         };
     }
 
@@ -241,8 +336,8 @@ const buildTaskInputsWithHashes = (filePath: string, rule: ResolvedRule): TaskIn
     if (discoveredInputs.styles) {
         inputs.styles = discoveredInputs.styles.map((style) => ({
             path: style.path,
-            hash: hashFileInput(style.path),
-            needsAst: style.needsAst,
+            hash: hashFileInput(style.path, context?.hashCache),
+            needsAst: needsCssAst && dependencyType === 'styles',
         }));
     }
 
@@ -250,8 +345,8 @@ const buildTaskInputsWithHashes = (filePath: string, rule: ResolvedRule): TaskIn
     if (discoveredInputs.spec) {
         inputs.spec = {
             path: discoveredInputs.spec.path,
-            hash: hashFileInput(discoveredInputs.spec.path),
-            needsAst: discoveredInputs.spec.needsAst,
+            hash: hashFileInput(discoveredInputs.spec.path, context?.hashCache),
+            needsAst: needsSpecAst,
         };
     }
 
@@ -267,12 +362,14 @@ const buildTaskInputsWithHashes = (filePath: string, rule: ResolvedRule): TaskIn
  * @param filePath - File path
  * @param fileType - File type
  * @param rule - Resolved rule
+ * @param context - Optional builder context
  * @returns Task or null if rule doesn't apply
  */
 export const buildTask = (
     filePath: string,
     fileType: FileType,
-    rule: ResolvedRule
+    rule: ResolvedRule,
+    context?: TaskBuilderContext
 ): Task | null => {
     // Check if rule applies to this file type
     if (!shouldApplyRule(rule, fileType)) {
@@ -287,7 +384,7 @@ export const buildTask = (
     }
 
     // Build inputs with content hashes
-    const inputs = buildTaskInputsWithHashes(filePath, rule);
+    const inputs = buildTaskInputsWithHashes(filePath, rule, context);
 
     // Calculate content-based task ID
     const taskId = calculateTaskId(rule.name, inputs, rule.options);
@@ -308,17 +405,19 @@ export const buildTask = (
  * @param filePath - File path
  * @param fileType - File type
  * @param rules - All resolved rules
+ * @param context - Optional context
  * @returns Array of tasks
  */
 export const buildTasksForFileTaskCentric = (
     filePath: string,
     fileType: FileType,
-    rules: ReadonlyMap<string, ResolvedRule>
+    rules: ReadonlyMap<string, ResolvedRule>,
+    context?: TaskBuilderContext
 ): ReadonlyArray<Task> => {
     const tasks: Task[] = [];
 
     for (const rule of rules.values()) {
-        const task = buildTask(filePath, fileType, rule);
+        const task = buildTask(filePath, fileType, rule, context);
         if (task) {
             tasks.push(task);
         }

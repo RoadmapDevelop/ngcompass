@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "oxc-parser": "^0.112.0",
+    "oxc-resolver": "^11.17.0"
+  }
+}

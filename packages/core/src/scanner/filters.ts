@@ -5,6 +5,8 @@
  * Uses functional composition and immutability.
  */
 
+import path from 'node:path';
+import { minimatch } from 'minimatch';
 import type {
     RawFileList,
     FilteredFileList,
@@ -124,3 +126,33 @@ export const filterByPattern = (
     pattern: RegExp
 ): ReadonlyArray<string> =>
     files.filter(file => pattern.test(file));
+
+/**
+ * Filters files using glob patterns.
+ *
+ * @param files - Files to filter
+ * @param includes - Include glob patterns
+ * @param ignores - Ignore glob patterns
+ * @param rootDir - Root directory for relative matching
+ * @returns Filtered files
+ */
+export const filterByGlob = (
+    files: ReadonlyArray<string>,
+    includes: ReadonlyArray<string>,
+    ignores: ReadonlyArray<string>,
+    rootDir: string
+): ReadonlyArray<string> => {
+    return files.filter((file) => {
+        const relativePath = path.relative(rootDir, file).replace(/\\/g, '/');
+
+        // Check if matches any include pattern
+        const isIncluded = includes.some((p) => minimatch(relativePath, p, { dot: true }));
+        if (!isIncluded) return false;
+
+        // Check if matches any ignore pattern
+        const isIgnored = ignores.some((p) => minimatch(relativePath, p, { dot: true }));
+        if (isIgnored) return false;
+
+        return true;
+    });
+};

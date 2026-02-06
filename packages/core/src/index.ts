@@ -49,8 +49,9 @@ export {
     type RuleRegistryEntry,
 } from './rules/index.js';
 
-// Execution Plan
+// Execution Plan (Phase 1.75 + Phase 2.0)
 export {
+    // Phase 1.75: Core execution plan
     buildExecutionPlan,
     buildFileUnit,
     validateExecutionPlan,
@@ -59,9 +60,15 @@ export {
     getFilesForRules,
     getTotalTasks,
     getTasksCountBySeverity,
+    // Phase 2.0: Incremental analysis
+    filterCachedTasks,
+    areAllTasksCached,
+    getCacheHitRate,
+    pruneStaleCache,
 } from './planner/index.js';
 
 export type {
+    // Phase 1.75
     ExecutionPlanOutput,
     ExecutionPlan,
     ExecutionIndexes,
@@ -70,8 +77,14 @@ export type {
     FileInfo,
     FileType,
     RuleTask,
+    Task,
     TaskInputs,
     FileInput,
     ResourceType,
     ExecutionPlanOptions,
+    // Phase 2.0
+    IncrementalPlan,
+    CacheFilterStats,
+    IncrementalFilterOptions,
+    CachePruneOptions,
 } from './planner/index.js';
