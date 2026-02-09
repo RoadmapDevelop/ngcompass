@@ -1,4 +1,5 @@
 import { AsyncDriver } from '../drivers/types.js';
+import { debug } from '@ngcompass/common';
 
 /**
  * Cache metadata for tracking usage and freshness
@@ -125,8 +126,8 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
             await driver.delete(hash);
             try {
                 await metadataDriver.delete(getMetadataKey(hash));
-            } catch {
-                // Ignore metadata cleanup errors
+            } catch (error) {
+                debug('cache', `Failed to delete metadata for ${hash}: ${error instanceof Error ? error.message : String(error)}`);
             }
         },
 

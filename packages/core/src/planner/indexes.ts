@@ -2,78 +2,47 @@
  * Index Builder
  *
  * Pure functions for building pre-computed indexes for O(1) queries.
- * Indexes enable efficient Phase 2 execution.
+ * Indexes enable efficient incremental execution strategies.
  */
 
-import type {
-    ExecutionPlan,
-    ExecutionIndexes,
-    ExecutionStats,
-    FileType,
-    Task,
-} from './types.js';
-import type { RuleSeverity } from '../rules/types.js';
-import { debug } from '@ngcompass/common';
+import type { ExecutionPlan, ExecutionIndexes, ExecutionStats, FileType, Task } from "./types.js";
+import type { RuleSeverity } from "../rules/types.js";
+import { debug } from "@ngcompass/common";
 
 /**
- * Builds all indexes from execution plan and tasks.
- *
- * Enhanced in Phase 1.75: Builds both file-level and task-level indexes.
- * Overloaded to support both old (plan only) and new (plan + tasks) signatures.
+ * Builds all indexes from execution plan and optional task list.
  *
  * @param plan - Execution plan (file-centric view)
- * @param tasks - All tasks (task-centric array, optional for backward compat)
+ * @param tasks - Task-centric list (optional for backward compatibility)
  * @returns Comprehensive pre-computed indexes
  */
 export function buildIndexes(plan: ExecutionPlan): ExecutionIndexes;
 export function buildIndexes(plan: ExecutionPlan, tasks: ReadonlyArray<Task>): ExecutionIndexes;
 export function buildIndexes(plan: ExecutionPlan, tasks?: ReadonlyArray<Task>): ExecutionIndexes {
-    debug('planner', 'Generating execution indexes...');
+    debug("planner", "Generating execution indexes...");
 
-    // File-level indexes (for parsing optimization)
-    const filesNeedingTsAst = buildFilesNeedingAst(plan, 'typescript');
-    const filesNeedingHtmlAst = buildFilesNeedingAst(plan, 'html');
-    const filesNeedingCssAst = buildFilesNeedingAst(plan, 'css');
-    const filesNeedingTypeChecker = buildFilesNeedingTypeChecker();
+    const filesNeedingTsAst = buildFilesNeedingAst(plan, "typescript");
+    const filesNeedingHtmlAst = buildFilesNeedingAst(plan, "html");
+    const filesNeedingCssAst = buildFilesNeedingAst(plan, "css");
+    const filesNeedingTypeChecker = buildFilesNeedingTypeChecker(plan);
 
-    // Task-level indexes (for execution strategies)
     const tasksByFile = tasks ? buildTasksByFile(tasks) : {};
-    const tasksBySeverityLevel = tasks ? buildTasksBySeverityLevel(tasks) : {
-        off: [],
-        low: [],
-        moderate: [],
-        high: [],
-        critical: [],
-        info: [],
-    };
+    const tasksBySeverityLevel = tasks ? buildTasksBySeverityLevel(tasks) : createEmptyTasksBySeverityLevel();
 
-    // Backward-compatible indexes
     const tasksByRule = buildTasksByRule(plan);
     const filesByType = buildFilesByType(plan);
     const tasksBySeverity = buildTasksBySeverity(plan);
     const stats = buildStats(plan);
 
-    debug('planner', 'Indexing complete:');
-    debug('planner', `  - TypeScript AST needed: ${filesNeedingTsAst.length} files`);
-    debug('planner', `  - HTML AST needed:       ${filesNeedingHtmlAst.length} files`);
-    debug('planner', `  - CSS AST needed:        ${filesNeedingCssAst.length} files`);
-    debug('planner', `  - Unique rules to run:   ${Object.keys(tasksByRule).length}`);
-    if (tasks) {
-        debug('planner', `  - Total tasks:           ${tasks.length}`);
-    }
+    logIndexSummary(plan, tasks, filesNeedingTsAst, filesNeedingHtmlAst, filesNeedingCssAst, tasksByRule);
 
     return {
-        // File-level indexes
         filesNeedingTsAst,
         filesNeedingHtmlAst,
         filesNeedingCssAst,
         filesNeedingTypeChecker,
-
-        // Task-level indexes
         tasksByFile,
         tasksBySeverityLevel,
-
-        // Backward-compatible indexes
         tasksByRule,
         filesByType,
         tasksBySeverity,
@@ -82,38 +51,21 @@ export function buildIndexes(plan: ExecutionPlan, tasks?: ReadonlyArray<Task>): 
 }
 
 /**
- * Builds index of files needing a specific AST type.
+ * Builds an index of files needing a specific AST type.
  *
  * @param plan - Execution plan
  * @param astType - AST type
- * @returns Array of file paths
+ * @returns Sorted array of file paths
  */
 const buildFilesNeedingAst = (
     plan: ExecutionPlan,
-    astType: 'typescript' | 'html' | 'css'
+    astType: "typescript" | "html" | "css"
 ): ReadonlyArray<string> => {
     const files = new Set<string>();
 
     for (const [filePath, unit] of Object.entries(plan)) {
-        for (const task of unit.tasks) {
-            let needsAst = false;
-
-            switch (astType) {
-                case 'typescript':
-                    needsAst = task.inputs.typescript.needsAst;
-                    break;
-                case 'html':
-                    needsAst = task.inputs.template?.needsAst ?? false;
-                    break;
-                case 'css':
-                    needsAst = task.inputs.styles?.some((s) => s.needsAst) ?? false;
-                    break;
-            }
-
-            if (needsAst) {
-                files.add(filePath);
-                break; // Found one task that needs it, no need to check more
-            }
+        if (unit.tasks.some((task) => needsAst(task, astType))) {
+            files.add(filePath);
         }
     }
 
@@ -121,16 +73,33 @@ const buildFilesNeedingAst = (
 };
 
 /**
- * Builds index of files needing TypeChecker.
+ * Determines whether a task requires a given AST type.
  *
- * @returns Array of file paths
+ * @param task - Task to inspect
+ * @param astType - AST type
+ * @returns true if task requires the AST type
  */
-const buildFilesNeedingTypeChecker = (): ReadonlyArray<string> => {
-    const files = new Set<string>();
-    // Check if any task needs TypeChecker (from rule metadata)
-    // This would require passing rule metadata through, so for now we'll skip
-    // In real implementation, check task.metadata.requires.typeChecker
+const needsAst = (task: any, astType: "typescript" | "html" | "css"): boolean => {
+    switch (astType) {
+        case "typescript":
+            return Boolean(task.inputs.typescript.needsAst);
+        case "html":
+            return Boolean(task.inputs.template?.needsAst ?? false);
+        case "css":
+            return Boolean(task.inputs.styles?.some((s: any) => s.needsAst) ?? false);
+    }
+};
 
+/**
+ * Builds an index of files needing a TypeChecker.
+ *
+ * @param plan - Execution plan
+ * @returns Sorted array of file paths
+ */
+const buildFilesNeedingTypeChecker = (plan: ExecutionPlan): ReadonlyArray<string> => {
+    void plan;
+
+    const files = new Set<string>();
     return Array.from(files).sort();
 };
 
@@ -138,23 +107,17 @@ const buildFilesNeedingTypeChecker = (): ReadonlyArray<string> => {
  * Builds index of tasks by rule name.
  *
  * @param plan - Execution plan
- * @returns Map of rule name → file paths
+ * @returns Map of rule name → sorted file paths
  */
-const buildTasksByRule = (
-    plan: ExecutionPlan
-): Readonly<Record<string, ReadonlyArray<string>>> => {
+const buildTasksByRule = (plan: ExecutionPlan): Readonly<Record<string, ReadonlyArray<string>>> => {
     const index: Record<string, string[]> = {};
 
     for (const [filePath, unit] of Object.entries(plan)) {
         for (const task of unit.tasks) {
-            if (!index[task.ruleName]) {
-                index[task.ruleName] = [];
-            }
-            index[task.ruleName].push(filePath);
+            (index[task.ruleName] ??= []).push(filePath);
         }
     }
 
-    // Sort each array for determinism
     for (const ruleName of Object.keys(index)) {
         index[ruleName].sort();
     }
@@ -166,12 +129,29 @@ const buildTasksByRule = (
  * Builds index of files by file type.
  *
  * @param plan - Execution plan
- * @returns Map of file type → file paths
+ * @returns Map of file type → sorted file paths
  */
-const buildFilesByType = (
-    plan: ExecutionPlan
-): Readonly<Record<FileType, ReadonlyArray<string>>> => {
-    const index: Record<FileType, string[]> = {
+const buildFilesByType = (plan: ExecutionPlan): Readonly<Record<FileType, ReadonlyArray<string>>> => {
+    const index: Record<FileType, string[]> = createEmptyFilesByTypeIndex();
+
+    for (const [filePath, unit] of Object.entries(plan)) {
+        index[unit.file.type].push(filePath);
+    }
+
+    for (const type of Object.keys(index) as FileType[]) {
+        index[type].sort();
+    }
+
+    return index;
+};
+
+/**
+ * Creates an empty files-by-type index.
+ *
+ * @returns Initialized files-by-type index
+ */
+const createEmptyFilesByTypeIndex = (): Record<FileType, string[]> => {
+    return {
         component: [],
         directive: [],
         pipe: [],
@@ -183,17 +163,6 @@ const buildFilesByType = (
         style: [],
         config: [],
     };
-
-    for (const [filePath, unit] of Object.entries(plan)) {
-        index[unit.file.type].push(filePath);
-    }
-
-    // Sort each array for determinism
-    for (const type of Object.keys(index) as FileType[]) {
-        index[type].sort();
-    }
-
-    return index;
 };
 
 /**
@@ -202,17 +171,8 @@ const buildFilesByType = (
  * @param plan - Execution plan
  * @returns Map of severity → count
  */
-const buildTasksBySeverity = (
-    plan: ExecutionPlan
-): Readonly<Record<RuleSeverity, number>> => {
-    const counts: Record<RuleSeverity, number> = {
-        off: 0,
-        low: 0,
-        moderate: 0,
-        high: 0,
-        critical: 0,
-        info: 0,
-    };
+const buildTasksBySeverity = (plan: ExecutionPlan): Readonly<Record<RuleSeverity, number>> => {
+    const counts: Record<RuleSeverity, number> = createEmptySeverityCounts();
 
     for (const unit of Object.values(plan)) {
         for (const task of unit.tasks) {
@@ -224,47 +184,41 @@ const buildTasksBySeverity = (
 };
 
 /**
- * Builds global statistics.
+ * Creates an empty severity-count record.
+ *
+ * @returns Initialized severity counts
+ */
+const createEmptySeverityCounts = (): Record<RuleSeverity, number> => {
+    return { off: 0, low: 0, moderate: 0, high: 0, critical: 0, info: 0 };
+};
+
+/**
+ * Builds global execution statistics.
  *
  * @param plan - Execution plan
  * @returns Execution statistics
  */
 const buildStats = (plan: ExecutionPlan): ExecutionStats => {
-    const files = Object.values(plan);
-    const totalFiles = files.length;
-    const totalTasks = files.reduce((sum, unit) => sum + unit.tasks.length, 0);
-    const avgTasksPerFile = totalFiles > 0 ? totalTasks / totalFiles : 0;
+    const units = Object.values(plan);
+    const totalFiles = units.length;
 
+    let totalTasks = 0;
     let filesWithTemplates = 0;
     let filesWithStyles = 0;
     let filesWithSpecs = 0;
 
-    for (const unit of files) {
-        // Check if any task has template/style/spec inputs
-        for (const task of unit.tasks) {
-            if (task.inputs.template) {
-                filesWithTemplates++;
-                break;
-            }
-        }
-        for (const task of unit.tasks) {
-            if (task.inputs.styles && task.inputs.styles.length > 0) {
-                filesWithStyles++;
-                break;
-            }
-        }
-        for (const task of unit.tasks) {
-            if (task.inputs.spec) {
-                filesWithSpecs++;
-                break;
-            }
-        }
+    for (const unit of units) {
+        totalTasks += unit.tasks.length;
+
+        if (unit.tasks.some((t) => Boolean(t.inputs.template))) filesWithTemplates++;
+        if (unit.tasks.some((t) => Boolean(t.inputs.styles?.length))) filesWithStyles++;
+        if (unit.tasks.some((t) => Boolean(t.inputs.spec))) filesWithSpecs++;
     }
 
     return {
         totalFiles,
         totalTasks,
-        avgTasksPerFile,
+        avgTasksPerFile: totalFiles > 0 ? totalTasks / totalFiles : 0,
         filesWithTemplates,
         filesWithStyles,
         filesWithSpecs,
@@ -286,9 +240,8 @@ export const getFilesForRules = (
 
     for (const ruleName of ruleNames) {
         const ruleFiles = index[ruleName];
-        if (ruleFiles) {
-            ruleFiles.forEach((file) => files.add(file));
-        }
+        if (!ruleFiles) continue;
+        for (const file of ruleFiles) files.add(file);
     }
 
     return Array.from(files).sort();
@@ -311,16 +264,9 @@ export const getTotalTasks = (indexes: ExecutionIndexes): number => {
  * @param severity - Severity level
  * @returns Task count
  */
-export const getTasksCountBySeverity = (
-    indexes: ExecutionIndexes,
-    severity: RuleSeverity
-): number => {
+export const getTasksCountBySeverity = (indexes: ExecutionIndexes, severity: RuleSeverity): number => {
     return indexes.tasksBySeverity[severity];
 };
-
-// ==============================================================================
-// TASK-LEVEL INDEX BUILDERS (Phase 1.75)
-// ==============================================================================
 
 /**
  * Builds index of tasks grouped by file path.
@@ -332,13 +278,9 @@ const buildTasksByFile = (tasks: ReadonlyArray<Task>): Readonly<Record<string, R
     const index: Record<string, Task[]> = {};
 
     for (const task of tasks) {
-        if (!index[task.filePath]) {
-            index[task.filePath] = [];
-        }
-        index[task.filePath].push(task);
+        (index[task.filePath] ??= []).push(task);
     }
 
-    // Sort each array by ruleName for determinism
     for (const filePath of Object.keys(index)) {
         index[filePath].sort((a, b) => a.ruleName.localeCompare(b.ruleName));
     }
@@ -355,20 +297,12 @@ const buildTasksByFile = (tasks: ReadonlyArray<Task>): Readonly<Record<string, R
 const buildTasksBySeverityLevel = (
     tasks: ReadonlyArray<Task>
 ): Readonly<Record<RuleSeverity, ReadonlyArray<Task>>> => {
-    const index: Record<RuleSeverity, Task[]> = {
-        off: [],
-        low: [],
-        moderate: [],
-        high: [],
-        critical: [],
-        info: [],
-    };
+    const index = createEmptyTasksBySeverityLevelMutable();
 
     for (const task of tasks) {
         index[task.severity].push(task);
     }
 
-    // Sort each array by filePath then ruleName for determinism
     for (const severity of Object.keys(index) as RuleSeverity[]) {
         index[severity].sort((a, b) => {
             const fileCompare = a.filePath.localeCompare(b.filePath);
@@ -378,4 +312,50 @@ const buildTasksBySeverityLevel = (
     }
 
     return index;
+};
+
+/**
+ * Creates an empty tasks-by-severity index in readonly shape.
+ *
+ * @returns Empty tasks-by-severity index
+ */
+const createEmptyTasksBySeverityLevel = (): Readonly<Record<RuleSeverity, ReadonlyArray<Task>>> => {
+    return { off: [], low: [], moderate: [], high: [], critical: [], info: [] };
+};
+
+/**
+ * Creates an empty tasks-by-severity index in mutable shape for building.
+ *
+ * @returns Empty tasks-by-severity index
+ */
+const createEmptyTasksBySeverityLevelMutable = (): Record<RuleSeverity, Task[]> => {
+    return { off: [], low: [], moderate: [], high: [], critical: [], info: [] };
+};
+
+/**
+ * Logs a summary of produced indexes.
+ *
+ * @param plan - Execution plan
+ * @param tasks - Task list if provided
+ * @param ts - Files needing TS AST
+ * @param html - Files needing HTML AST
+ * @param css - Files needing CSS AST
+ * @param tasksByRule - TasksByRule index
+ */
+const logIndexSummary = (
+    plan: ExecutionPlan,
+    tasks: ReadonlyArray<Task> | undefined,
+    ts: ReadonlyArray<string>,
+    html: ReadonlyArray<string>,
+    css: ReadonlyArray<string>,
+    tasksByRule: Readonly<Record<string, ReadonlyArray<string>>>
+): void => {
+    void plan;
+
+    debug("planner", "Indexing complete:");
+    debug("planner", `  - TypeScript AST needed: ${ts.length} files`);
+    debug("planner", `  - HTML AST needed:       ${html.length} files`);
+    debug("planner", `  - CSS AST needed:        ${css.length} files`);
+    debug("planner", `  - Unique rules to run:   ${Object.keys(tasksByRule).length}`);
+    if (tasks) debug("planner", `  - Total tasks:           ${tasks.length}`);
 };

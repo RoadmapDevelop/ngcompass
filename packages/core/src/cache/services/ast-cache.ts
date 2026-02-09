@@ -1,4 +1,5 @@
 import { AsyncDriver, SyncDriver } from '../drivers/types.js';
+import { debug } from '@ngcompass/common';
 
 export interface AstEntry {
     filePath: string;
@@ -37,11 +38,8 @@ export const createAstCache = (
                     l1.set(hash, cold);
                     return cold;
                 }
-            } catch {
-                // If L2 fails (e.g. deserialization, corruption), we ignore it and return undefined.
-                // Optionally we could delete it, but the driver implementation handles its own consistency usually.
-                // If using our disk driver, it might just throw.
-                // Safe default: assume miss.
+            } catch (error) {
+                debug('cache', `Failed to read AST from L2 for ${hash}: ${error instanceof Error ? error.message : String(error)}`);
                 return undefined;
             }
 
