@@ -82,6 +82,10 @@ export const warmupHashCache = async (
             })
         );
     }
+
+    if (metaCache.flush) {
+        await metaCache.flush();
+    }
 };
 
 /**

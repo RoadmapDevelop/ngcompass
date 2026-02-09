@@ -2,6 +2,7 @@ import path from 'path';
 import { createMemoryDriver } from './drivers/memory.js';
 import { createDiskDriver } from './drivers/disk.js';
 import { createAtomicDriver } from './drivers/atomic.js';
+import { createJsonFileDriver } from './drivers/json-file.js';
 import { createSourceCache, SourceCache, SourceEntry } from './services/source-cache.js';
 import { createAstCache, AstCache, AstEntry } from './services/ast-cache.js';
 import { createResultCache, ResultCache } from './services/result-cache.js';
@@ -90,7 +91,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         path: path.join(config.disk?.path ?? defaultBaseDir, 'config')
     });
 
-    const metaDriver = createDiskDriver<FileMeta>({
+    const metaDriver = createJsonFileDriver<FileMeta>({
         path: path.join(config.disk?.path ?? defaultBaseDir, 'meta')
     });
 
