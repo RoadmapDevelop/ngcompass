@@ -18,7 +18,7 @@ import { Ok, Err } from "./types.js";
 import { debug, time, timeLog } from "@ngcompass/common";
 import { detectFileType } from "./file-type.js";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
-import { calculateFileHash, initHasher, calculateGlobalHash } from "./hashing.js";
+import { calculateFileHash, initHasher, calculateGlobalHash, warmupHashCache } from "./hashing.js";
 import { buildIndexes } from "./indexes.js";
 import { serializePlan, deserializePlan } from "./serialize.js";
 
@@ -47,6 +47,17 @@ export const buildExecutionPlan = async (
 
         const context = createTaskBuilderContext();
         const fileTypeCache = new Map<string, FileType>();
+
+        if (options.cache) {
+            debug("planner", "Warming up hash cache from metadata index...");
+            const start = performance.now();
+            await warmupHashCache(
+                options.files as string[],
+                options.cache.metas,
+                context.hashCache!
+            );
+            debug("planner", `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
+        }
 
         const cached = await tryLoadPlanFromCache(options, context);
         if (cached) {
