@@ -10,6 +10,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { GitignoreFilter, Result, Option } from './types.js';
 import { Ok, Err } from './types.js';
+import { debug } from '@ngcompass/common';
 
 /**
  * Loads .gitignore content from a directory.
@@ -26,8 +27,9 @@ export const loadGitignore = async (rootDir: string): Promise<Option<string>> =>
     try {
         const content = await fs.readFile(gitignorePath, 'utf-8');
         return content;
-    } catch {
+    } catch (error) {
         // .gitignore doesn't exist or can't be read
+        debug('scanner', `Failed to load .gitignore from ${rootDir}: ${error instanceof Error ? error.message : String(error)}`);
         return null;
     }
 };

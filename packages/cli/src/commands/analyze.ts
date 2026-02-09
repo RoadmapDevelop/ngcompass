@@ -9,7 +9,8 @@ import {
     filterCachedTasks
 } from '@ngcompass/core';
 import { getReporter } from '@ngcompass/reporters';
-import chalk from 'chalk'; // Still used for non-reporter logging like discovery steps?
+import { debug } from '@ngcompass/common';
+import chalk from 'chalk';
 import process from 'node:process';
 
 /**
@@ -78,7 +79,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 // 3. Resolve Rules
                 const tRulesStart = performance.now();
                 console.log('→ Resolving rules...');
-                const rulesResult = await resolveRules(config as any);
+                const rulesResult = await resolveRules(config);
                 const tRulesEnd = performance.now();
 
                 if (!rulesResult.ok) {
@@ -155,7 +156,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                                 };
                             }).filter(r => r !== null);
                         } catch (e) {
-                            // ignore cache errors
+                            debug('cache', `Failed to load cached results: ${e instanceof Error ? e.message : String(e)}`);
                         }
                     }
                 }
@@ -195,7 +196,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                         const entries: ReadonlyArray<readonly [string, any]> = resultsToCache;
                         await cache.results.setMany(entries);
                     } catch (e) {
-                        // ignore cache errors
+                        debug('cache', `Failed to write cache results: ${e instanceof Error ? e.message : String(e)}`);
                     }
                 }
 

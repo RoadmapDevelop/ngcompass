@@ -1,6 +1,7 @@
 
 import { parseTs } from '../../parsers/ts.js';
 import { RuleResult, RuleContext, RuleFailure } from '../types.js';
+import { walkProgram } from '../visitor.js';
 
 /**
  * template-no-call-expression
@@ -22,27 +23,6 @@ export const templateNoCallExpression = (context: RuleContext): RuleResult => {
         return { ruleName: 'template-no-call-expression', failures: [] };
     }
 
-    // Helper to traverse Oxc AST
-    const hasCallExpression = (node: any): boolean => {
-        if (!node) return false;
-
-        if (node.type === 'CallExpression') {
-            // We found a function call!
-            return true;
-        }
-
-        // Recursive check
-        for (const key of Object.keys(node)) {
-            const val = node[key];
-            if (Array.isArray(val)) {
-                if (val.some(child => hasCallExpression(child))) return true;
-            } else if (typeof val === 'object' && val !== null && val.type) {
-                if (hasCallExpression(val)) return true;
-            }
-        }
-        return false;
-    };
-
     const checkExpression = (expr: string, sourceSpan: any) => {
         if (!expr || !expr.trim()) return;
 
@@ -54,21 +34,19 @@ export const templateNoCallExpression = (context: RuleContext): RuleResult => {
             const exprProgram = parserRes.program;
 
             // Check for CallExpression in the parsed AST
-            if (hasCallExpression(exprProgram)) {
-                // Map location.
-                // sourceSpan from angular-html-parser has { start: { line, col, offset } }
-                // line and col are 0-indexed typically in some parsers, 1-indexed in others.
-                // angular-html-parser: line is 0-indexed (usually), col is 0-indexed.
-
-                failures.push({
-                    filePath: context.filePath,
-                    message: `Avoid function calls in templates: ${expr}`,
-                    line: (sourceSpan.start.line || 0) + 1,
-                    column: (sourceSpan.start.col || 0) + 1,
-                    severity: 'high',
-                    ruleName: 'template-no-call-expression'
-                });
-            }
+            walkProgram(exprProgram, (node) => {
+                if (node.type === 'CallExpression') {
+                    failures.push({
+                        filePath: context.filePath,
+                        message: `Avoid function calls in templates: ${expr}`,
+                        line: (sourceSpan.start.line || 0) + 1,
+                        column: (sourceSpan.start.col || 0) + 1,
+                        severity: 'high',
+                        ruleName: 'template-no-call-expression'
+                    });
+                    return false; // Stop visiting children of this call expression
+                }
+            });
         } catch (e) {
             // Ignore parse errors
         }
@@ -82,10 +60,6 @@ export const templateNoCallExpression = (context: RuleContext): RuleResult => {
                     if (attr.name.startsWith('[') || attr.name.startsWith('bind-')) {
                         checkExpression(attr.value, attr.sourceSpan);
                     }
-                    // Check Interpolated attributes: prop="{{ expr }}"
-                    // angular-html-parser doesn't always break these out in 'attrs' array as structured headers
-                    // But if it does, the value includes {{ }}.
-                    // For now, only checking explicit inputs.
                 }
                 visitHtml(node.children);
             } else if (node.type === 'Interpolation') {

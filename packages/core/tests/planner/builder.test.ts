@@ -19,8 +19,6 @@ vi.mock('../../src/planner/hashing.js', () => ({
     calculateFileHash: vi.fn().mockReturnValue('file-hash'),
 }));
 
-// Import mocked functions to configure them
-import { discoverResources } from '../../src/planner/resources.js';
 
 
 // Mock resolved rules

@@ -9,6 +9,7 @@ import type {
     RuleResolutionResult,
     ResolvedRule,
     ResolvedRulesMap,
+    RulesConfig,
 } from '../types.js';
 import { Ok, Err } from '../types.js';
 import { resolveExtendsChain } from './loader.js';
@@ -16,7 +17,7 @@ import { mergeRulesConfigs, applyOverrides } from './merger.js';
 import { isRuleEnabled } from './normalize.js';
 import { isKnownRule, getRuleMetadata } from '../registry.js';
 import { debug, time, timeEnd } from '@ngcompass/common';
-import type { ValidatedConfig } from '../../config/health/types.js';
+import type { NormalizedAnalyzerConfig } from '@ngcompass/common';
 
 /**
  * Resolve rules from config
@@ -29,7 +30,7 @@ import type { ValidatedConfig } from '../../config/health/types.js';
  * 5. Filter enabled rules
  */
 export const resolveRules = async (
-    config: ValidatedConfig,
+    config: NormalizedAnalyzerConfig,
     configDir: string = process.cwd()
 ): Promise<Result<RuleResolutionResult>> => {
     time('rule-resolution');
@@ -58,7 +59,7 @@ export const resolveRules = async (
 
         // Step 4: Apply user config rules (highest precedence)
         debug('loader', 'Applying user config rules');
-        const finalRules = applyOverrides(mergedPresetRules, config.rules || {});
+        const finalRules = applyOverrides(mergedPresetRules, (config.rules || {}) as RulesConfig);
         debug('loader', `Final merged rules: ${finalRules.size} rules`);
 
         // Step 5: Attach metadata and create resolved rules
