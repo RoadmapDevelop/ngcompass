@@ -5,8 +5,8 @@
  * using convention-based detection (no parsing).
  */
 
+import { readdir } from 'node:fs/promises';
 import path from 'node:path';
-import { existsSync } from 'node:fs';
 import type { TaskInputs, FileInput } from './types.js';
 import { getBaseName, isComponentFile } from './file-type.js';
 
@@ -17,15 +17,32 @@ import { getBaseName, isComponentFile } from './file-type.js';
  * @param tsFilePath - TypeScript file path (absolute)
  * @returns TaskInputs with all discovered resources
  */
-export const discoverResources = (
+export const discoverResources = async (
     tsFilePath: string,
     needsTsAst: boolean,
     needsHtmlAst: boolean,
     needsCssAst: boolean,
-    needsSpecAst: boolean
-): TaskInputs => {
+    needsSpecAst: boolean,
+    directoryCache?: Map<string, string[]>
+): Promise<TaskInputs> => {
     const dir = path.dirname(tsFilePath);
     const baseName = getBaseName(tsFilePath);
+
+    // Get files in directory (cached or fresh)
+    let files: string[] = [];
+    if (directoryCache?.has(dir)) {
+        files = directoryCache.get(dir)!;
+    } else {
+        try {
+            files = await readdir(dir);
+            directoryCache?.set(dir, files);
+        } catch {
+            // Directory error (should not happen if ts file exists, but safe fallback)
+            files = [];
+        }
+    }
+
+    const hasFile = (name: string) => files.includes(name);
 
     // TypeScript file (always present)
     const typescript: FileInput = {
@@ -35,8 +52,9 @@ export const discoverResources = (
     };
 
     // Template file (for components/directives)
-    const templatePath = path.join(dir, `${baseName}.component.html`);
-    const template: FileInput | undefined = existsSync(templatePath)
+    const templateName = `${baseName}.component.html`;
+    const templatePath = path.join(dir, templateName);
+    const template: FileInput | undefined = hasFile(templateName)
         ? { path: templatePath, needsAst: needsHtmlAst, hash: '' }
         : undefined;
 
@@ -46,16 +64,17 @@ export const discoverResources = (
         // Check for common style extensions
         const styleExtensions = ['.css', '.scss', '.sass', '.less'];
         for (const ext of styleExtensions) {
-            const stylePath = path.join(dir, `${baseName}.component${ext}`);
-            if (existsSync(stylePath)) {
-                styles.push({ path: stylePath, needsAst: needsCssAst, hash: '' });
+            const styleName = `${baseName}.component${ext}`;
+            if (hasFile(styleName)) {
+                styles.push({ path: path.join(dir, styleName), needsAst: needsCssAst, hash: '' });
             }
         }
     }
 
     // Spec file
-    const specPath = path.join(dir, `${baseName}.spec.ts`);
-    const spec: FileInput | undefined = existsSync(specPath)
+    const specName = `${baseName}.spec.ts`;
+    const specPath = path.join(dir, specName);
+    const spec: FileInput | undefined = hasFile(specName)
         ? { path: specPath, needsAst: needsSpecAst, hash: '' }
         : undefined;
 
@@ -74,28 +93,38 @@ export const discoverResources = (
  * @param resourceType - Type of resource to check
  * @returns true if resource exists
  */
-export const resourceExists = (
+export const resourceExists = async (
     tsFilePath: string,
-    resourceType: 'template' | 'style' | 'spec'
-): boolean => {
+    resourceType: 'template' | 'style' | 'spec',
+    directoryCache?: Map<string, string[]>
+): Promise<boolean> => {
     const dir = path.dirname(tsFilePath);
     const baseName = getBaseName(tsFilePath);
 
+    let files: string[] = [];
+    if (directoryCache?.has(dir)) {
+        files = directoryCache.get(dir)!;
+    } else {
+        try {
+            files = await readdir(dir);
+            directoryCache?.set(dir, files);
+        } catch {
+            return false;
+        }
+    }
+
+    const hasFile = (name: string) => files.includes(name);
+
     switch (resourceType) {
         case 'template': {
-            const templatePath = path.join(dir, `${baseName}.component.html`);
-            return existsSync(templatePath);
+            return hasFile(`${baseName}.component.html`);
         }
         case 'style': {
             const styleExtensions = ['.css', '.scss', '.sass', '.less'];
-            return styleExtensions.some((ext) => {
-                const stylePath = path.join(dir, `${baseName}.component${ext}`);
-                return existsSync(stylePath);
-            });
+            return styleExtensions.some((ext) => hasFile(`${baseName}.component${ext}`));
         }
         case 'spec': {
-            const specPath = path.join(dir, `${baseName}.spec.ts`);
-            return existsSync(specPath);
+            return hasFile(`${baseName}.spec.ts`);
         }
     }
 };
@@ -106,18 +135,35 @@ export const resourceExists = (
  * @param tsFilePath - Component TypeScript file path
  * @returns Array of style file paths
  */
-export const getStyleFiles = (tsFilePath: string): ReadonlyArray<string> => {
+export const getStyleFiles = async (
+    tsFilePath: string,
+    directoryCache?: Map<string, string[]>
+): Promise<ReadonlyArray<string>> => {
     if (!isComponentFile(tsFilePath)) return [];
 
     const dir = path.dirname(tsFilePath);
     const baseName = getBaseName(tsFilePath);
+
+    let files: string[] = [];
+    if (directoryCache?.has(dir)) {
+        files = directoryCache.get(dir)!;
+    } else {
+        try {
+            files = await readdir(dir);
+            directoryCache?.set(dir, files);
+        } catch {
+            return [];
+        }
+    }
+
+    const hasFile = (name: string) => files.includes(name);
     const styleExtensions = ['.css', '.scss', '.sass', '.less'];
     const styles: string[] = [];
 
     for (const ext of styleExtensions) {
-        const stylePath = path.join(dir, `${baseName}.component${ext}`);
-        if (existsSync(stylePath)) {
-            styles.push(stylePath);
+        const styleName = `${baseName}.component${ext}`;
+        if (hasFile(styleName)) {
+            styles.push(path.join(dir, styleName));
         }
     }
 
@@ -130,14 +176,29 @@ export const getStyleFiles = (tsFilePath: string): ReadonlyArray<string> => {
  * @param tsFilePath - Component TypeScript file path
  * @returns Template file path or null if not found
  */
-export const getTemplateFile = (tsFilePath: string): string | null => {
+export const getTemplateFile = async (
+    tsFilePath: string,
+    directoryCache?: Map<string, string[]>
+): Promise<string | null> => {
     if (!isComponentFile(tsFilePath)) return null;
 
     const dir = path.dirname(tsFilePath);
     const baseName = getBaseName(tsFilePath);
-    const templatePath = path.join(dir, `${baseName}.component.html`);
 
-    return existsSync(templatePath) ? templatePath : null;
+    let files: string[] = [];
+    if (directoryCache?.has(dir)) {
+        files = directoryCache.get(dir)!;
+    } else {
+        try {
+            files = await readdir(dir);
+            directoryCache?.set(dir, files);
+        } catch {
+            return null;
+        }
+    }
+
+    const templateName = `${baseName}.component.html`;
+    return files.includes(templateName) ? path.join(dir, templateName) : null;
 };
 
 /**
@@ -146,10 +207,25 @@ export const getTemplateFile = (tsFilePath: string): string | null => {
  * @param tsFilePath - TypeScript file path
  * @returns Spec file path or null if not found
  */
-export const getSpecFile = (tsFilePath: string): string | null => {
+export const getSpecFile = async (
+    tsFilePath: string,
+    directoryCache?: Map<string, string[]>
+): Promise<string | null> => {
     const dir = path.dirname(tsFilePath);
     const baseName = getBaseName(tsFilePath);
-    const specPath = path.join(dir, `${baseName}.spec.ts`);
 
-    return existsSync(specPath) ? specPath : null;
+    let files: string[] = [];
+    if (directoryCache?.has(dir)) {
+        files = directoryCache.get(dir)!;
+    } else {
+        try {
+            files = await readdir(dir);
+            directoryCache?.set(dir, files);
+        } catch {
+            return null;
+        }
+    }
+
+    const specName = `${baseName}.spec.ts`;
+    return files.includes(specName) ? path.join(dir, specName) : null;
 };

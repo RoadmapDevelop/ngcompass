@@ -2,15 +2,27 @@
  * Task Builder Tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
     shouldApplyRule,
-    buildRuleTask,
-    generateCacheKey,
+    buildTask,
     filterRulesByAstRequirement,
     groupRulesByDependencyType,
 } from '../../src/planner/task-builder.js';
 import type { ResolvedRule, RuleSeverity } from '../../src/rules/types.js';
+import type { TaskInputs } from '../../src/planner/types.js';
+
+// Mock resources and hashing
+vi.mock('../../src/planner/resources.js', () => ({
+    discoverResources: vi.fn(),
+}));
+
+vi.mock('../../src/planner/hashing.js', () => ({
+    hashFile: vi.fn().mockReturnValue('mock-hash'),
+    calculateTaskId: vi.fn().mockReturnValue('mock-task-id'),
+}));
+
+import { discoverResources } from '../../src/planner/resources.js';
 
 // Mock resolved rules
 const createMockRule = (
@@ -82,63 +94,45 @@ describe('shouldApplyRule', () => {
     });
 });
 
-describe('buildRuleTask', () => {
-    it('returns null for rules that do not apply', () => {
+describe('buildTask', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        (discoverResources as any).mockResolvedValue({
+            typescript: { path: 'src/app/utils.ts', hash: 'mock-hash', needsAst: true },
+        } as TaskInputs);
+    });
+
+    it('returns null for rules that do not apply', async () => {
         const rule = createMockRule('template-check', 'component');
-        const task = buildRuleTask('src/app/auth.service.ts', 'service', rule, 'key123');
+        const task = await buildTask('src/app/auth.service.ts', 'service', rule);
 
         expect(task).toBeNull();
     });
 
-    it('returns null for disabled rules', () => {
+    it('returns null for disabled rules', async () => {
         const rule = createMockRule('no-console', 'standalone', {}, 'off');
 
-        const task = buildRuleTask('src/app/utils.ts', 'logic', rule, 'key123');
+        const task = await buildTask('src/app/utils.ts', 'logic', rule);
         expect(task).toBeNull();
     });
 
-    it('builds task for applicable rule', () => {
+    it('builds task for applicable rule', async () => {
         const rule = createMockRule('no-console', 'standalone', { tsAst: true });
-        const task = buildRuleTask('src/app/utils.ts', 'logic', rule, 'key123');
+        const task = await buildTask('src/app/utils.ts', 'logic', rule);
 
         expect(task).not.toBeNull();
         expect(task?.ruleName).toBe('no-console');
         expect(task?.severity).toBe('moderate');
-        expect(task?.cacheKey).toBe('key123');
+        expect(task?.taskId).toBe('mock-task-id');
         expect(task?.inputs.typescript.needsAst).toBe(true);
     });
 
-    it('includes options in task', () => {
+    it('includes options in task', async () => {
         const rule = createMockRule('no-console', 'standalone', {}, 'moderate', { allowWarnings: true });
 
-        const task = buildRuleTask('src/app/utils.ts', 'logic', rule, 'key123');
+        const task = await buildTask('src/app/utils.ts', 'logic', rule);
 
         expect(task?.options).toEqual({ allowWarnings: true });
-    });
-});
-
-describe('generateCacheKey', () => {
-    it('generates consistent cache keys', () => {
-        const key1 = generateCacheKey('file.ts', 'no-console');
-        const key2 = generateCacheKey('file.ts', 'no-console');
-
-        expect(key1).toBe(key2);
-    });
-
-    it('generates different keys for different inputs', () => {
-        const key1 = generateCacheKey('file1.ts', 'no-console');
-        const key2 = generateCacheKey('file2.ts', 'no-console');
-        const key3 = generateCacheKey('file1.ts', 'no-debugger');
-
-        expect(key1).not.toBe(key2);
-        expect(key1).not.toBe(key3);
-    });
-
-    it('generates base64 encoded keys', () => {
-        const key = generateCacheKey('file.ts', 'no-console');
-
-        // Should be valid base64
-        expect(() => Buffer.from(key, 'base64')).not.toThrow();
     });
 });
 
@@ -202,10 +196,9 @@ describe('groupRulesByDependencyType', () => {
 
         const grouped = groupRulesByDependencyType(rules);
 
-        expect(grouped.standalone).toHaveLength(2);
-        expect(grouped.component).toHaveLength(1);
-        expect(grouped.styles).toHaveLength(1);
-        expect(grouped.imports).toHaveLength(0);
+        expect(grouped.allTs).toHaveLength(2);
+        expect(grouped.component).toHaveLength(2); // component + styles
+        expect(grouped.directive).toHaveLength(1); // component only
     });
 
     it('returns empty arrays for unused types', () => {
@@ -216,7 +209,6 @@ describe('groupRulesByDependencyType', () => {
         const grouped = groupRulesByDependencyType(rules);
 
         expect(grouped.component).toEqual([]);
-        expect(grouped.styles).toEqual([]);
-        expect(grouped.imports).toEqual([]);
+        expect(grouped.directive).toEqual([]);
     });
 });

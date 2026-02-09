@@ -6,12 +6,11 @@ import {
     resolveRules,
     getEnabledRules,
     buildExecutionPlan,
-    filterCachedTasks,
-    Task
+    filterCachedTasks
 } from '@ngcompass/core';
-import chalk from 'chalk';
+import { getReporter } from '@ngcompass/reporters';
+import chalk from 'chalk'; // Still used for non-reporter logging like discovery steps?
 import process from 'node:process';
-import path from 'node:path';
 
 /**
  * Registers the 'analyze' command.
@@ -122,33 +121,10 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     console.log('-------------------------------------------\n');
                 }
 
-                const { stats } = planResult.data.indexes;
-                const elapsedTime = performance.now() - startTime;
-
-                const formatTask = (task: Task, index: number) => {
-                    const rel = (p: string) => path.relative(process.cwd(), p);
-                    const shortHash = (h: string) => h.substring(0, 8);
-
-                    const inputs: string[] = [];
-                    inputs.push(`${chalk.blue('TS')}:${shortHash(task.inputs.typescript.hash)}${task.inputs.typescript.needsAst ? '*' : ''}`);
-
-                    if (task.inputs.template) {
-                        inputs.push(`${chalk.magenta('TPL')}:${shortHash(task.inputs.template.hash)}${task.inputs.template.needsAst ? '*' : ''}`);
-                    }
-                    if (task.inputs.styles) {
-                        task.inputs.styles.forEach(s => inputs.push(`${chalk.green('CSS')}:${shortHash(s.hash)}${s.needsAst ? '*' : ''}`));
-                    }
-                    if (task.inputs.spec) {
-                        inputs.push(`${chalk.cyan('SPEC')}:${shortHash(task.inputs.spec.hash)}${task.inputs.spec.needsAst ? '*' : ''}`);
-                    }
-
-                    const opts = JSON.stringify(task.options);
-                    return `  ${chalk.gray((index + 1).toString().padStart(2, ' '))} ${chalk.bold.cyan(task.ruleName.padEnd(25))} ${shortHash(task.taskId)} ${task.severity.padEnd(5)} ${chalk.white(rel(task.filePath))} ${chalk.gray(opts)} [${inputs.join(', ')}]`;
-                };
-
-                const countInputs = (t: Task) => 1 + (t.inputs.template ? 1 : 0) + (t.inputs.styles?.length || 0) + (t.inputs.spec ? 1 : 0);
-
                 // 5. Incremental Filtering (if enabled)
+                let tasksToExecute = planResult.data.tasks;
+                let cachedResults: any[] = [];
+
                 if (options.incremental || options.force) {
                     console.log('→ Filtering by cache...');
 
@@ -158,48 +134,88 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                         { forceRerun: !!options.force }
                     );
 
-                    const { cached, pending, stats: cacheStats } = incrementalPlan;
-                    const finalTime = performance.now() - startTime;
 
-                    // Final Summary
-                    console.log('\n' + chalk.bold('═'.repeat(60)));
-                    console.log(chalk.bold.cyan('  Analysis Complete'));
-                    console.log(chalk.bold('═'.repeat(60)));
-                    console.log(`  ${chalk.bold('Tasks:')}     ${chalk.cyan(stats.totalTasks)} tasks`);
-                    console.log(`  ${chalk.bold('Files:')}     ${chalk.cyan(stats.totalFiles)} files`);
-                    console.log(`  ${chalk.bold('Cached:')}    ${chalk.green(cached.length)} tasks (${(cacheStats.cacheHitRate * 100).toFixed(1)}%)`);
-                    console.log(`  ${chalk.bold('Pending:')}   ${chalk.yellow(pending.length)} tasks`);
-                    console.log(`  ${chalk.bold('Time:')}      ${chalk.magenta(finalTime.toFixed(0))}ms`);
-                    console.log(chalk.bold('═'.repeat(60)) + '\n');
+                    tasksToExecute = incrementalPlan.pending;
 
-                    if (pending.length === 0) {
-                        console.log(chalk.bold.green('🎉 Everything is up to date!\n'));
-                    } else if (options.show) {
-                        console.log(chalk.bold(`\nShowing first 50 pending tasks (sorted by most inputs):`));
-                        const sorted = [...pending].sort((a, b) => countInputs(b) - countInputs(a));
-                        sorted.slice(0, 50).forEach((task, i) => console.log(formatTask(task, i)));
-                        if (sorted.length > 50) {
-                            console.log(chalk.gray(`  ... and ${sorted.length - 50} more`));
+                    const { cached, stats: cacheStats } = incrementalPlan;
+                    console.log(`  Cached: ${cached.length} tasks (${(cacheStats.cacheHitRate * 100).toFixed(1)}%)`);
+                    console.log(`  Pending: ${tasksToExecute.length} tasks`);
+
+                    // Retrieve cached results to merge later
+                    if (cached.length > 0) {
+                        try {
+                            const cachedMap = await cache.results.getMany(cached.map(t => t.taskId));
+                            cachedResults = cached.map(task => {
+                                const result = cachedMap.get(task.taskId) as any;
+                                if (!result) return null;
+                                // Hydrate result with current file path (crucial for accurate reporting)
+                                return {
+                                    ...result,
+                                    failures: result.failures.map((f: any) => ({ ...f, filePath: task.filePath }))
+                                };
+                            }).filter(r => r !== null);
+                        } catch (e) {
+                            // ignore cache errors
                         }
                     }
-                } else {
-                    // Final Summary (non-incremental)
-                    console.log('\n' + chalk.bold('═'.repeat(60)));
-                    console.log(chalk.bold.cyan('  Analysis Complete'));
-                    console.log(chalk.bold('═'.repeat(60)));
-                    console.log(`  ${chalk.bold('Tasks:')}     ${chalk.cyan(stats.totalTasks)} tasks`);
-                    console.log(`  ${chalk.bold('Files:')}     ${chalk.cyan(stats.totalFiles)} files`);
-                    console.log(`  ${chalk.bold('Time:')}      ${chalk.magenta(elapsedTime.toFixed(0))}ms`);
-                    console.log(chalk.bold('═'.repeat(60)) + '\n');
+                }
 
-                    if (options.show) {
-                        console.log(chalk.bold(`\nShowing first 50 tasks (sorted by most inputs):`));
-                        const sorted = [...planResult.data.tasks].sort((a, b) => countInputs(b) - countInputs(a));
-                        sorted.slice(0, 50).forEach((task, i) => console.log(formatTask(task, i)));
-                        if (sorted.length > 50) {
-                            console.log(chalk.gray(`  ... and ${sorted.length - 50} more`));
-                        }
+                // 6. Execute Analysis
+                console.log(`→ Executing analysis on ${tasksToExecute.length} tasks...`);
+
+                // Lazy import to avoid circular dependency
+                const { runAnalysis } = await import('@ngcompass/core');
+
+                const analysisResult = await runAnalysis(tasksToExecute, process.cwd());
+
+                if (!analysisResult.ok) {
+                    console.error(chalk.red(`✗ Analysis failed: ${analysisResult.error.message}`));
+                    process.exit(1);
+                    return;
+                }
+
+                const finalTime = performance.now() - startTime;
+                const newResults = analysisResult.data.results;
+                const allResults = [...newResults, ...cachedResults];
+
+                // Recalculate stats for display from ALL results
+                const totalErrors = allResults.flatMap((r: any) => r.failures).filter((f: any) => f.severity === 'critical' || f.severity === 'high').length;
+                const totalWarnings = allResults.flatMap((r: any) => r.failures).filter((f: any) => f.severity !== 'critical' && f.severity !== 'high').length;
+
+                // Cache new results (pass & fail)
+                const resultsToCache: [string, any][] = [];
+                for (const result of newResults) {
+                    if (result.taskId) {
+                        resultsToCache.push([result.taskId, result]);
                     }
+                }
+
+                if (resultsToCache.length > 0) {
+                    try {
+                        const entries: ReadonlyArray<readonly [string, any]> = resultsToCache;
+                        await cache.results.setMany(entries);
+                    } catch (e) {
+                        // ignore cache errors
+                    }
+                }
+
+                const results = allResults.filter((r: any) => r.failures.length > 0);
+
+                // 7. Report Results
+                const reporter = getReporter('console');
+
+                reporter.summary({
+                    totalFiles: scanResult.data.files.length,
+                    totalTasks: planResult.data.indexes.stats.totalTasks,
+                    totalErrors,
+                    totalWarnings,
+                    duration: finalTime
+                });
+
+                reporter.report(results);
+
+                if (totalErrors > 0) {
+                    process.exit(1);
                 }
 
             } catch (error) {
@@ -209,4 +225,3 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
             }
         });
 }
-

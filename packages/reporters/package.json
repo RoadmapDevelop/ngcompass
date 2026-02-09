@@ -30,6 +30,7 @@
     },
     "dependencies": {
         "@ngcompass/common": "workspace:*",
+        "@ngcompass/core": "workspace:*",
         "picocolors": "^1.1.1"
     },
     "keywords": [

@@ -23,6 +23,8 @@ export type {
     BuiltinPreset,
     RuleRegistry,
     RuleRegistryEntry,
+    RuleResult,
+    RuleFailure,
 } from './types.js';
 
 export { Ok, Err } from './types.js';

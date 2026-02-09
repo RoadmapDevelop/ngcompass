@@ -9,6 +9,6 @@
     "module": "esnext",
     "types": ["vitest/globals", "node"]
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "src/rules/domains/prefer-on-push.ts", "src/rules/domains/template-no-call-expression.ts"],
   "exclude": ["node_modules", "dist", "tests"]
 }

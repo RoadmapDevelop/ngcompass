@@ -228,13 +228,12 @@ export const pruneStaleCache = async (
             entry.metadata.hits < minHits; // Not used enough
 
         if (shouldPrune) {
-            // Would need cache.delete(taskId) - not implemented yet
-            // For now, just count
+            await cache.delete(entry.metadata.taskId);
             prunedCount++;
         }
     }
 
-    debug('incremental', `Would prune ${prunedCount} stale entries`);
+    debug('incremental', `Pruned ${prunedCount} stale entries`);
 
     return prunedCount;
 };

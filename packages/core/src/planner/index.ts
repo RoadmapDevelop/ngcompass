@@ -57,9 +57,8 @@ export {
 
 export {
     shouldApplyRule,
-    buildRuleTask,
-    buildTasksForFile,
-    generateCacheKey,
+    buildTask,
+    buildTasksForFileTaskCentric as buildTasksForFile, // Backward compat alias
     filterRulesByAstRequirement,
     groupRulesByDependencyType,
 } from './task-builder.js';

@@ -10,13 +10,14 @@ import type {
     ExecutionPlanOutput,
     FileAnalysisUnit,
     Task,
+    RuleTask,
     Result,
     FileType,
 } from './types.js';
 import { Ok, Err } from './types.js';
 import { debug, time, timeLog } from '@ngcompass/common';
 import { detectFileType } from './file-type.js';
-import { buildTasksForFile, type TaskBuilderContext } from './task-builder.js';
+import { buildTasksForFileTaskCentric, type TaskBuilderContext } from './task-builder.js';
 import { calculateFileHash, initHasher, calculateGlobalHash } from './hashing.js';
 import { buildIndexes } from './indexes.js';
 import { serializePlan, deserializePlan } from './serialize.js';
@@ -59,6 +60,7 @@ export const buildExecutionPlan = async (
         const context: TaskBuilderContext = {
             hashCache: new Map(),
             resourceCache: new Map(),
+            directoryCache: new Map(),
         };
         const fileTypeCache = new Map<string, FileType>();
 
@@ -70,7 +72,7 @@ export const buildExecutionPlan = async (
         // Simple plan cache check (if enabled)
         if (options.cache) {
             // Use ORIGINAL hash calculation (not the "fast" version)
-            const globalHash = calculateGlobalHash(files, rules, context.hashCache!);
+            const globalHash = await calculateGlobalHash(files, rules, context.hashCache!);
 
             // Try to load from cache with detailed timing
             const tCacheStart = performance.now();
@@ -108,7 +110,7 @@ export const buildExecutionPlan = async (
             }
 
             // Mark for saving later
-            (context as any)._globalHash = globalHash;
+            context.globalHash = globalHash;
         }
 
         // Build tasks array (file-centric order: files → rules)
@@ -131,14 +133,14 @@ export const buildExecutionPlan = async (
         };
 
         // Save to cache if enabled (Phase 3: non-blocking serialization)
-        if (options.cache && (context as any)._globalHash) {
+        if (options.cache && context.globalHash) {
             const cacheSaveStart = performance.now();
             debug('planner', 'Saving execution plan to cache (non-blocking)...');
 
             // Serialize to compact format for M2 (sub-150ms load)
             const compact = serializePlan(output);
 
-            await options.cache.plans.set((context as any)._globalHash, compact);
+            await options.cache.plans.set(context.globalHash!, compact);
             const cacheSaveTime = performance.now() - cacheSaveStart;
             debug('planner', `  Plan cache saved in ${cacheSaveTime.toFixed(2)}ms`);
         }
@@ -171,7 +173,7 @@ const buildFileAnalysisUnit = async (
     const fileType = detectFileType(filePath);
 
     // Build tasks for this file
-    const tasks = buildTasksForFile(filePath, fileType, rules);
+    const tasks = await buildTasksForFileTaskCentric(filePath, fileType, rules);
 
     // Skip files with no applicable tasks
     if (tasks.length === 0) {
@@ -188,7 +190,16 @@ const buildFileAnalysisUnit = async (
 
     // Calculate content hash
     // Use first task's inputs as representative (they should all have same resources)
-    const hash = tasks.length > 0 ? calculateFileHash(tasks[0].inputs, applicableRules) : '';
+    const hash = tasks.length > 0 ? calculateFileHash((tasks[0] as any).inputs, applicableRules) : '';
+
+    // Convert Task[] to RuleTask[] for backward compatibility
+    const ruleTasks: RuleTask[] = tasks.map(task => ({
+        ruleName: task.ruleName,
+        severity: task.severity,
+        options: task.options,
+        cacheKey: task.taskId,
+        inputs: task.inputs
+    }));
 
     return {
         file: {
@@ -196,7 +207,7 @@ const buildFileAnalysisUnit = async (
             type: fileType,
             hash,
         },
-        tasks,
+        tasks: ruleTasks,
     };
 };
 
@@ -394,20 +405,8 @@ const buildAllTasks = async (
         }
 
         // Build tasks for this file
-        const fileTasks = buildTasksForFile(file, fileType, rules, context);
-
-        // Convert RuleTask to Task by adding taskId and filePath
-        for (const ruleTask of fileTasks) {
-            const task: Task = {
-                taskId: ruleTask.cacheKey, // Use cacheKey as taskId
-                filePath: file,
-                ruleName: ruleTask.ruleName,
-                severity: ruleTask.severity,
-                options: ruleTask.options,
-                inputs: ruleTask.inputs,
-            };
-            allTasks.push(task);
-        }
+        const fileTasks = await buildTasksForFileTaskCentric(file, fileType, rules, context);
+        allTasks.push(...fileTasks);
     }
 
     return allTasks;
