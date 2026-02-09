@@ -7,6 +7,7 @@
 
 import type { RuleSeverity, ResolvedRule } from '../rules/types.js';
 import type { CacheContext } from '../cache/index.js';
+import { Result, Ok, Err } from '@ngcompass/common';
 
 // ==============================================================================
 // EXECUTION PLAN OUTPUT
@@ -360,9 +361,6 @@ export interface CachePruneOptions {
 /**
  * Result type for execution plan builder
  */
-export type Result<T, E = Error> =
-    | { readonly ok: true; readonly data: T }
-    | { readonly ok: false; readonly error: E };
-
-export const Ok = <T>(data: T): Result<T> => ({ ok: true, data });
-export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+// Result type imported from @ngcompass/common
+export type { Result };
+export { Ok, Err };

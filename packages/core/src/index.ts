@@ -45,8 +45,9 @@ export {
     type PresetConfig,
     type PresetReference,
     type BuiltinPreset,
-    type RuleRegistry,
     type RuleRegistryEntry,
+    type RuleResult,
+    type RuleFailure,
 } from './rules/index.js';
 
 // Execution Plan (Phase 1.75 + Phase 2.0)
@@ -88,3 +89,15 @@ export type {
     IncrementalFilterOptions,
     CachePruneOptions,
 } from './planner/index.js';
+
+// Engine
+export * from './engine/orchestrator.js';
+export * from './parsers/index.js';
+
+// Register built-in rules
+import { registerRuleImplementation } from './rules/registry.js';
+import { preferOnPush } from './rules/domains/prefer-on-push.js';
+import { templateNoCallExpression } from './rules/domains/template-no-call-expression.js';
+
+registerRuleImplementation('prefer-on-push-component-change-detection', preferOnPush as any);
+registerRuleImplementation('template-no-call-expression', templateNoCallExpression as any);

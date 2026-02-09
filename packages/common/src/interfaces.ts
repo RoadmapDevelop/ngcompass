@@ -186,6 +186,11 @@ export interface HealthReport {
 }
 
 /**
+ * Configuration Report (alias for HealthReport)
+ */
+export type ConfigReport = HealthReport;
+
+/**
  * Result of the configuration initialization
  */
 export interface InitResult {

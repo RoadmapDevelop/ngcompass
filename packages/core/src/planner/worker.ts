@@ -43,14 +43,14 @@ const run = async () => {
             const fileType = fileTypeCache?.get(file) ?? detectFileType(file);
 
             // Build all tasks for this file with caching context
-            const fileTasks = buildTasksForFileTaskCentric(
+            const fileTasks = await buildTasksForFileTaskCentric(
                 file,
                 fileType,
                 rules,
                 context
             );
 
-            tasks.push(...(fileTasks as Task[]));
+            tasks.push(...fileTasks);
         }
 
         if (parentPort) {

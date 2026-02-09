@@ -1,6 +1,20 @@
-import type { HealthReport, InitResult } from '@ngcompass/common';
+import type { ConfigReport } from '@ngcompass/common';
+import { RuleResult } from '@ngcompass/core';
 
 export interface ConfigReporter {
-    renderHealthReport(report: HealthReport): void | Promise<void>;
-    renderInitResult(result: InitResult): void | Promise<void>;
+    report(report: ConfigReport): void;
+}
+
+export interface ResultSummary {
+    totalFiles: number;
+    totalTasks: number;
+    totalErrors: number;
+    totalWarnings: number;
+    duration: number;
+}
+
+export interface Reporter {
+    report(results: RuleResult[]): void;
+    summary(stats: ResultSummary): void;
+    error(error: Error): void;
 }

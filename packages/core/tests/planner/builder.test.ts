@@ -2,9 +2,25 @@
  * Execution Plan Builder Integration Tests
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { buildExecutionPlan, validateExecutionPlan, getExecutionPlanSummary } from '../../src/planner/builder.js';
 import type { ResolvedRule, RuleSeverity } from '../../src/rules/types.js';
+import type { TaskInputs } from '../../src/planner/types.js';
+import * as resources from '../../src/planner/resources.js';
+
+
+
+vi.mock('../../src/planner/hashing.js', () => ({
+    initHasher: vi.fn(),
+    calculateGlobalHash: vi.fn().mockResolvedValue('global-hash'),
+    hashFile: vi.fn().mockResolvedValue('file-hash'),
+    calculateTaskId: vi.fn().mockReturnValue('task-id'),
+    hashTaskInputs: vi.fn().mockResolvedValue('inputs-hash'),
+    calculateFileHash: vi.fn().mockReturnValue('file-hash'),
+}));
+
+// Import mocked functions to configure them
+import { discoverResources } from '../../src/planner/resources.js';
 
 
 // Mock resolved rules
@@ -28,13 +44,20 @@ const createMockRule = (
 });
 
 describe('buildExecutionPlan', () => {
-    it('builds execution plan for single file', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        vi.spyOn(resources, 'discoverResources').mockResolvedValue({
+            typescript: { path: 'src/app/utils.ts', hash: 'file-hash', needsAst: true },
+        } as TaskInputs);
+    });
+
+    it('builds execution plan for single file', async () => {
         const files = ['src/app/utils.ts'];
         const rules = new Map<string, ResolvedRule>([
             ['no-console', createMockRule('no-console', 'standalone', { tsAst: true })],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -44,7 +67,7 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('builds execution plan for multiple files', () => {
+    it('builds execution plan for multiple files', async () => {
         const files = [
             'src/app/utils.ts',
             'src/app/user.component.ts',
@@ -55,7 +78,7 @@ describe('buildExecutionPlan', () => {
             ['template-check', createMockRule('template-check', 'component', { htmlAst: true })],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -63,7 +86,7 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('applies only applicable rules to each file', () => {
+    it('applies only applicable rules to each file', async () => {
         const files = [
             'src/app/utils.ts',
             'src/app/user.component.ts',
@@ -73,7 +96,7 @@ describe('buildExecutionPlan', () => {
             ['template-check', createMockRule('template-check', 'component')],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -90,7 +113,7 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('builds indexes correctly', () => {
+    it('builds indexes correctly', async () => {
         const files = [
             'src/app/user.component.ts',
             'src/app/auth.service.ts',
@@ -99,7 +122,7 @@ describe('buildExecutionPlan', () => {
             ['no-console', createMockRule('no-console', 'standalone', { tsAst: true })],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -116,13 +139,13 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('returns error for empty file list', () => {
+    it('returns error for empty file list', async () => {
         const files: string[] = [];
         const rules = new Map<string, ResolvedRule>([
             ['no-console', createMockRule('no-console', 'standalone')],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
@@ -130,11 +153,11 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('returns error for empty rules', () => {
+    it('returns error for empty rules', async () => {
         const files = ['src/app/utils.ts'];
         const rules = new Map<string, ResolvedRule>();
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(false);
         if (!result.ok) {
@@ -142,7 +165,7 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('skips disabled rules', () => {
+    it('skips disabled rules', async () => {
         const files = ['src/app/utils.ts'];
         const disabledRule = createMockRule('no-console', 'standalone', {}, 'off');
 
@@ -150,7 +173,7 @@ describe('buildExecutionPlan', () => {
             ['no-console', disabledRule],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -159,34 +182,42 @@ describe('buildExecutionPlan', () => {
         }
     });
 
-    it('assigns unique cache keys to each task', () => {
+    it('assigns unique cache keys to each task', async () => {
         const files = ['src/app/utils.ts'];
         const rules = new Map<string, ResolvedRule>([
             ['no-console', createMockRule('no-console', 'standalone')],
             ['no-debugger', createMockRule('no-debugger', 'standalone')],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        // Mock calculateTaskId to return unique values
+        const { calculateTaskId } = await import('../../src/planner/hashing.js');
+        (calculateTaskId as any).mockReset();
+        (calculateTaskId as any)
+            .mockReturnValueOnce('task-id-1')
+            .mockReturnValueOnce('task-id-2');
+
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
+
 
         expect(result.ok).toBe(true);
         if (result.ok) {
             const tasks = result.data.plan['src/app/utils.ts'].tasks;
             const cacheKeys = tasks.map((t) => t.cacheKey);
 
-            // All cache keys should be unique
+            // All task IDs should be unique
             expect(new Set(cacheKeys).size).toBe(cacheKeys.length);
         }
     });
 });
 
 describe('validateExecutionPlan', () => {
-    it('validates correct execution plan', () => {
+    it('validates correct execution plan', async () => {
         const files = ['src/app/utils.ts'];
         const rules = new Map<string, ResolvedRule>([
             ['no-console', createMockRule('no-console', 'standalone')],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
@@ -216,18 +247,18 @@ describe('validateExecutionPlan', () => {
             },
         };
 
-        expect(validateExecutionPlan(output)).toBe(false);
+        expect(validateExecutionPlan(output as any)).toBe(false);
     });
 });
 
 describe('getExecutionPlanSummary', () => {
-    it('generates summary string', () => {
+    it('generates summary string', async () => {
         const files = ['src/app/utils.ts', 'src/app/user.component.ts'];
         const rules = new Map<string, ResolvedRule>([
             ['no-console', createMockRule('no-console', 'standalone')],
         ]);
 
-        const result = buildExecutionPlan({ files, rules, rootDir: '/project' });
+        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
 
         expect(result.ok).toBe(true);
         if (result.ok) {
