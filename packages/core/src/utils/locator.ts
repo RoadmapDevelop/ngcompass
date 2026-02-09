@@ -5,7 +5,7 @@
 export class Locator {
     private readonly lines: number[];
 
-    constructor(private readonly content: string) {
+    constructor(content: string) {
         this.lines = [0];
         for (let i = 0; i < content.length; i++) {
             if (content[i] === '\n') {
