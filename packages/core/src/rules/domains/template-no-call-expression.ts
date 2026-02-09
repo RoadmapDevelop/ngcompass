@@ -10,7 +10,7 @@ import { walkProgram } from '../visitor.js';
  * Function calls in templates are executed on every change detection cycle.
  */
 export const templateNoCallExpression = (context: RuleContext): RuleResult => {
-    const { template, program } = context;
+    const { template } = context;
     const failures: RuleFailure[] = [];
 
     // Debug logs to confirm rule execution

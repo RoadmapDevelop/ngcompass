@@ -235,7 +235,7 @@ export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' |
     /**
      * Resolved rule configuration.
      */
-    rules: Record<string, unknown>;
+    rules: Record<string, RuleConfig | Severity | 'off'>;
 }
 
 
