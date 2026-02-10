@@ -98,7 +98,8 @@ export class ConsoleReporter implements Reporter {
         // but it provides timing info which is useful.
 
         // We can just print the timing in a subtle way.
-        console.log(pc.gray(`Parsed ${stats.totalTasks} files in ${stats.duration.toFixed(0)}ms`));
+        const cachedInfo = stats.cachedTasks ? ` (${stats.cachedTasks} cached)` : '';
+        console.log(pc.gray(`Analyzed ${stats.totalTasks} tasks${cachedInfo} in ${stats.duration.toFixed(0)}ms`));
     }
 
     error(error: Error): void {

@@ -8,10 +8,7 @@ import {
 } from "@ngcompass/common";
 import type { ConfigReporter } from "../types.js";
 
-type ExtendedConfigReporter = ConfigReporter & {
-    renderInitResult?: (result: InitResult) => void;
-    renderHealthReport?: (report: HealthReport) => void;
-};
+
 
 const formatPath = (path?: (string | number)[]): string => {
     if (!path || path.length === 0) return "";
@@ -86,7 +83,7 @@ const renderSummary = (report: HealthReport) => {
     console.log(`Found ${total} issues (${parts.join(", ")}) status ${statusLabel}`);
 };
 
-export const TextConfigReporter: ExtendedConfigReporter = {
+export const TextConfigReporter: ConfigReporter = {
     report(report: ConfigReport): void {
         if (!report.valid) {
             console.error(pc.red("✗ Configuration validation failed"));

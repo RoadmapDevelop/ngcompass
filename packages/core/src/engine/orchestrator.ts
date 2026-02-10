@@ -13,7 +13,7 @@ import { Task } from "../planner/index.js";
 import { RuleResult, RuleContext, Result, Ok, Err, RuleFailure } from "../rules/types.js";
 import { parseTs, parseHtml } from "../parsers/index.js";
 import { getRuleExecutor } from "../rules/registry.js";
-import { warn, error } from "@ngcompass/common";
+import { warn, error, debug } from "@ngcompass/common";
 
 import type { Program } from "oxc-parser";
 import type { HtmlParserResult } from "../parsers/html.js";
@@ -141,7 +141,7 @@ export const executeTask = async (task: Task, context: AnalysisContext): Promise
 };
 
 /**
- * Runs analysis across all tasks with bounded concurrency.
+ * Runs analysis across all tasks using worker threads for parallelism.
  *
  * @param tasks - Tasks to execute
  * @param rootDir - Root directory for resolving paths
@@ -153,20 +153,122 @@ export const runAnalysis = async (
 ): Promise<Result<AnalysisResult>> => {
     try {
         const startTime = performance.now();
-        const context = createAnalysisContext(rootDir);
 
-        const limit = pLimit(16);
+        // Use workers for heavy loads
+        if (tasks.length > 50) {
+            debug("engine", `Running analysis on ${tasks.length} tasks using workers...`);
+            return await runAnalysisParallel(tasks, rootDir, startTime);
+        }
+
+        // Sequential/Local for small loads (avoid worker overhead)
+        const context = createAnalysisContext(rootDir);
+        const limit = pLimit(4); // Lower concurrency for local execution
         const results = await Promise.all(tasks.map((t) => limit(() => executeTaskOrLog(t, context))));
 
         const successful = results.filter((r): r is RuleResult => r !== null);
-
         return Ok({
             results: successful,
             stats: calculateStats(successful, startTime),
         });
+
     } catch (e) {
         return Err(e instanceof Error ? e : new Error(String(e)));
     }
+};
+
+const runAnalysisParallel = async (
+    tasks: ReadonlyArray<Task>,
+    rootDir: string,
+    startTime: number
+): Promise<Result<AnalysisResult>> => {
+    const { Worker } = await import("node:worker_threads");
+    const os = await import("node:os");
+
+    // Determine worker count (min 2, max CPU cores)
+    const workerCount = Math.max(2, os.cpus().length);
+    const workerPath = await resolveWorkerPath();
+
+    if (!workerPath) {
+        warn("workers", "Execution worker not found, falling back to local execution.");
+        // Fallback logic duplicated for safety
+        const context = createAnalysisContext(rootDir);
+        const limit = pLimit(4);
+        const results = await Promise.all(tasks.map((t) => limit(() => executeTaskOrLog(t, context))));
+        const successful = results.filter((r): r is RuleResult => r !== null);
+        return Ok({
+            results: successful,
+            stats: calculateStats(successful, startTime),
+        });
+    }
+
+    // Split tasks into chunks
+    const chunks = splitIntoChunks(tasks, workerCount);
+
+    // Dispatch to workers
+    const promises = chunks.map((chunk) => {
+        return new Promise<RuleResult[]>((resolve, reject) => {
+            const worker = new Worker(workerPath, {
+                workerData: {
+                    rootDir,
+                    tasks: chunk,
+                },
+            });
+
+            worker.on("message", (msg: { results: RuleResult[], errors: any[] }) => {
+                if (msg.errors && msg.errors.length > 0) {
+                    msg.errors.forEach(e => {
+                        error("workers", `Worker failed task ${e.task.taskId}:`, e.error);
+                    });
+                }
+                resolve(msg.results);
+            });
+
+            worker.on("error", reject);
+            worker.on("exit", (code) => {
+                if (code !== 0) reject(new Error(`Worker stopped with exit code ${code}`));
+            });
+        });
+    });
+
+    const chunkResults = await Promise.all(promises);
+    const successful = chunkResults.flat();
+
+    return Ok({
+        results: successful,
+        stats: calculateStats(successful, startTime),
+    });
+};
+
+const resolveWorkerPath = async (): Promise<string | null> => {
+    const { fileURLToPath } = await import("node:url");
+    const { dirname, join } = await import("node:path");
+    const { existsSync } = await import("node:fs");
+
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = dirname(__filename);
+
+    const candidates = [
+        join(__dirname, "execution-worker.js"),
+        join(__dirname, "execution-worker.cjs"),
+        join(__dirname, "engine", "execution-worker.js"),
+        join(__dirname, "engine", "execution-worker.cjs"),
+        join(__dirname, "src", "engine", "execution-worker.ts"), // For dev/test
+    ];
+
+    for (const candidate of candidates) {
+        if (existsSync(candidate)) return candidate;
+    }
+
+    return null;
+};
+
+const splitIntoChunks = <T>(items: ReadonlyArray<T>, chunkCount: number): T[][] => {
+    const size = Math.ceil(items.length / chunkCount);
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += size) {
+        chunks.push(items.slice(i, i + size));
+    }
+    return chunks;
 };
 
 /**

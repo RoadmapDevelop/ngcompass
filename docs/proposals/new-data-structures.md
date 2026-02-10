@@ -1155,12 +1155,12 @@ class IncrementalIndexBuilder {
 
 ## 5. IMPLEMENTATION PRIORITY MATRIX
 
-| Priority | Recommendation | Impact | Effort | ROI | Est. Time Saved |
+| Priority | Recommendation | Impact | Effort | ROI | Est. Time Saved | Status |
 |----------|----------------|---------|--------|-----|-----------------|
-| 🔴 P0 | **#4: Directory Catalog Cache** | Critical | Medium | ⭐⭐⭐⭐⭐ | 50s → 0.5s |
-| 🔴 P0 | **#3: Bloom Filter Cache** | Critical | Low-Med | ⭐⭐⭐⭐⭐ | 50s → 5s |
-| �� P1 | **#1: File Metadata Index** | High | Medium | ⭐⭐⭐⭐ | 15s → 2s |
-| 🟡 P1 | **#2: Component Dependency Graph** | High | Medium | ⭐⭐⭐⭐ | 15s → 8s |
+| 🔴 P0 | **#4: Directory Catalog Cache** | Critical | Medium | ⭐⭐⭐⭐⭐ | 50s → 0.5s | ✅ **DONE** |
+| 🔴 P0 | **#3: Bloom Filter Cache** | Critical | Low-Med | ⭐⭐⭐⭐⭐ | 50s → 5s | ✅ **DONE** |
+| 🟡 P1 | **#1: File Metadata Index** | High | Medium | ⭐⭐⭐⭐ | 15s → 2s | ✅ **DONE** |
+| 🟡 P1 | **#2: Component Dependency Graph** | High | Medium | ⭐⭐⭐⭐ | 15s → 8s | ✅ **DONE** |
 | 🟢 P2 | **#5: Priority Queue Execution** | Medium | Low | ⭐⭐⭐ | First failure: 120s → 10s |
 | 🟢 P2 | **#7: Hierarchical Cache with LRU** | Medium | Low-Med | ⭐⭐⭐ | Prevents OOM |
 | 🟢 P3 | **#6: AST Node Index** | Medium | Med-High | ⭐⭐ | 120s → 80s |
