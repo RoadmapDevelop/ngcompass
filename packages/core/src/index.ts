@@ -95,9 +95,4 @@ export * from './engine/orchestrator.js';
 export * from './parsers/index.js';
 
 // Register built-in rules
-import { registerRuleImplementation } from './rules/registry.js';
-import { preferOnPush } from './rules/domains/prefer-on-push.js';
-import { templateNoCallExpression } from './rules/domains/template-no-call-expression.js';
-
-registerRuleImplementation('prefer-on-push-component-change-detection', preferOnPush as any);
-registerRuleImplementation('template-no-call-expression', templateNoCallExpression as any);
+import './rules/register-all.js';

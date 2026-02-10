@@ -9,6 +9,13 @@ import type { FileInput, FileType, Task, TaskInputs } from "./types.js";
 import { discoverResources } from "./resources.js";
 import { hashFile, calculateTaskId } from "./hashing.js";
 import { debug } from "@ngcompass/common";
+import { ComponentDependencyGraph } from "./component-graph.js";
+
+export interface GraphStats {
+    hits: number;
+    misses: number;
+    fallbacks: number;
+}
 
 /**
  * Context for task building to enable memoization and shared caches.
@@ -18,6 +25,8 @@ export interface TaskBuilderContext {
     resourceCache?: Map<string, TaskInputs>;
     directoryCache?: Map<string, string[]>;
     globalHash?: string;
+    componentGraph?: ComponentDependencyGraph;
+    graphStats?: GraphStats;
 }
 
 /**
@@ -278,6 +287,34 @@ const resolveAstRequirements = (rule: ResolvedRule) => {
 const getOrDiscoverResources = async (filePath: string, context?: TaskBuilderContext): Promise<TaskInputs> => {
     const cached = context?.resourceCache?.get(filePath);
     if (cached) return cached;
+
+    // Fast path: use graph if available
+    if (context?.componentGraph) {
+        const node = context.componentGraph.getResources(filePath);
+        if (node) {
+            if (context.graphStats) context.graphStats.hits++;
+            const inputs: TaskInputs = {
+                typescript: { path: filePath, hash: "", needsAst: false }, // Hashes computed later
+                styles: node.stylePaths.map(p => ({ path: p, hash: "", needsAst: false })),
+            };
+
+            if (node.templatePath) {
+                inputs.template = { path: node.templatePath, hash: "", needsAst: false };
+            }
+
+            if (node.specPath) {
+                inputs.spec = { path: node.specPath, hash: "", needsAst: false };
+            }
+
+            context?.resourceCache?.set(filePath, inputs);
+            return inputs;
+        } else {
+            if (context.graphStats) context.graphStats.misses++;
+        }
+    }
+
+    // Slow path: directory scan
+    if (context?.graphStats) context.graphStats.fallbacks++;
 
     const discovered = await discoverResources(
         filePath,

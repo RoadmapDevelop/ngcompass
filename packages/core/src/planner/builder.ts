@@ -19,6 +19,7 @@ import { debug, time, timeLog } from "@ngcompass/common";
 import { detectFileType } from "./file-type.js";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
 import { calculateFileHash, initHasher, calculateGlobalHash, warmupHashCache } from "./hashing.js";
+import { ComponentDependencyGraph } from "./component-graph.js";
 import { buildIndexes } from "./indexes.js";
 import { serializePlan, deserializePlan } from "./serialize.js";
 
@@ -65,8 +66,24 @@ export const buildExecutionPlan = async (
             return Ok(cached);
         }
 
+        // Build Component Dependency Graph (P1 Optimization)
+        debug("planner", "Building component dependency graph...");
+        const graphStart = performance.now();
+        const graph = new ComponentDependencyGraph();
+        graph.build(options.files);
+        context.componentGraph = graph;
+        context.graphStats = { hits: 0, misses: 0, fallbacks: 0 };
+        debug("planner", `Graph build took ${(performance.now() - graphStart).toFixed(2)}ms`);
+
         debug("planner", "Building tasks...");
         const tasks = await buildAllTasks(files, rules, context, fileTypeCache);
+
+        if (context.graphStats) {
+            debug(
+                "planner",
+                `Component graph stats: hits=${context.graphStats.hits}, misses=${context.graphStats.misses}, fallbacks=${context.graphStats.fallbacks}`
+            );
+        }
 
         debug("planner", "Converting tasks to file-centric plan...");
         const plan = convertTasksToPlan(tasks, rules, fileTypeCache);
@@ -337,7 +354,7 @@ const buildAllTasks = async (
     context?: TaskBuilderContext,
     fileTypeCache?: Map<string, FileType>
 ): Promise<ReadonlyArray<Task>> => {
-    const PARALLEL_THRESHOLD = 500;
+    const PARALLEL_THRESHOLD = 10000;
     const WORKER_COUNT = 4;
 
     if (files.length >= PARALLEL_THRESHOLD) {

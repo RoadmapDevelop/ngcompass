@@ -208,6 +208,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 reporter.summary({
                     totalFiles: scanResult.data.files.length,
                     totalTasks: planResult.data.indexes.stats.totalTasks,
+                    cachedTasks: cachedResults.length,
                     totalErrors,
                     totalWarnings,
                     duration: finalTime
