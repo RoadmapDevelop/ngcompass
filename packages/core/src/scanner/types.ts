@@ -4,18 +4,14 @@
  * All types are immutable (readonly) following FP principles.
  */
 
-/**
- * Result type for error handling (no exceptions)
- */
-export type Result<T, E = Error> =
-    | { readonly ok: true; readonly data: T }
-    | { readonly ok: false; readonly error: E };
+import { Result, Ok, Err } from '@ngcompass/common';
 
 /**
  * Helper constructors for Result type
  */
-export const Ok = <T>(data: T): Result<T> => ({ ok: true, data });
-export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+// Result type imported from @ngcompass/common
+export type { Result };
+export { Ok, Err };
 
 import type { CacheContext } from '../cache/index.js';
 

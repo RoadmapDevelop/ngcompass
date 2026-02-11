@@ -5,7 +5,7 @@
  * Handles loading, merging, and resolving rules from config + presets
  */
 
-import { Severity } from "@ngcompass/common";
+import { Severity, Result, Ok, Err } from "@ngcompass/common";
 
 // ==============================================================================
 // RULE CONFIGURATION
@@ -143,12 +143,9 @@ export interface RuleResolutionResult {
 /**
  * Result type for rule resolution
  */
-export type Result<T, E = Error> =
-    | { readonly ok: true; readonly data: T }
-    | { readonly ok: false; readonly error: E };
-
-export const Ok = <T>(data: T): Result<T> => ({ ok: true, data });
-export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+// Result type imported from @ngcompass/common
+export type { Result };
+export { Ok, Err };
 
 // ==============================================================================
 // RULE REGISTRY ENTRY
@@ -167,3 +164,32 @@ export interface RuleRegistryEntry {
  * Rule registry (ruleName → entry)
  */
 export type RuleRegistry = ReadonlyMap<string, RuleRegistryEntry>;
+// ==============================================================================
+// RULE EXECUTION TYPES
+// ==============================================================================
+
+export interface RuleFailure {
+    readonly filePath: string;
+    readonly message: string;
+    readonly line: number;
+    readonly column: number;
+    readonly severity: RuleSeverity;
+    readonly ruleName: string;
+}
+
+export interface RuleResult {
+    readonly ruleName: string;
+    readonly failures: ReadonlyArray<RuleFailure>;
+    readonly taskId?: string;
+}
+
+export interface RuleContext {
+    readonly sourceFile?: import('typescript').SourceFile; // Deprecated
+    readonly filePath: string; // The file being analyzed
+    readonly fileContent: string; // Raw content for line/col mapping
+    readonly program?: import('oxc-parser').Program;
+    readonly template?: import('../parsers/html').HtmlParserResult;
+    readonly style?: import('../parsers/css').CssParserResult;
+    readonly options?: Readonly<Record<string, unknown>>;
+}
+

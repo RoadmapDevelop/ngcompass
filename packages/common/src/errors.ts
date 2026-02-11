@@ -6,7 +6,6 @@ export class AnalyzerError extends Error {
   constructor(message: string, public readonly code?: string) {
     super(message);
     this.name = 'AnalyzerError';
-    // RECHECK THAT POSSIBLE ISSUES WITH THIS
     // Capture stack trace if available (V8/Node.js specific)
     if ('captureStackTrace' in Error) {
       // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call

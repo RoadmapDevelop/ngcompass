@@ -1,20 +1,24 @@
-# Technical Debt - Configuration & Health Checks
+# Remaining Technical Debt & Future Roadmap
 
-This document tracks items that need further implementation or refactoring in the configuration and health check system.
+This document track's the remaining technical debt and identifies areas for further improvement following the Phase 1.95 and P1 debt resolution.
 
-## 🔴 High Priority
+## 1. Resolved Issues (Phase 1.95 & P1)
 
-- **Unknown Rule Detection**: Currently, we only check for schema validity and severity levels. We need a way to verify if a rule name exists in the actual rule registry.
-  - *Dependency*: Rule Registry implementation.
-- **Rule Option Validation**: We do not yet validate the `options` object for each rule. Each rule should provide a schema for its options.
-  - *Dependency*: Rule-specific JSON schemas or Zod schemas.
+The following high-priority issues have been successfully addressed:
 
-## 🟡 Medium Priority
+- **[FIXED] taskId Propagation**: `taskId` is now correctly included in `RuleResult`, enabling the incremental cache to function.
+- **[FIXED] Cache Pruning**: `ResultCache` now supports deletion, and `pruneStaleCache` correctly removes old/infrequent entries.
+- **[FIXED] Performance (Planning)**: Sync `existsSync` calls in `resources.ts` were replaced with async `readdir` and a directory cache.
+- **[FIXED] Hashing Reliability**: `calculateTaskId` now includes file paths, and `hashFile` enforces UTF-8 to avoid `ERR_INVALID_ARG_TYPE`.
+- **[FIXED] Type Safety (Context)**: Smuggled state like `_globalHash` has been replaced with proper fields on `TaskBuilderContext`.
+- **[FIXED] Logger Integration**: Replaced `console` calls with `logger` from `@ngcompass/common` in `orchestrator.ts` and `builder.ts`.
+- **[FIXED] Visitor Consolidation**: Extracted AST traversal into a shared `walkProgram` utility in `visitor.ts`.
+- **[FIXED] Result Schema Validation**: Added strict structural validation for `RuleResult` in `orchestrator.ts`.
 
-- **Rule Inheritance Validation**: When profiles extend other profiles or the base config, we should ensure rule merging logic doesn't create invalid states.
+## 2. Priority Debt (P3 - Medium)
 
-## ✅ Completed Tasks
-
-- [x] **Empty Rule Name Detection**: Validate that rule names are not empty strings.
-- [x] **Consolidated Error Reporting**: Deep validation across all profiles (initial implementation done, then reverted to single-profile focused per user request).
-- [x] **Schema Resilience**: Health check continues even if Zod schema validation fails (partial validation).
+| # | Issue | File | Description |
+| --- | --- | --- | --- |
+| 1 | **Worker Pool Sizing** | `orchestrator.ts` | Dynamically adjust worker count based on machine CPU cores. |
+| 2 | **Watch Mode** | `cli/` | Implement a watch mode for near-instant linting feedback. |
+| 3 | **Lazy AST Parsing** | `orchestrator.ts` | Optimize to only parse ASTs if needed by enabled rules. |

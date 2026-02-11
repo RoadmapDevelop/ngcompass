@@ -1,13 +1,8 @@
 /**
  * Incremental Planner (Phase 2.0)
  *
- * Filters execution plan by checking cache before execution.
+ * Filters execution tasks by cache status.
  * Splits tasks into cached (skip) and pending (execute).
- *
- * Key benefits:
- * - 90%+ speed improvement on unchanged code
- * - Rename-resilient (content-based cache)
- * - Precise invalidation (only affected tasks)
  */
 
 import type {
@@ -15,23 +10,13 @@ import type {
     IncrementalPlan,
     CacheFilterStats,
     IncrementalFilterOptions,
-    CachePruneOptions
-} from './types.js';
-import type { ResultCache } from '../cache/services/result-cache.js';
-import { debug } from '@ngcompass/common';
-
-// ==============================================================================
-// INCREMENTAL FILTER
-// ==============================================================================
+    CachePruneOptions,
+} from "./types.js";
+import type { ResultCache } from "../cache/services/result-cache.js";
+import { debug } from "@ngcompass/common";
 
 /**
  * Filters tasks by cache status.
- *
- * Splits tasks into:
- * - cached: Tasks with results in cache (skip execution)
- * - pending: Tasks without cache (must execute)
- *
- * Uses bulk cache queries for performance (1 query instead of N).
  *
  * @param tasks - All tasks from execution plan
  * @param cache - Result cache
@@ -45,93 +30,28 @@ export const filterCachedTasks = async (
 ): Promise<IncrementalPlan> => {
     const startTime = performance.now();
 
-    debug('incremental', `Filtering ${tasks.length} tasks by cache...`);
+    debug("incremental", `Filtering ${tasks.length} tasks by cache...`);
 
-    // Force rerun bypasses cache
     if (options.forceRerun) {
-        debug('incremental', 'Force rerun enabled - skipping cache check');
-        return {
-            cached: [],
-            pending: tasks,
-            cachedResults: new Map(),
-            stats: {
-                totalTasks: tasks.length,
-                cachedTasks: 0,
-                pendingTasks: tasks.length,
-                cacheHitRate: 0,
-                timeSavedEstimate: 0,
-            },
-        };
+        return buildForcedRerunPlan(tasks);
     }
 
-    // Extract all taskIds
     const taskIds = tasks.map((t) => t.taskId);
-
-    // Early exit if no tasks
     if (taskIds.length === 0) {
-        return {
-            cached: [],
-            pending: [],
-            cachedResults: new Map(),
-            stats: {
-                totalTasks: 0,
-                cachedTasks: 0,
-                pendingTasks: 0,
-                cacheHitRate: 0,
-                timeSavedEstimate: 0,
-            },
-        };
+        return buildEmptyIncrementalPlan();
     }
 
-    // Bulk check which tasks are cached
     const cachedTaskIds = await cache.hasMany(taskIds);
+    debug("incremental", `Found ${cachedTaskIds.size}/${tasks.length} tasks in cache`);
 
-    debug('incremental', `Found ${cachedTaskIds.size}/${tasks.length} tasks in cache`);
+    const { skippedTasks, tasks: pendingTasks } = splitTasksByCache(tasks, cachedTaskIds);
 
-    // Split tasks: cached vs pending
-    const cached: Task[] = [];
-    const pending: Task[] = [];
+    const cachedResults = await maybeLoadCachedResults(cache, skippedTasks, options);
+    const stats = buildCacheFilterStats(tasks.length, skippedTasks.length, pendingTasks.length);
 
-    for (const task of tasks) {
-        if (cachedTaskIds.has(task.taskId)) {
-            cached.push(task);
-        } else {
-            pending.push(task);
-        }
-    }
+    logFilterSummary(startTime, stats);
 
-    // Optionally load cached results
-    let cachedResults: ReadonlyMap<string, unknown> = new Map<string, unknown>();
-    if (options.loadCachedResults && cached.length > 0) {
-        debug('incremental', `Loading ${cached.length} cached results...`);
-        const cachedIds = cached.map((t) => t.taskId);
-        cachedResults = await cache.getMany(cachedIds);
-        debug('incremental', `Loaded ${cachedResults.size} cached results`);
-    }
-
-    // Calculate statistics
-    const cacheHitRate = tasks.length > 0 ? cachedTaskIds.size / tasks.length : 0;
-    const timeSavedEstimate = cacheHitRate * 100; // Simplified estimate
-
-    const stats: CacheFilterStats = {
-        totalTasks: tasks.length,
-        cachedTasks: cached.length,
-        pendingTasks: pending.length,
-        cacheHitRate,
-        timeSavedEstimate,
-    };
-
-    const elapsed = performance.now() - startTime;
-    debug('incremental', `Cache filtering completed in ${elapsed.toFixed(2)}ms`);
-    debug('incremental', `Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%`);
-    debug('incremental', `Skipping ${cached.length} tasks, executing ${pending.length} tasks`);
-
-    return {
-        cached,
-        pending,
-        cachedResults,
-        stats,
-    };
+    return { skippedTasks, tasks: pendingTasks, cachedResults, stats };
 };
 
 /**
@@ -145,9 +65,7 @@ export const areAllTasksCached = async (
     tasks: ReadonlyArray<Task>,
     cache: ResultCache
 ): Promise<boolean> => {
-    if (tasks.length === 0) {
-        return true;
-    }
+    if (tasks.length === 0) return true;
 
     const taskIds = tasks.map((t) => t.taskId);
     const cachedTaskIds = await cache.hasMany(taskIds);
@@ -166,9 +84,7 @@ export const getCacheHitRate = async (
     tasks: ReadonlyArray<Task>,
     cache: ResultCache
 ): Promise<number> => {
-    if (tasks.length === 0) {
-        return 0;
-    }
+    if (tasks.length === 0) return 0;
 
     const taskIds = tasks.map((t) => t.taskId);
     const cachedTaskIds = await cache.hasMany(taskIds);
@@ -176,17 +92,8 @@ export const getCacheHitRate = async (
     return cachedTaskIds.size / tasks.length;
 };
 
-// ==============================================================================
-// CACHE PRUNING
-// ==============================================================================
-
 /**
- * Prune stale cache entries.
- *
- * Removes entries based on:
- * - Age (timestamp)
- * - Access frequency (hits)
- * - Last access time (LRU)
+ * Prunes stale cache entries.
  *
  * @param taskIds - All current task IDs
  * @param cache - Result cache
@@ -198,43 +105,215 @@ export const pruneStaleCache = async (
     cache: ResultCache,
     options: CachePruneOptions = {}
 ): Promise<number> => {
-    debug('incremental', 'Pruning stale cache entries...');
+    debug("incremental", "Pruning stale cache entries...");
 
-    // Early exit if no task IDs
     if (taskIds.length === 0) {
-        debug('incremental', 'No tasks to prune');
+        debug("incremental", "No tasks to prune");
         return 0;
     }
 
-    // Get metadata for all cached tasks
     const entries = await cache.getManyWithMetadata(taskIds);
-
-    // Early exit if cache is empty
     if (entries.size === 0) {
-        debug('incremental', 'Cache is empty, nothing to prune');
+        debug("incremental", "Cache is empty, nothing to prune");
         return 0;
     }
 
+    const { now, maxAgeMs, minHits } = resolvePrunePolicy(options);
+
+    const staleTaskIds = collectStaleTaskIds(entries, now, maxAgeMs, minHits);
+    const prunedCount = await deleteMany(cache, staleTaskIds);
+
+    debug("incremental", `Pruned ${prunedCount} stale entries`);
+    return prunedCount;
+};
+
+/**
+ * Builds a plan when force rerun is enabled.
+ *
+ * @param tasks - All tasks
+ * @returns Incremental plan with all tasks pending
+ */
+const buildForcedRerunPlan = (tasks: ReadonlyArray<Task>): IncrementalPlan => {
+    debug("incremental", "Force rerun enabled - skipping cache check");
+
+    const stats: CacheFilterStats = {
+        totalTasks: tasks.length,
+        cachedTasks: 0,
+        pendingTasks: tasks.length,
+        cacheHitRate: 0,
+        timeSavedEstimate: 0,
+    };
+
+    return {
+        skippedTasks: [],
+        tasks: tasks,
+        cachedResults: new Map(),
+        stats,
+    };
+};
+
+/**
+ * Builds an empty incremental plan.
+ *
+ * @returns Empty IncrementalPlan
+ */
+const buildEmptyIncrementalPlan = (): IncrementalPlan => {
+    const stats: CacheFilterStats = {
+        totalTasks: 0,
+        cachedTasks: 0,
+        pendingTasks: 0,
+        cacheHitRate: 0,
+        timeSavedEstimate: 0,
+    };
+
+    return {
+        skippedTasks: [],
+        tasks: [],
+        cachedResults: new Map(),
+        stats,
+    };
+};
+
+/**
+ * Splits tasks into cached and pending buckets.
+ *
+ * @param tasks - All tasks
+ * @param cachedTaskIds - Set of cached task IDs
+ * @returns Split task arrays
+ */
+const splitTasksByCache = (
+    tasks: ReadonlyArray<Task>,
+    cachedTaskIds: ReadonlySet<string>
+): { skippedTasks: Task[]; tasks: Task[] } => {
+    const skippedTasks: Task[] = [];
+    const pendingTasks: Task[] = [];
+
+    for (const task of tasks) {
+        if (cachedTaskIds.has(task.taskId)) skippedTasks.push(task);
+        else pendingTasks.push(task);
+    }
+
+    return { skippedTasks, tasks: pendingTasks };
+};
+
+/**
+ * Loads cached results when enabled.
+ *
+ * @param cache - Result cache
+ * @param cachedTasks - Cached tasks
+ * @param options - Filter options
+ * @returns Cached results map
+ */
+const maybeLoadCachedResults = async (
+    cache: ResultCache,
+    cachedTasks: ReadonlyArray<Task>,
+    options: IncrementalFilterOptions
+): Promise<ReadonlyMap<string, unknown>> => {
+    if (!options.loadCachedResults) return new Map<string, unknown>();
+    if (cachedTasks.length === 0) return new Map<string, unknown>();
+
+    debug("incremental", `Loading ${cachedTasks.length} cached results...`);
+
+    const cachedIds = cachedTasks.map((t) => t.taskId);
+    const cachedResults = await cache.getMany(cachedIds);
+
+    debug("incremental", `Loaded ${cachedResults.size} cached results`);
+    return cachedResults;
+};
+
+/**
+ * Builds cache filter statistics.
+ *
+ * @param total - Total tasks
+ * @param cached - Cached tasks
+ * @param pending - Pending tasks
+ * @returns CacheFilterStats
+ */
+const buildCacheFilterStats = (total: number, cached: number, pending: number): CacheFilterStats => {
+    const cacheHitRate = total > 0 ? cached / total : 0;
+    const timeSavedEstimate = cacheHitRate * 100;
+
+    return {
+        totalTasks: total,
+        cachedTasks: cached,
+        pendingTasks: pending,
+        cacheHitRate,
+        timeSavedEstimate,
+    };
+};
+
+/**
+ * Logs filter timing and summary statistics.
+ *
+ * @param startTime - Filtering start timestamp
+ * @param stats - Filter stats
+ */
+const logFilterSummary = (startTime: number, stats: CacheFilterStats): void => {
+    const elapsed = performance.now() - startTime;
+
+    debug("incremental", `Cache filtering completed in ${elapsed.toFixed(2)}ms`);
+    debug("incremental", `Cache hit rate: ${(stats.cacheHitRate * 100).toFixed(1)}%`);
+    debug("incremental", `Skipping ${stats.cachedTasks} tasks, executing ${stats.pendingTasks} tasks`);
+};
+
+/**
+ * Resolves prune policy from options with defaults applied.
+ *
+ * @param options - Prune options
+ * @returns Prune policy values
+ */
+const resolvePrunePolicy = (
+    options: CachePruneOptions
+): { now: number; maxAgeMs: number; minHits: number } => {
     const now = Date.now();
-    const maxAge = options.maxAge ?? 7 * 24 * 60 * 60 * 1000; // 7 days default
+    const maxAgeMs = options.maxAge ?? 7 * 24 * 60 * 60 * 1000;
     const minHits = options.minHits ?? 1;
 
-    let prunedCount = 0;
+    return { now, maxAgeMs, minHits };
+};
+
+/**
+ * Collects task IDs that should be pruned based on metadata.
+ *
+ * @param entries - Cache entries with metadata
+ * @param now - Current time
+ * @param maxAgeMs - Maximum entry age in ms
+ * @param minHits - Minimum hit count
+ * @returns Array of task IDs to prune
+ */
+const collectStaleTaskIds = (
+    entries: ReadonlyMap<string, { metadata: { taskId: string; timestamp: number; hits: number } }>,
+    now: number,
+    maxAgeMs: number,
+    minHits: number
+): string[] => {
+    const stale: string[] = [];
 
     for (const [, entry] of entries) {
-        const age = now - entry.metadata.timestamp;
-        const shouldPrune =
-            age > maxAge || // Too old
-            entry.metadata.hits < minHits; // Not used enough
+        const ageMs = now - entry.metadata.timestamp;
+        const tooOld = ageMs > maxAgeMs;
+        const tooCold = entry.metadata.hits < minHits;
 
-        if (shouldPrune) {
-            // Would need cache.delete(taskId) - not implemented yet
-            // For now, just count
-            prunedCount++;
-        }
+        if (tooOld || tooCold) stale.push(entry.metadata.taskId);
     }
 
-    debug('incremental', `Would prune ${prunedCount} stale entries`);
+    return stale;
+};
 
-    return prunedCount;
+/**
+ * Deletes multiple cache entries sequentially.
+ *
+ * @param cache - Result cache
+ * @param taskIds - Task IDs to delete
+ * @returns Number of deletions performed
+ */
+const deleteMany = async (cache: ResultCache, taskIds: ReadonlyArray<string>): Promise<number> => {
+    let deleted = 0;
+
+    for (const taskId of taskIds) {
+        await cache.delete(taskId);
+        deleted++;
+    }
+
+    return deleted;
 };

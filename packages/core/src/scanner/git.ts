@@ -63,7 +63,8 @@ export const getRepoFingerprint = async (dir: string): Promise<string> => {
             // Fallback if index not readable or not found
             return head.trim();
         }
-    } catch {
+    } catch (error) {
+        debug('scanner', `Failed to get repo fingerprint: ${error instanceof Error ? error.message : String(error)}`);
         return '';
     }
 };

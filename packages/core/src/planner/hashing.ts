@@ -1,47 +1,47 @@
 /**
  * Content Hashing
  *
- * Pure functions for calculating content hashes for cache invalidation.
- * Hash includes: file content + related resources + active rules
+ * Deterministic hashing utilities for cache invalidation.
+ * Hash inputs may include: file content, related resources, and active rules.
  */
 
-import crypto from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import { stat } from 'node:fs/promises';
-import xxhash from 'xxhash-wasm';
-import type { TaskInputs } from './types.js';
-import type { ResolvedRule } from '../rules/types.js';
-import type { MetaCache } from '../cache/index.js';
+import crypto from "node:crypto";
+import * as fs from "node:fs/promises";
+import xxhash from "xxhash-wasm";
+import { debug } from "@ngcompass/common";
 
-let h64: ((input: string) => string) | undefined;
+import type { TaskInputs } from "./types.js";
+import type { ResolvedRule } from "../rules/types.js";
+import type { MetaCache } from "../cache/index.js";
+
+let h64: ((input: string | Uint8Array) => string) | undefined;
 
 /**
  * Initializes the xxhash hasher.
  */
 export const initHasher = async (): Promise<void> => {
     if (h64) return;
+
     const { h64: hasher } = await xxhash();
-    h64 = (input: string) => hasher(input).toString(16);
+    h64 = (input: string | Uint8Array) => hasher(input as any).toString(16).padStart(16, "0");
 };
 
 /**
- * Computes a fast hash of a string using xxhash if initialized,
- * falling back to SHA-256 otherwise.
+ * Computes a hash using xxhash if initialized, otherwise falls back to SHA-256.
  *
- * @param content - Content to hash
+ * @param content - Data to hash
  * @returns Hex-encoded hash
  */
-export const computeHash = (content: string): string => {
-    if (h64) {
-        return h64(content);
-    }
-    // Fallback for safety, though we should always initialize
-    return crypto.createHash('sha256').update(content).digest('hex');
+export const computeHash = (content: string | Uint8Array): string => {
+    if (h64) return h64(content);
+
+    const hasher = crypto.createHash("sha256");
+    hasher.update(content);
+    return hasher.digest("hex");
 };
 
 /**
- * Warms up the in-memory hash cache using persistent metadata (Stat-First Hashing).
- * Parallelizes stat() and metaCache.get() to minimize I/O overhead.
+ * Warms up the in-memory hash cache using persistent metadata (stat-first hashing).
  *
  * @param filePaths - Files to warm up
  * @param metaCache - Persistent meta cache
@@ -52,107 +52,121 @@ export const warmupHashCache = async (
     metaCache: MetaCache,
     hashCache: Map<string, string>
 ): Promise<void> => {
-    // Use a pool to avoid overwhelming the OS with thousands of stats at once
-    const BATCH_SIZE = 50;
-    for (let i = 0; i < filePaths.length; i += BATCH_SIZE) {
-        const batch = filePaths.slice(i, i + BATCH_SIZE);
+    const batchSize = 50;
+
+    for (let i = 0; i < filePaths.length; i += batchSize) {
+        const batch = filePaths.slice(i, i + batchSize);
+
         await Promise.all(
             batch.map(async (filePath) => {
                 if (hashCache.has(filePath)) return;
 
                 try {
-                    // 1. Get file stats
-                    const stats = await stat(filePath);
+                    const stats = await fs.stat(filePath);
                     const mtime = stats.mtimeMs;
                     const size = stats.size;
 
-                    // 2. Check persistent cache
                     const cachedMeta = await metaCache.get(filePath);
 
                     if (cachedMeta && cachedMeta.mtime === mtime && cachedMeta.size === size) {
-                        // HIT: Reuse cached hash without reading file
                         hashCache.set(filePath, cachedMeta.hash);
-                    } else {
-                        // MISS: Read, hash, and update persistent cache
-                        const content = readFileSafe(filePath);
-                        const hash = computeHash(content);
-
-                        hashCache.set(filePath, hash);
-                        await metaCache.set(filePath, { mtime, size, hash });
+                        return;
                     }
-                } catch (err) {
-                    // Handle missing files by allowing them to be handled by normal pipeline
+
+                    const hash = await hashFile(filePath);
+                    hashCache.set(filePath, hash);
+                    await metaCache.set(filePath, { mtime, size, hash });
+                } catch {
+                    return;
                 }
             })
         );
     }
-};
 
-/**
- * Reads file content safely.
- *
- * @param filePath - File path
- * @returns File content or empty string if error
- */
-const readFileSafe = (filePath: string): string => {
-    try {
-        return readFileSync(filePath, 'utf-8');
-    } catch {
-        return '';
+    if (metaCache.flush) {
+        await metaCache.flush();
     }
 };
 
 /**
- * Calculates hash for a single file.
+ * Reads file content and returns a content hash.
  *
  * @param filePath - File path
- * @param cache - Optional hash cache
+ * @param cache - Optional in-memory cache
  * @returns Content hash
  */
-export const hashFile = (filePath: string, cache?: Map<string, string>): string => {
-    if (cache?.has(filePath)) {
-        return cache.get(filePath)!;
+export const hashFile = async (filePath: string, cache?: Map<string, string>): Promise<string> => {
+    const cached = cache?.get(filePath);
+    if (cached) return cached;
+
+    try {
+        const content = await fs.readFile(filePath, "utf-8");
+        const hash = computeHash(content);
+        cache?.set(filePath, hash);
+        return hash;
+    } catch (error) {
+        debug(
+            "planner",
+            `Failed to hash file: ${filePath}. Error: ${error instanceof Error ? error.message : String(error)}`
+        );
+        return "";
     }
-
-    const content = readFileSafe(filePath);
-    const hash = computeHash(content);
-
-    if (cache) {
-        cache.set(filePath, hash);
-    }
-
-    return hash;
 };
 
 /**
- * Calculates hash for multiple files combined.
+ * Alias for hashFile to maintain compatibility.
+ */
+export const hashFileInput = hashFile;
+
+/**
+ * Calculates a combined hash for multiple files.
  *
  * @param filePaths - Array of file paths
  * @param cache - Optional hash cache
  * @returns Combined hash
  */
-export const hashFiles = (
+export const hashFiles = async (
     filePaths: ReadonlyArray<string>,
     cache?: Map<string, string>
-): string => {
-    const combinedContent = filePaths
-        .map((path) => {
-            if (cache?.has(path)) {
-                // We can't use the hash here directly as we need the content for combined hash
-                // BUT we can cache the result of this entire combined hash if we wanted.
-                // For now, let's just use the cached content if we had a content cache.
-                // However, the bottleneck is SHA-256 on the same files.
-                return readFileSafe(path);
-            }
-            return readFileSafe(path);
-        })
-        .join('\n---FILE-BOUNDARY---\n');
-    return computeHash(combinedContent);
+): Promise<string> => {
+    if (filePaths.length === 0) return "";
+
+    const entries = await Promise.all(
+        filePaths.map(async (p) => `${p}:${await hashFile(p, cache)}`)
+    );
+
+    entries.sort();
+    return computeHash(entries.join("|"));
+};
+
+/**
+ * Produces a stable JSON representation by sorting object keys recursively.
+ *
+ * @param value - Serializable value
+ * @returns Stable JSON string
+ */
+const stableStringify = (value: unknown): string => {
+    const seen = new WeakSet<object>();
+
+    const normalize = (v: any): any => {
+        if (v && typeof v === "object") {
+            if (seen.has(v)) return "[Circular]";
+            seen.add(v);
+
+            if (Array.isArray(v)) return v.map(normalize);
+
+            const out: Record<string, any> = {};
+            for (const k of Object.keys(v).sort()) out[k] = normalize(v[k]);
+            return out;
+        }
+        return v;
+    };
+
+    return JSON.stringify(normalize(value));
 };
 
 /**
  * Calculates hash for rules configuration.
- * Includes rule names, severities, and options.
  *
  * @param rules - Rules that apply to this file
  * @returns Rules hash
@@ -164,20 +178,15 @@ export const hashRules = (rules: ReadonlyArray<ResolvedRule>): string => {
             severity: rule.severity,
             options: rule.options,
         }))
-        .sort((a, b) => a.name.localeCompare(b.name)); // Sort for determinism
+        .sort((a, b) => a.name.localeCompare(b.name));
 
-    const rulesJson = JSON.stringify(rulesData);
-    return computeHash(rulesJson);
+    return computeHash(stableStringify(rulesData));
 };
 
 /**
- * Calculates combined hash for a file and its resources using existing hashes.
- * Hash = hash(tsHash + templateHash + stylesHashes + specHash + rulesHash)
+ * Calculates combined hash for a file and its resources.
  *
- * This version is optimized for P2/P3 to reuse hashes already computed during
- * task building, effectively eliminating a second full pass of disk I/O.
- *
- * @param inputs - Task inputs (all resources with hashes)
+ * @param inputs - Task inputs with hashes
  * @param applicableRules - Rules that apply to this file
  * @returns Combined content hash
  */
@@ -187,103 +196,60 @@ export const calculateFileHash = (
 ): string => {
     const parts: string[] = [];
 
-    // Combine input hashes
     parts.push(inputs.typescript.hash);
 
-    if (inputs.template) {
-        parts.push(inputs.template.hash);
-    }
+    if (inputs.template) parts.push(inputs.template.hash);
 
     if (inputs.styles) {
-        // Collect and sort style hashes for determinism
         const styleHashes = inputs.styles.map((s) => s.hash).sort();
         parts.push(...styleHashes);
     }
 
-    if (inputs.spec) {
-        parts.push(inputs.spec.hash);
-    }
+    if (inputs.spec) parts.push(inputs.spec.hash);
 
-    // Hash rules configuration
-    const rulesHash = hashRules(applicableRules);
-    parts.push(rulesHash);
+    parts.push(hashRules(applicableRules));
 
-    // Combine all parts and hash
-    return computeHash(parts.join('::'));
+    return computeHash(parts.join("::"));
 };
 
 /**
  * Calculates hash for task inputs only (no rules).
- * Used for detecting if resources changed.
  *
  * @param inputs - Task inputs
  * @returns Inputs hash
  */
-export const hashTaskInputs = (inputs: TaskInputs): string => {
-    const filePaths: string[] = [];
+export const hashTaskInputs = async (inputs: TaskInputs): Promise<string> => {
+    const filePaths: string[] = [inputs.typescript.path];
 
-    filePaths.push(inputs.typescript.path);
-
-    if (inputs.template) {
-        filePaths.push(inputs.template.path);
-    }
-
-    if (inputs.styles) {
-        filePaths.push(...inputs.styles.map((s) => s.path));
-    }
-
-    if (inputs.spec) {
-        filePaths.push(inputs.spec.path);
-    }
+    if (inputs.template) filePaths.push(inputs.template.path);
+    if (inputs.styles) filePaths.push(...inputs.styles.map((s) => s.path));
+    if (inputs.spec) filePaths.push(inputs.spec.path);
 
     return hashFiles(filePaths);
 };
 
 /**
- * Fast hash using only file stats (size + mtime).
- * Much faster than content hash but less accurate.
+ * Fast hash using only file stats.
  *
  * @param filePath - File path
  * @returns Stats-based hash
  */
-export const hashFileStats = (filePath: string): string => {
+export const hashFileStats = async (filePath: string): Promise<string> => {
     try {
-        const stats = readFileSync(filePath).length; // Just get size for now
-        return computeHash(`${filePath}::${stats}`);
+        const stats = await fs.stat(filePath);
+        return computeHash(`${filePath}::${stats.size}::${stats.mtimeMs}`);
     } catch {
-        return '';
+        return "";
     }
-};
-
-/**
- * Calculates hash for a single file input.
- * Returns empty string if file doesn't exist.
- *
- * @param filePath - File path
- * @param cache - Optional hash cache
- * @returns Content hash or empty string
- */
-export const hashFileInput = (filePath: string, cache?: Map<string, string>): string => {
-    return hashFile(filePath, cache);
 };
 
 /**
  * Calculates content-based task ID for task-centric caching.
  *
- * Task ID includes:
- * - Rule name
- * - All input file content hashes
- * - Rule options
- *
- * This enables:
- * - Cache hits even after file renames (content unchanged)
- * - Precise invalidation (only when relevant content changes)
- * - Cross-project cache sharing (same content = same ID)
- *
  * @param ruleName - Rule name
  * @param inputs - Task inputs with hashes
  * @param options - Rule options
- * @returns Content-based task ID (SHA-256)
+ * @returns Content-based task ID
  */
 export const calculateTaskId = (
     ruleName: string,
@@ -292,56 +258,45 @@ export const calculateTaskId = (
 ): string => {
     const parts: string[] = [ruleName];
 
-    // Add TypeScript hash (always present)
+    parts.push(inputs.typescript.path);
     parts.push(inputs.typescript.hash);
 
-    // Add template hash (if present)
-    if (inputs.template) {
-        parts.push(inputs.template.hash);
-    }
+    if (inputs.template) parts.push(inputs.template.hash);
 
-    // Add styles hashes (if present)
-    if (inputs.styles && inputs.styles.length > 0) {
-        const stylesHash = inputs.styles.map((s) => s.hash).join('::');
+    if (inputs.styles?.length) {
+        const stylesHash = inputs.styles.map((s) => s.hash).sort().join("::");
         parts.push(stylesHash);
     }
 
-    // Add spec hash (if present)
-    if (inputs.spec) {
-        parts.push(inputs.spec.hash);
-    }
+    if (inputs.spec) parts.push(inputs.spec.hash);
 
-    // Add options (stringified for determinism)
-    parts.push(JSON.stringify(options));
+    parts.push(stableStringify(options));
 
-    // Combine all parts and hash
-    return computeHash(parts.join('::'));
+    return computeHash(parts.join("::"));
 };
 
 /**
  * Calculates a global hash for the entire project state.
- * Used for caching the complete ExecutionPlanOutput.
  *
  * @param files - All discovered files
  * @param rules - All resolved rules
  * @param hashCache - Current hash cache
  * @returns Global state hash
  */
-export const calculateGlobalHash = (
+export const calculateGlobalHash = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, ResolvedRule>,
     hashCache: Map<string, string>
-): string => {
+): Promise<string> => {
+    const fileEntries = await Promise.all(
+        files.map(async (f) => `${f}:${hashCache.get(f) ?? (await hashFile(f, hashCache))}`)
+    );
+
+    fileEntries.sort();
+
     const parts: string[] = [];
-
-    // 1. Add all file paths and their content hashes (sorted for determinism)
-    const fileHashes = files
-        .map((f) => `${f}:${hashCache.get(f) || ''}`)
-        .sort();
-    parts.push(...fileHashes);
-
-    // 2. Add rules hash
+    parts.push(...fileEntries);
     parts.push(hashRules(Array.from(rules.values())));
 
-    return computeHash(parts.join('||'));
+    return computeHash(parts.join("||"));
 };
