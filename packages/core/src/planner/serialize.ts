@@ -46,7 +46,7 @@ export const deserializePlan = (compact: CompactPlan): ExecutionPlanOutput => {
     const plan: Record<string, FileAnalysisUnit> = {};
     const allTasks: Task[] = [];
 
-    for (const unitData of units as any[]) {
+    for (const unitData of units) {
         const { filePath, fileType, fileHash, ruleTasks } = deserializeUnit(unitData, rules, files, hashes, options);
 
         plan[filePath] = {

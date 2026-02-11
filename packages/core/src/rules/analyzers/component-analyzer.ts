@@ -161,7 +161,7 @@ export const analyzeComponent = (classNode: ClassDeclaration): ComponentMetadata
         standalone: metadataObject ? extractStandalone(metadataObject) : MISSING,
         templateUrl: metadataObject ? extractTemplateUrl(metadataObject) : MISSING,
         template: metadataObject ? extractTemplate(metadataObject) : MISSING,
-        decoratorStart: componentDecorator.span?.start ?? 0,  // Track decorator position
+        decoratorStart: componentDecorator.start ?? componentDecorator.span?.start ?? 0,  // Track decorator position
     };
 
     componentCache.set(classNode, metadata);

@@ -6,7 +6,7 @@ export const recommendedPreset: PresetConfig = {
     rules: {
         // --- 1. MODERN ANGULAR (Signals & Control Flow) ---
         'prefer-signal-inputs': 'moderate',
-        'prefer-standalone': 'high',
+        'prefer-standalone': 'low',
         'use-inject': 'moderate',
         'no-input-rename': 'low',
         'no-output-on-prefix': 'low',
@@ -47,6 +47,7 @@ export const recommendedPreset: PresetConfig = {
         'template-no-negated-async': 'moderate',
         'template-prefer-control-flow': 'high',
         'template-no-duplicate-attributes': 'high',
+        'template-no-call-expression': 'high',
 
         // --- 5. CODE HYGIENE & STYLE ---
         'no-var': 'high',

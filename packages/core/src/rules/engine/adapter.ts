@@ -31,6 +31,7 @@ export const registerNewEngineRule = (handler: RuleHandler<any>): void => {
             // Extract metadata if available from handler
             category: 'best-practice', // Default, should ideally come from handler
             dependencyType: 'component', // Default
+            ...handler.meta,
         }
     );
 

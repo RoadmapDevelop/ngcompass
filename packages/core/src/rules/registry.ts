@@ -5,12 +5,13 @@
  * This will be populated as rules are implemented
  */
 
-import type { RuleRegistry, RuleRegistryEntry, RuleMetadata, RuleContext, RuleResult } from './types.js';
+import type { RuleRegistry, RuleRegistryEntry, RuleMetadata, RuleContext, RuleResult, RuleFailure } from './types.js';
 
 /**
  * Rule Executor Function
  */
-export type RuleExecutor = (context: RuleContext) => RuleResult | Iterable<import('./types.js').RuleFailure>;
+export type PresetReference = string;
+export type RuleExecutor = (context: RuleContext) => RuleResult | Iterable<RuleFailure>;
 
 /**
  * Map of rule names to their executor functions
@@ -49,7 +50,6 @@ export const getRuleExecutor = (name: string): RuleExecutor | undefined => {
     // Fall back to new engine adapter
     // Import dynamically to avoid circular dependency
     try {
-        // @ts-ignore - dynamic import for adapter
         const { isNewEngineRule, executeNewEngineRule } = require('./engine/adapter.js');
 
         if (isNewEngineRule(name)) {

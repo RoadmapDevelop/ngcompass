@@ -58,7 +58,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
 
                 // 2. Discover Files
                 const tScanStart = performance.now();
-                console.log('→ Discovering files...');
+                console.log(chalk.blue('→ Discovering files...'));
                 const scanResult = await scan({
                     rootDir: process.cwd(),
                     include: config.include || ['src/**/*.ts'],
@@ -75,9 +75,11 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     return;
                 }
 
+                console.log(chalk.dim(`  Found ${scanResult.data.files.length} files in ${(tScanEnd - tScanStart).toFixed(0)}ms`));
+
                 // 3. Resolve Rules
                 const tRulesStart = performance.now();
-                console.log('→ Resolving rules...');
+                console.log(chalk.blue('→ Resolving rules...'));
                 const rulesResult = await resolveRules(config);
                 const tRulesEnd = performance.now();
 
@@ -87,12 +89,15 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     return;
                 }
 
+                const enabledRules = getEnabledRules(rulesResult.data.rules);
+                console.log(chalk.dim(`  Resolved ${enabledRules.size} active rules in ${(tRulesEnd - tRulesStart).toFixed(0)}ms`));
+
                 // 4. Build Execution Plan
                 const tPlanStart = performance.now();
-                console.log('→ Building execution plan...');
+                console.log(chalk.blue('→ Building execution plan...'));
                 const planResult = await buildExecutionPlan({
                     files: scanResult.data.files,
-                    rules: getEnabledRules(rulesResult.data.rules),
+                    rules: enabledRules,
                     rootDir: process.cwd(),
                     cache,
                     debug: options.debug
@@ -106,9 +111,11 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     return;
                 }
 
+                console.log(chalk.dim(`  Generated ${planResult.data.tasks.length} tasks in ${(tPlanEnd - tPlanStart).toFixed(0)}ms`));
+
                 // 5. Run Analysis
                 const tExecStart = performance.now();
-                console.log('→ Running analysis...');
+                console.log(chalk.blue('→ Running analysis...'));
                 const result = await runAnalysis(planResult.data, {
                     rootDir: process.cwd(),
                     cache
@@ -122,11 +129,22 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 }
 
                 const analysis = result.data;
-                const duration = (tExecEnd - tExecStart).toFixed(2);
-                console.log(chalk.green(`✓ Analysis complete in ${duration}ms`));
-                console.log(`  Files: ${analysis.stats.totalFiles}`);
-                console.log(`  Errors: ${analysis.stats.totalErrors}`);
-                console.log(`  Warnings: ${analysis.stats.totalWarnings}`);
+                const duration = (tExecEnd - tExecStart).toFixed(0);
+
+                if (options.debug) {
+                    console.log('\n--- Performance Breakdown ---');
+                    console.log(`Config resolve: ${(tConfigEnd - tConfigStart).toFixed(2)}ms`);
+                    console.log(`File discovery: ${(tScanEnd - tScanStart).toFixed(2)}ms`);
+                    console.log(`Rule resolution: ${(tRulesEnd - tRulesStart).toFixed(2)}ms`);
+                    console.log(`Plan build:     ${(tPlanEnd - tPlanStart).toFixed(2)}ms`);
+                    console.log(`Execution:      ${duration}ms`);
+                }
+
+                console.log('\n' + chalk.green(`✓ Analysis complete`));
+                console.log(chalk.bold(`  Total Time: ${(performance.now() - startTime).toFixed(2)}ms`));
+                console.log(`  Files:      ${analysis.stats.totalFiles}`);
+                console.log(`  Errors:     ${analysis.stats.totalErrors}`);
+                console.log(`  Warnings:   ${analysis.stats.totalWarnings}`);
 
                 // 6. Report Results
                 const reporter = getReporter((config as any).reporter || 'default');
@@ -150,23 +168,6 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                             console.log(`[ngcompass:cache] Saved ${cacheEntries.length} results to cache (${(tCacheEnd - tCacheStart).toFixed(2)}ms)`);
                         }
                     }
-                }
-
-                if (options.debug) {
-                    console.log('\n--- Performance Breakdown (Sub-1s Goal) ---');
-                    console.log(`Config resolve: ${(tConfigEnd - tConfigStart).toFixed(2)}ms`);
-                    console.log(`File discovery: ${(tScanEnd - tScanStart).toFixed(2)}ms`);
-                    if (scanResult.data.timings) {
-                        const t = scanResult.data.timings;
-                        console.log(`  - Normalization: ${t.normalization.toFixed(2)}ms`);
-                        console.log(`  - Discovery:    ${t.discovery.toFixed(2)}ms`);
-                        console.log(`  - Filtering:    ${t.filtering.toFixed(2)}ms`);
-                    }
-                    console.log(`Rule resolution: ${(tRulesEnd - tRulesStart).toFixed(2)}ms`);
-                    console.log(`Plan build:     ${(tPlanEnd - tPlanStart).toFixed(2)}ms`); // Uses cached/incremental plan
-                    console.log(`Execution:      ${duration}ms`); // Uses skipped/cached results
-                    console.log(`Total overhead: ${(performance.now() - startTime).toFixed(2)}ms`);
-                    console.log('-------------------------------------------\n');
                 }
 
                 if (analysis.stats.totalErrors > 0) {

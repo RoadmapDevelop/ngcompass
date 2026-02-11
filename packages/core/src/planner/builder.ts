@@ -212,7 +212,7 @@ const tryLoadPlanFromCache = async (
 
     const tDeserStart = performance.now();
     const output =
-        (cachedData as any).v === 1 ? deserializePlan(cachedData as any) : (cachedData as ExecutionPlanOutput);
+        cachedData.v === 1 ? deserializePlan(cachedData) : (cachedData as ExecutionPlanOutput);
     const tDeserEnd = performance.now();
 
     if (options.debug) {
@@ -369,7 +369,7 @@ const tryBuildAllTasksParallel = async (
         debug("planner", `Workers completed. Generated ${tasks.length} tasks.`);
         return tasks;
     } catch (error) {
-        debug("planner", `Parallel execution failed, falling back to sequential: ${error}`);
+        debug("planner", `Parallel execution failed, falling back to sequential: ${String(error)}`);
         return null;
     }
 };

@@ -120,7 +120,7 @@ export type BuiltinPreset =
 /**
  * Preset reference (builtin or file path)
  */
-export type PresetReference = BuiltinPreset | string;
+export type PresetReference = string;
 
 // ==============================================================================
 // RESOLUTION RESULT

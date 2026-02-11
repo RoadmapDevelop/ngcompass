@@ -39,8 +39,8 @@ const readFileCached = (filePath: string, rootDir: string): Promise<string> => {
         // Return empty string on error, let parsers handle it or fail later
         return "";
     });
-    fileCache.set(filePath, promise!);
-    return promise!;
+    fileCache.set(filePath, promise);
+    return promise;
 };
 
 const getProgram = (filePath: string, rootDir: string): Promise<Program> => {
@@ -94,44 +94,38 @@ const executeBatchedTasks = async (
 const main = async () => {
     if (!parentPort) return;
 
-    try {
-        const { rootDir, tasks } = workerData as ExecutionWorkerData;
-        const results: RuleResult[] = [];
-        const errors: Array<{ task: Task; error: string }> = [];
+    const { rootDir, tasks } = workerData as ExecutionWorkerData;
+    const results: RuleResult[] = [];
+    const errors: Array<{ task: Task; error: string }> = [];
 
-        // Group tasks by file
-        const tasksByFile = new Map<string, Task[]>();
-        for (const task of tasks) {
-            const fileTasks = tasksByFile.get(task.filePath) ?? [];
-            fileTasks.push(task);
-            tasksByFile.set(task.filePath, fileTasks); // set again (redundant but safe) with update
-        }
+    // Group tasks by file
+    const tasksByFile = new Map<string, Task[]>();
+    for (const task of tasks) {
+        const fileTasks = tasksByFile.get(task.filePath) ?? [];
+        fileTasks.push(task);
+        tasksByFile.set(task.filePath, fileTasks); // set again (redundant but safe) with update
+    }
 
-        // Execute batched tasks per file
-        for (const fileTasks of tasksByFile.values()) {
-            try {
-                // executeBatchedTasks now handles the batching by options internally
-                // We just pass it all tasks for this file
-                const batchResults = await executeBatchedTasks(fileTasks, rootDir);
-                results.push(...batchResults);
-            } catch (e) {
-                // If the entire file batch fails (e.g. file read error, parse error)
-                // we fail all tasks for this file
-                for (const task of fileTasks) {
-                    errors.push({
-                        task,
-                        error: e instanceof Error ? e.message : String(e)
-                    });
-                }
+    // Execute batched tasks per file
+    for (const fileTasks of tasksByFile.values()) {
+        try {
+            // executeBatchedTasks now handles the batching by options internally
+            // We just pass it all tasks for this file
+            const batchResults = await executeBatchedTasks(fileTasks, rootDir);
+            results.push(...batchResults);
+        } catch (e) {
+            // If the entire file batch fails (e.g. file read error, parse error)
+            // we fail all tasks for this file
+            for (const task of fileTasks) {
+                errors.push({
+                    task,
+                    error: e instanceof Error ? e.message : String(e)
+                });
             }
         }
-
-        parentPort.postMessage({ results, errors } satisfies ExecutionWorkerResult);
-
-    } catch (e) {
-        // Fatal worker error
-        throw e;
     }
+
+    parentPort.postMessage({ results, errors } satisfies ExecutionWorkerResult);
 };
 
 void main();
