@@ -5,7 +5,7 @@ export const recommendedPreset: PresetConfig = {
     description: 'Comprehensive recommended rules for modern Angular projects',
     rules: {
         // --- 1. MODERN ANGULAR (Signals & Control Flow) ---
-        'prefer-signals': 'moderate',
+        'prefer-signal-inputs': 'moderate',
         'prefer-standalone': 'high',
         'use-inject': 'moderate',
         'no-input-rename': 'low',
@@ -16,7 +16,6 @@ export const recommendedPreset: PresetConfig = {
         'template-prefer-self-closing-tags': 'low',
         'no-empty-lifecycle-method': 'moderate',
         'implements-on-destroy': 'high',
-        'prefer-signal-inputs': 'moderate',
         'prefer-signal-queries': 'moderate',
 
         // --- 2. RxJS BEST PRACTICES ---

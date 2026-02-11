@@ -1,4 +1,5 @@
 import { AsyncDriver } from '../drivers/types.js';
+import { debug } from '@ngcompass/common';
 
 /**
  * Cache metadata for tracking usage and freshness
@@ -32,6 +33,7 @@ export interface ResultCache {
     get: <T>(hash: string) => Promise<T | undefined>;
     set: <T>(hash: string, result: T) => Promise<void>;
     has: (hash: string) => Promise<boolean>;
+    delete: (hash: string) => Promise<void>;
 
     // Bulk operations (Phase 2.0)
     getMany: <T>(hashes: ReadonlyArray<string>) => Promise<ReadonlyMap<string, T>>;
@@ -118,6 +120,15 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
 
         has: async (hash: string): Promise<boolean> => {
             return driver.has(hash);
+        },
+
+        delete: async (hash: string): Promise<void> => {
+            await driver.delete(hash);
+            try {
+                await metadataDriver.delete(getMetadataKey(hash));
+            } catch (error) {
+                debug('cache', `Failed to delete metadata for ${hash}: ${error instanceof Error ? error.message : String(error)}`);
+            }
         },
 
         // Bulk operations

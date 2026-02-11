@@ -7,6 +7,7 @@
 
 import type { RuleSeverity, ResolvedRule } from '../rules/types.js';
 import type { CacheContext } from '../cache/index.js';
+import { Result, Ok, Err } from '@ngcompass/common';
 
 // ==============================================================================
 // EXECUTION PLAN OUTPUT
@@ -29,6 +30,12 @@ export interface ExecutionPlanOutput {
 
     /** Pre-computed indexes for efficient queries */
     readonly indexes: ExecutionIndexes;
+
+    /** Tasks that were skipped */
+    readonly skippedTasks: ReadonlyArray<Task>;
+
+    /** Pre-loaded cached results (taskId → result) */
+    readonly cachedResults?: ReadonlyMap<string, unknown>;
 }
 
 /**
@@ -280,6 +287,9 @@ export interface ExecutionPlanOptions {
 
     /** Debug mode for detailed timing logging */
     readonly debug?: boolean;
+
+    /** Options for incremental filtering */
+    readonly incremental?: IncrementalFilterOptions;
 }
 
 // ==============================================================================
@@ -293,10 +303,10 @@ export interface ExecutionPlanOptions {
  */
 export interface IncrementalPlan {
     /** Tasks with results in cache (can be skipped) */
-    readonly cached: ReadonlyArray<Task>;
+    readonly skippedTasks: ReadonlyArray<Task>;
 
     /** Tasks without cache entries (must be executed) */
-    readonly pending: ReadonlyArray<Task>;
+    readonly tasks: ReadonlyArray<Task>;
 
     /** Pre-loaded cached results (taskId → result) */
     readonly cachedResults: ReadonlyMap<string, unknown>;
@@ -360,9 +370,6 @@ export interface CachePruneOptions {
 /**
  * Result type for execution plan builder
  */
-export type Result<T, E = Error> =
-    | { readonly ok: true; readonly data: T }
-    | { readonly ok: false; readonly error: E };
-
-export const Ok = <T>(data: T): Result<T> => ({ ok: true, data });
-export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
+// Result type imported from @ngcompass/common
+export type { Result };
+export { Ok, Err };

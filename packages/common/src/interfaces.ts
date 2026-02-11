@@ -186,6 +186,11 @@ export interface HealthReport {
 }
 
 /**
+ * Configuration Report (alias for HealthReport)
+ */
+export type ConfigReport = HealthReport;
+
+/**
  * Result of the configuration initialization
  */
 export interface InitResult {
@@ -230,7 +235,7 @@ export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' |
     /**
      * Resolved rule configuration.
      */
-    rules: Record<string, unknown>;
+    rules: Record<string, RuleConfig | Severity | 'off'>;
 }
 
 

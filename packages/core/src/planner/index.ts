@@ -8,7 +8,7 @@
  */
 
 // Main builder
-export { buildExecutionPlan, buildFileUnit, validateExecutionPlan, getExecutionPlanSummary } from './builder.js';
+export { buildExecutionPlan, getExecutionPlanSummary } from './builder.js';
 
 // Types
 export type {
@@ -57,9 +57,8 @@ export {
 
 export {
     shouldApplyRule,
-    buildRuleTask,
-    buildTasksForFile,
-    generateCacheKey,
+    buildTask,
+    buildTasksForFileTaskCentric as buildTasksForFile, // Backward compat alias
     filterRulesByAstRequirement,
     groupRulesByDependencyType,
 } from './task-builder.js';

@@ -23,7 +23,7 @@ export type Namespace =
     | 'planner'
     | 'incremental'
     | 'dry-run'
-    | 'mock-executor';
+    | 'engine';
 
 interface LoggerConfig {
     enabled: boolean;

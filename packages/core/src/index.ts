@@ -45,16 +45,15 @@ export {
     type PresetConfig,
     type PresetReference,
     type BuiltinPreset,
-    type RuleRegistry,
     type RuleRegistryEntry,
+    type RuleResult,
+    type RuleFailure,
 } from './rules/index.js';
 
 // Execution Plan (Phase 1.75 + Phase 2.0)
 export {
     // Phase 1.75: Core execution plan
     buildExecutionPlan,
-    buildFileUnit,
-    validateExecutionPlan,
     getExecutionPlanSummary,
     buildIndexes,
     getFilesForRules,
@@ -88,3 +87,10 @@ export type {
     IncrementalFilterOptions,
     CachePruneOptions,
 } from './planner/index.js';
+
+// Engine
+export * from './engine/orchestrator.js';
+export * from './parsers/index.js';
+
+// Register built-in rules
+import './rules/register-all.js';
