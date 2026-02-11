@@ -38,9 +38,28 @@ export const registerRuleImplementation = (
 
 /**
  * Get a rule executor by name
+ *
+ * Automatically falls back to new engine if rule is registered there
  */
 export const getRuleExecutor = (name: string): RuleExecutor | undefined => {
-    return ruleExecutors.get(name);
+    // Check old-style executors first
+    const executor = ruleExecutors.get(name);
+    if (executor) return executor;
+
+    // Fall back to new engine adapter
+    // Import dynamically to avoid circular dependency
+    try {
+        // @ts-ignore - dynamic import for adapter
+        const { isNewEngineRule, executeNewEngineRule } = require('./engine/adapter.js');
+
+        if (isNewEngineRule(name)) {
+            return (ctx: RuleContext) => executeNewEngineRule(name, ctx);
+        }
+    } catch (e) {
+        // Adapter not available, continue
+    }
+
+    return undefined;
 };
 
 /**
@@ -82,7 +101,7 @@ const createRegistryEntry = (
 const knownRules = [
     // --- Angular Components & Directives ---
     'prefer-on-push-component-change-detection',
-    'template-no-call-expression',
+    'prefer-standalone',
 ] as const;
 
 /**

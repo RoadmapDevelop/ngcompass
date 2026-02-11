@@ -54,8 +54,6 @@ export {
 export {
     // Phase 1.75: Core execution plan
     buildExecutionPlan,
-    buildFileUnit,
-    validateExecutionPlan,
     getExecutionPlanSummary,
     buildIndexes,
     getFilesForRules,

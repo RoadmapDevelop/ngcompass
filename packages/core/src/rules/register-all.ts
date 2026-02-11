@@ -2,9 +2,13 @@
  * Registers all built-in rules with the registry.
  * Imported for side-effects.
  */
-import { registerRuleImplementation } from './registry.js';
-import { preferOnPush } from './domains/prefer-on-push.js';
-import { templateNoCallExpression } from './domains/template-no-call-expression.js';
 
-registerRuleImplementation('prefer-on-push-component-change-detection', preferOnPush as any);
-registerRuleImplementation('template-no-call-expression', templateNoCallExpression as any);
+// New high-performance engine
+import { registerNewEngineRule } from './engine/adapter.js';
+import { preferOnPushRule } from './domains/prefer-on-push.rule.js';
+import { preferStandaloneRule } from './domains/prefer-standalone.rule.js';
+import { preferSignalInputsRule } from './domains/prefer-signal-inputs.rule.js';
+
+registerNewEngineRule(preferOnPushRule);
+registerNewEngineRule(preferStandaloneRule);
+registerNewEngineRule(preferSignalInputsRule);

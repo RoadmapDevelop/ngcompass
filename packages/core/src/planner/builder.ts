@@ -17,9 +17,9 @@ import type {
 import { Ok, Err } from "./types.js";
 import { debug, time, timeLog } from "@ngcompass/common";
 import { detectFileType } from "./file-type.js";
+import { filterCachedTasks } from "./incremental.js";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
 import { calculateFileHash, initHasher, calculateGlobalHash, warmupHashCache } from "./hashing.js";
-import { ComponentDependencyGraph } from "./component-graph.js";
 import { buildIndexes } from "./indexes.js";
 import { serializePlan, deserializePlan } from "./serialize.js";
 
@@ -60,29 +60,45 @@ export const buildExecutionPlan = async (
             debug("planner", `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
         }
 
-        const cached = await tryLoadPlanFromCache(options, context);
-        if (cached) {
+        const cachedPlan = await tryLoadPlanFromCache(options, context);
+        let allTasks: ReadonlyArray<Task>;
+
+        if (cachedPlan) {
             timeLog(timerLabel, "planner", "Execution plan loaded from cache");
-            return Ok(cached);
+            allTasks = cachedPlan.tasks;
+        } else {
+            debug("planner", "Building tasks...");
+            allTasks = await buildAllTasks(files, rules, context, fileTypeCache);
+
+            // Save full plan to cache
+            if (options.cache && context.globalHash) {
+                debug("planner", "Converting all tasks to full plan for cache...");
+                const fullPlan = convertTasksToPlan(allTasks, rules, fileTypeCache);
+                const fullIndexes = buildIndexes(fullPlan, allTasks);
+                const fullOutput: ExecutionPlanOutput = {
+                    tasks: allTasks,
+                    plan: fullPlan,
+                    indexes: fullIndexes,
+                    skippedTasks: []
+                };
+                await savePlanToCacheIfEnabled(options, context, fullOutput);
+            }
         }
 
-        // Build Component Dependency Graph (P1 Optimization)
-        debug("planner", "Building component dependency graph...");
-        const graphStart = performance.now();
-        const graph = new ComponentDependencyGraph();
-        graph.build(options.files);
-        context.componentGraph = graph;
-        context.graphStats = { hits: 0, misses: 0, fallbacks: 0 };
-        debug("planner", `Graph build took ${(performance.now() - graphStart).toFixed(2)}ms`);
+        let tasks = allTasks;
+        let skippedTasks: ReadonlyArray<Task> = [];
+        let cachedResults: ReadonlyMap<string, unknown> | undefined;
 
-        debug("planner", "Building tasks...");
-        const tasks = await buildAllTasks(files, rules, context, fileTypeCache);
-
-        if (context.graphStats) {
-            debug(
-                "planner",
-                `Component graph stats: hits=${context.graphStats.hits}, misses=${context.graphStats.misses}, fallbacks=${context.graphStats.fallbacks}`
+        if (options.cache) {
+            debug("planner", "Filtering cached tasks...");
+            const incremental = await filterCachedTasks(
+                allTasks,
+                options.cache.results,
+                options.incremental
             );
+            tasks = incremental.tasks;
+            skippedTasks = incremental.skippedTasks;
+            cachedResults = incremental.cachedResults;
         }
 
         debug("planner", "Converting tasks to file-centric plan...");
@@ -91,9 +107,9 @@ export const buildExecutionPlan = async (
         debug("planner", `Building indexes for ${tasks.length} tasks...`);
         const indexes = buildIndexes(plan, tasks);
 
-        const output: ExecutionPlanOutput = { tasks, plan, indexes };
-
-        await savePlanToCacheIfEnabled(options, context, output);
+        const output: ExecutionPlanOutput = { tasks, plan, indexes, skippedTasks, cachedResults };
+        // Note: We do NOT save the filtered plan to the main plan cache, as it is state-dependent.
+        // The main cache stores the full plan.
 
         timeLog(timerLabel, "planner", "Execution plan built");
         return Ok(output);
@@ -104,42 +120,7 @@ export const buildExecutionPlan = async (
     }
 };
 
-/**
- * Builds execution plan for a single file (useful for testing).
- *
- * @param filePath - File path
- * @param rules - All resolved rules
- * @returns FileAnalysisUnit or null
- */
-export const buildFileUnit = async (
-    filePath: string,
-    rules: ReadonlyMap<string, any>
-): Promise<FileAnalysisUnit | null> => {
-    return buildFileAnalysisUnit(filePath, rules);
-};
 
-/**
- * Validates execution plan output.
- *
- * @param output - Execution plan output
- * @returns true if valid
- */
-export const validateExecutionPlan = (output: ExecutionPlanOutput): boolean => {
-    if (!output.plan || Object.keys(output.plan).length === 0) return false;
-    if (!output.indexes) return false;
-
-    const planFileCount = Object.keys(output.plan).length;
-    const statsFileCount = output.indexes.stats.totalFiles;
-    if (planFileCount !== statsFileCount) return false;
-
-    if (output.indexes.stats.totalTasks !== output.tasks.length) return false;
-
-    for (const task of output.tasks) {
-        if (!output.plan[task.filePath]) return false;
-    }
-
-    return true;
-};
 
 /**
  * Gets execution plan summary (for logging).
@@ -171,43 +152,7 @@ export const getExecutionPlanSummary = (output: ExecutionPlanOutput): string => 
     return lines.join("\n");
 };
 
-/**
- * Builds a single file analysis unit.
- *
- * @param filePath - File path
- * @param rules - All resolved rules
- * @returns FileAnalysisUnit or null if no applicable rules
- */
-const buildFileAnalysisUnit = async (
-    filePath: string,
-    rules: ReadonlyMap<string, any>
-): Promise<FileAnalysisUnit | null> => {
-    const fileType = detectFileType(filePath);
-    const tasks = await buildTasksForFileTaskCentric(filePath, fileType, rules);
 
-    if (tasks.length === 0) {
-        debug("planner", `  - ${filePath}: Skipped (no applicable rules)`);
-        return null;
-    }
-
-    debug("planner", `  - ${filePath}: ${fileType} (${tasks.length} tasks)`);
-
-    const applicableRules = collectApplicableRulesFromTasks(tasks, rules);
-    const hash = calculateHashFromTasks(tasks, applicableRules);
-
-    const ruleTasks: RuleTask[] = tasks.map((task) => ({
-        ruleName: task.ruleName,
-        severity: task.severity,
-        options: task.options,
-        cacheKey: task.taskId,
-        inputs: task.inputs,
-    }));
-
-    return {
-        file: { path: filePath, type: fileType, hash },
-        tasks: ruleTasks,
-    };
-};
 
 /**
  * Validates top-level inputs for plan build.

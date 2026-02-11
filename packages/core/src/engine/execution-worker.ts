@@ -2,12 +2,12 @@ import { parentPort, workerData } from "node:worker_threads";
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
 import { parseTs, parseHtml } from "../parsers/index.js";
-import { getRuleExecutor } from "../rules/registry.js";
-import "../rules/register-all.js"; // Register all built-in rules
-import { RuleContext, RuleResult, RuleFailure } from "../rules/types.js";
+import "../rules/register-all.js"; // CRITICAL: Register all rules in worker thread
+import { RuleResult } from "../rules/types.js";
 import { Task } from "../planner/index.js";
 import type { Program } from "oxc-parser";
 import type { HtmlParserResult } from "../parsers/html.js";
+import { executeBatchedTasks as executeSharedBatchedTasks } from "./runner.js";
 
 /**
  * Worker input payload.
@@ -71,49 +71,25 @@ const getTemplate = (filePath: string, rootDir: string): Promise<HtmlParserResul
     return promise;
 };
 
-// const getStyle = (filePath: string): Promise<CssResult | undefined> => {
-//     // Placeholder as in orchestrator
-//     return Promise.resolve(undefined);
-// };
+/**
+ * Executors a batch of tasks using the shared runner.
+ */
+const executeBatchedTasks = async (
+    tasks: ReadonlyArray<Task>,
+    rootDir: string
+): Promise<RuleResult[]> => {
+    // Adapter to match ExecutionContext interface
+    const context = {
+        rootDir,
+        readFile: (p: string) => readFileCached(p, rootDir),
+        getProgram: (p: string) => getProgram(p, rootDir),
+        getTemplate: (p: string) => getTemplate(p, rootDir),
+        getStyle: async () => undefined, // Worker doesn't cache styles yet
+    };
 
-const executeTask = async (task: Task, rootDir: string): Promise<RuleResult> => {
-    try {
-        const executor = getRuleExecutor(task.ruleName);
-        if (!executor) {
-            throw new Error(`No executor found for rule: ${task.ruleName}`);
-        }
-
-        const fileContent = await readFileCached(task.filePath, rootDir);
-        const program = task.inputs.typescript.needsAst ? await getProgram(task.filePath, rootDir) : undefined;
-
-        const templatePath = task.inputs.template?.path ?? task.filePath;
-        const template = task.inputs.template?.needsAst ? await getTemplate(templatePath, rootDir) : undefined;
-
-        const context: RuleContext = {
-            filePath: task.filePath,
-            fileContent,
-            program,
-            template,
-            options: task.options,
-        };
-
-        const raw = executor(context);
-
-        // Normalize result
-        const failures = (raw && typeof raw === 'object' && 'failures' in raw)
-            ? (raw as RuleResult).failures
-            : [];
-
-        return {
-            ruleName: task.ruleName,
-            taskId: task.taskId,
-            failures: failures as ReadonlyArray<RuleFailure>,
-        };
-
-    } catch (error) {
-        throw error;
-    }
+    return executeSharedBatchedTasks(tasks, context);
 };
+
 
 const main = async () => {
     if (!parentPort) return;
@@ -123,15 +99,30 @@ const main = async () => {
         const results: RuleResult[] = [];
         const errors: Array<{ task: Task; error: string }> = [];
 
+        // Group tasks by file
+        const tasksByFile = new Map<string, Task[]>();
         for (const task of tasks) {
+            const fileTasks = tasksByFile.get(task.filePath) ?? [];
+            fileTasks.push(task);
+            tasksByFile.set(task.filePath, fileTasks); // set again (redundant but safe) with update
+        }
+
+        // Execute batched tasks per file
+        for (const fileTasks of tasksByFile.values()) {
             try {
-                const result = await executeTask(task, rootDir);
-                results.push(result);
+                // executeBatchedTasks now handles the batching by options internally
+                // We just pass it all tasks for this file
+                const batchResults = await executeBatchedTasks(fileTasks, rootDir);
+                results.push(...batchResults);
             } catch (e) {
-                errors.push({
-                    task,
-                    error: e instanceof Error ? e.message : String(e)
-                });
+                // If the entire file batch fails (e.g. file read error, parse error)
+                // we fail all tasks for this file
+                for (const task of fileTasks) {
+                    errors.push({
+                        task,
+                        error: e instanceof Error ? e.message : String(e)
+                    });
+                }
             }
         }
 
