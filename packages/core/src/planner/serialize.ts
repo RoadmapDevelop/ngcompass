@@ -60,7 +60,7 @@ export const deserializePlan = (compact: CompactPlan): ExecutionPlanOutput => {
     }
 
     const indexes = buildIndexes(plan, allTasks);
-    return { tasks: allTasks, plan, indexes };
+    return { tasks: allTasks, plan, indexes, skippedTasks: [] };
 };
 
 /**

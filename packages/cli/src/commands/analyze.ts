@@ -6,10 +6,9 @@ import {
     resolveRules,
     getEnabledRules,
     buildExecutionPlan,
-    filterCachedTasks
+    runAnalysis
 } from '@ngcompass/core';
 import { getReporter } from '@ngcompass/reporters';
-import { debug } from '@ngcompass/common';
 import chalk from 'chalk';
 import process from 'node:process';
 
@@ -98,12 +97,59 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     cache,
                     debug: options.debug
                 });
+
                 const tPlanEnd = performance.now();
 
                 if (!planResult.ok) {
                     console.error(chalk.red(`✗ Execution plan building failed: ${planResult.error.message}`));
                     process.exit(1);
                     return;
+                }
+
+                // 5. Run Analysis
+                const tExecStart = performance.now();
+                console.log('→ Running analysis...');
+                const result = await runAnalysis(planResult.data, {
+                    rootDir: process.cwd(),
+                    cache
+                });
+                const tExecEnd = performance.now();
+
+                if (!result.ok) {
+                    console.error(chalk.red(`✗ Analysis failed: ${result.error.message}`));
+                    process.exit(1);
+                    return;
+                }
+
+                const analysis = result.data;
+                const duration = (tExecEnd - tExecStart).toFixed(2);
+                console.log(chalk.green(`✓ Analysis complete in ${duration}ms`));
+                console.log(`  Files: ${analysis.stats.totalFiles}`);
+                console.log(`  Errors: ${analysis.stats.totalErrors}`);
+                console.log(`  Warnings: ${analysis.stats.totalWarnings}`);
+
+                // 6. Report Results
+                const reporter = getReporter((config as any).reporter || 'default');
+                await reporter.report([...analysis.results]);
+
+                // 7. Save Results to Cache
+                if (cache) {
+                    const tCacheStart = performance.now();
+                    const cacheEntries: [string, any][] = [];
+
+                    for (const result of analysis.results) {
+                        if (result.taskId) {
+                            cacheEntries.push([result.taskId, result]);
+                        }
+                    }
+
+                    if (cacheEntries.length > 0) {
+                        await cache.results.setMany(cacheEntries);
+                        const tCacheEnd = performance.now();
+                        if (options.debug) {
+                            console.log(`[ngcompass:cache] Saved ${cacheEntries.length} results to cache (${(tCacheEnd - tCacheStart).toFixed(2)}ms)`);
+                        }
+                    }
                 }
 
                 if (options.debug) {
@@ -117,109 +163,15 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                         console.log(`  - Filtering:    ${t.filtering.toFixed(2)}ms`);
                     }
                     console.log(`Rule resolution: ${(tRulesEnd - tRulesStart).toFixed(2)}ms`);
-                    console.log(`Plan build:     ${(tPlanEnd - tPlanStart).toFixed(2)}ms`);
+                    console.log(`Plan build:     ${(tPlanEnd - tPlanStart).toFixed(2)}ms`); // Uses cached/incremental plan
+                    console.log(`Execution:      ${duration}ms`); // Uses skipped/cached results
                     console.log(`Total overhead: ${(performance.now() - startTime).toFixed(2)}ms`);
                     console.log('-------------------------------------------\n');
                 }
 
-                // 5. Incremental Filtering (if enabled)
-                let tasksToExecute = planResult.data.tasks;
-                let cachedResults: any[] = [];
-
-                if (options.incremental || options.force) {
-                    console.log('→ Filtering by cache...');
-
-                    const incrementalPlan = await filterCachedTasks(
-                        planResult.data.tasks,
-                        cache.results,
-                        { forceRerun: !!options.force }
-                    );
-
-
-                    tasksToExecute = incrementalPlan.pending;
-
-                    const { cached, stats: cacheStats } = incrementalPlan;
-                    console.log(`  Cached: ${cached.length} tasks (${(cacheStats.cacheHitRate * 100).toFixed(1)}%)`);
-                    console.log(`  Pending: ${tasksToExecute.length} tasks`);
-
-                    // Retrieve cached results to merge later
-                    if (cached.length > 0) {
-                        try {
-                            const cachedMap = await cache.results.getMany(cached.map(t => t.taskId));
-                            cachedResults = cached.map(task => {
-                                const result = cachedMap.get(task.taskId) as any;
-                                if (!result) return null;
-                                // Hydrate result with current file path (crucial for accurate reporting)
-                                return {
-                                    ...result,
-                                    failures: result.failures.map((f: any) => ({ ...f, filePath: task.filePath }))
-                                };
-                            }).filter(r => r !== null);
-                        } catch (e) {
-                            debug('cache', `Failed to load cached results: ${e instanceof Error ? e.message : String(e)}`);
-                        }
-                    }
-                }
-
-                // 6. Execute Analysis
-                console.log(`→ Executing analysis on ${tasksToExecute.length} tasks...`);
-
-                // Lazy import to avoid circular dependency
-                const { runAnalysis } = await import('@ngcompass/core');
-
-                const analysisResult = await runAnalysis(tasksToExecute, process.cwd());
-
-                if (!analysisResult.ok) {
-                    console.error(chalk.red(`✗ Analysis failed: ${analysisResult.error.message}`));
-                    process.exit(1);
-                    return;
-                }
-
-                const finalTime = performance.now() - startTime;
-                const newResults = analysisResult.data.results;
-                const allResults = [...newResults, ...cachedResults];
-
-                // Recalculate stats for display from ALL results
-                const totalErrors = allResults.flatMap((r: any) => r.failures).filter((f: any) => f.severity === 'critical' || f.severity === 'high').length;
-                const totalWarnings = allResults.flatMap((r: any) => r.failures).filter((f: any) => f.severity !== 'critical' && f.severity !== 'high').length;
-
-                // Cache new results (pass & fail)
-                const resultsToCache: [string, any][] = [];
-                for (const result of newResults) {
-                    if (result.taskId) {
-                        resultsToCache.push([result.taskId, result]);
-                    }
-                }
-
-                if (resultsToCache.length > 0) {
-                    try {
-                        const entries: ReadonlyArray<readonly [string, any]> = resultsToCache;
-                        await cache.results.setMany(entries);
-                    } catch (e) {
-                        debug('cache', `Failed to write cache results: ${e instanceof Error ? e.message : String(e)}`);
-                    }
-                }
-
-                const results = allResults.filter((r: any) => r.failures.length > 0);
-
-                // 7. Report Results
-                const reporter = getReporter('console');
-
-                reporter.summary({
-                    totalFiles: scanResult.data.files.length,
-                    totalTasks: planResult.data.indexes.stats.totalTasks,
-                    cachedTasks: cachedResults.length,
-                    totalErrors,
-                    totalWarnings,
-                    duration: finalTime
-                });
-
-                reporter.report(results);
-
-                if (totalErrors > 0) {
+                if (analysis.stats.totalErrors > 0) {
                     process.exit(1);
                 }
-
             } catch (error) {
                 console.error(chalk.red(`✗ Error during analysis: ${(error as Error).message}`));
                 process.exit(1);

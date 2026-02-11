@@ -30,6 +30,12 @@ export interface ExecutionPlanOutput {
 
     /** Pre-computed indexes for efficient queries */
     readonly indexes: ExecutionIndexes;
+
+    /** Tasks that were skipped */
+    readonly skippedTasks: ReadonlyArray<Task>;
+
+    /** Pre-loaded cached results (taskId → result) */
+    readonly cachedResults?: ReadonlyMap<string, unknown>;
 }
 
 /**
@@ -281,6 +287,9 @@ export interface ExecutionPlanOptions {
 
     /** Debug mode for detailed timing logging */
     readonly debug?: boolean;
+
+    /** Options for incremental filtering */
+    readonly incremental?: IncrementalFilterOptions;
 }
 
 // ==============================================================================
@@ -294,10 +303,10 @@ export interface ExecutionPlanOptions {
  */
 export interface IncrementalPlan {
     /** Tasks with results in cache (can be skipped) */
-    readonly cached: ReadonlyArray<Task>;
+    readonly skippedTasks: ReadonlyArray<Task>;
 
     /** Tasks without cache entries (must be executed) */
-    readonly pending: ReadonlyArray<Task>;
+    readonly tasks: ReadonlyArray<Task>;
 
     /** Pre-loaded cached results (taskId → result) */
     readonly cachedResults: ReadonlyMap<string, unknown>;

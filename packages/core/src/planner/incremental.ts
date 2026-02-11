@@ -44,14 +44,14 @@ export const filterCachedTasks = async (
     const cachedTaskIds = await cache.hasMany(taskIds);
     debug("incremental", `Found ${cachedTaskIds.size}/${tasks.length} tasks in cache`);
 
-    const { cached, pending } = splitTasksByCache(tasks, cachedTaskIds);
+    const { skippedTasks, tasks: pendingTasks } = splitTasksByCache(tasks, cachedTaskIds);
 
-    const cachedResults = await maybeLoadCachedResults(cache, cached, options);
-    const stats = buildCacheFilterStats(tasks.length, cached.length, pending.length);
+    const cachedResults = await maybeLoadCachedResults(cache, skippedTasks, options);
+    const stats = buildCacheFilterStats(tasks.length, skippedTasks.length, pendingTasks.length);
 
     logFilterSummary(startTime, stats);
 
-    return { cached, pending, cachedResults, stats };
+    return { skippedTasks, tasks: pendingTasks, cachedResults, stats };
 };
 
 /**
@@ -145,8 +145,8 @@ const buildForcedRerunPlan = (tasks: ReadonlyArray<Task>): IncrementalPlan => {
     };
 
     return {
-        cached: [],
-        pending: tasks,
+        skippedTasks: [],
+        tasks: tasks,
         cachedResults: new Map(),
         stats,
     };
@@ -167,8 +167,8 @@ const buildEmptyIncrementalPlan = (): IncrementalPlan => {
     };
 
     return {
-        cached: [],
-        pending: [],
+        skippedTasks: [],
+        tasks: [],
         cachedResults: new Map(),
         stats,
     };
@@ -184,16 +184,16 @@ const buildEmptyIncrementalPlan = (): IncrementalPlan => {
 const splitTasksByCache = (
     tasks: ReadonlyArray<Task>,
     cachedTaskIds: ReadonlySet<string>
-): { cached: Task[]; pending: Task[] } => {
-    const cached: Task[] = [];
-    const pending: Task[] = [];
+): { skippedTasks: Task[]; tasks: Task[] } => {
+    const skippedTasks: Task[] = [];
+    const pendingTasks: Task[] = [];
 
     for (const task of tasks) {
-        if (cachedTaskIds.has(task.taskId)) cached.push(task);
-        else pending.push(task);
+        if (cachedTaskIds.has(task.taskId)) skippedTasks.push(task);
+        else pendingTasks.push(task);
     }
 
-    return { cached, pending };
+    return { skippedTasks, tasks: pendingTasks };
 };
 
 /**

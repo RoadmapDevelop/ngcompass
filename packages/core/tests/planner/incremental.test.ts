@@ -56,11 +56,11 @@ describe('Incremental Planner', () => {
 
             const plan = await filterCachedTasks(tasks, cache);
 
-            expect(plan.cached).toHaveLength(2);
-            expect(plan.pending).toHaveLength(1);
-            expect(plan.cached[0].taskId).toBe('task1');
-            expect(plan.cached[1].taskId).toBe('task2');
-            expect(plan.pending[0].taskId).toBe('task3');
+            expect(plan.skippedTasks).toHaveLength(2);
+            expect(plan.tasks).toHaveLength(1);
+            expect(plan.skippedTasks[0].taskId).toBe('task1');
+            expect(plan.skippedTasks[1].taskId).toBe('task2');
+            expect(plan.tasks[0].taskId).toBe('task3');
         });
 
         it('should calculate correct cache statistics', async () => {
@@ -94,8 +94,8 @@ describe('Incremental Planner', () => {
 
             const plan = await filterCachedTasks([], cache);
 
-            expect(plan.cached).toHaveLength(0);
-            expect(plan.pending).toHaveLength(0);
+            expect(plan.skippedTasks).toHaveLength(0);
+            expect(plan.tasks).toHaveLength(0);
             expect(plan.stats.cacheHitRate).toBe(0);
         });
 
@@ -110,8 +110,8 @@ describe('Incremental Planner', () => {
 
             const plan = await filterCachedTasks(tasks, cache);
 
-            expect(plan.cached).toHaveLength(0);
-            expect(plan.pending).toHaveLength(2);
+            expect(plan.skippedTasks).toHaveLength(0);
+            expect(plan.tasks).toHaveLength(2);
             expect(plan.stats.cacheHitRate).toBe(0);
         });
 
@@ -129,8 +129,8 @@ describe('Incremental Planner', () => {
 
             const plan = await filterCachedTasks(tasks, cache);
 
-            expect(plan.cached).toHaveLength(2);
-            expect(plan.pending).toHaveLength(0);
+            expect(plan.skippedTasks).toHaveLength(2);
+            expect(plan.tasks).toHaveLength(0);
             expect(plan.stats.cacheHitRate).toBe(1.0);
         });
 
@@ -146,8 +146,8 @@ describe('Incremental Planner', () => {
 
             const plan = await filterCachedTasks(tasks, cache, { forceRerun: true });
 
-            expect(plan.cached).toHaveLength(0);
-            expect(plan.pending).toHaveLength(1);
+            expect(plan.skippedTasks).toHaveLength(0);
+            expect(plan.tasks).toHaveLength(1);
         });
 
         it('should load cached results when requested', async () => {
@@ -339,8 +339,8 @@ describe('Incremental Planner', () => {
             const plan = await filterCachedTasks(tasks, cache);
             const elapsed = performance.now() - startTime;
 
-            expect(plan.cached).toHaveLength(500);
-            expect(plan.pending).toHaveLength(500);
+            expect(plan.skippedTasks).toHaveLength(500);
+            expect(plan.tasks).toHaveLength(500);
             expect(elapsed).toBeLessThan(1000); // Should be fast (< 1s)
         });
     });

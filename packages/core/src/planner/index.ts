@@ -8,7 +8,7 @@
  */
 
 // Main builder
-export { buildExecutionPlan, buildFileUnit, validateExecutionPlan, getExecutionPlanSummary } from './builder.js';
+export { buildExecutionPlan, getExecutionPlanSummary } from './builder.js';
 
 // Types
 export type {

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { buildExecutionPlan, validateExecutionPlan, getExecutionPlanSummary } from '../../src/planner/builder.js';
+import { buildExecutionPlan, getExecutionPlanSummary } from '../../src/planner/builder.js';
 import type { ResolvedRule, RuleSeverity } from '../../src/rules/types.js';
 import type { TaskInputs } from '../../src/planner/types.js';
 import * as resources from '../../src/planner/resources.js';
@@ -208,46 +208,7 @@ describe('buildExecutionPlan', () => {
     });
 });
 
-describe('validateExecutionPlan', () => {
-    it('validates correct execution plan', async () => {
-        const files = ['src/app/utils.ts'];
-        const rules = new Map<string, ResolvedRule>([
-            ['no-console', createMockRule('no-console', 'standalone')],
-        ]);
 
-        const result = await buildExecutionPlan({ files, rules, rootDir: '/project' });
-
-        expect(result.ok).toBe(true);
-        if (result.ok) {
-            expect(validateExecutionPlan(result.data)).toBe(true);
-        }
-    });
-
-    it('rejects empty plan', () => {
-        const output = {
-            plan: {},
-            indexes: {
-                filesNeedingTsAst: [],
-                filesNeedingHtmlAst: [],
-                filesNeedingCssAst: [],
-                filesNeedingTypeChecker: [],
-                tasksByRule: {},
-                filesByType: {} as any,
-                tasksBySeverity: {} as any,
-                stats: {
-                    totalFiles: 0,
-                    totalTasks: 0,
-                    avgTasksPerFile: 0,
-                    filesWithTemplates: 0,
-                    filesWithStyles: 0,
-                    filesWithSpecs: 0,
-                },
-            },
-        };
-
-        expect(validateExecutionPlan(output as any)).toBe(false);
-    });
-});
 
 describe('getExecutionPlanSummary', () => {
     it('generates summary string', async () => {
