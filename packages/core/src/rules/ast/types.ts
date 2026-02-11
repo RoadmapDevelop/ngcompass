@@ -8,6 +8,8 @@
 export interface Node {
     readonly type: string;
     readonly span?: { start: number; end: number };
+    readonly start?: number;
+    readonly end?: number;
 }
 
 export interface Identifier extends Node {

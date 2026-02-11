@@ -185,7 +185,7 @@ export const runAnalysis = async (
         }
 
         // 2. Retrieve Cached Results for Skipped Tasks
-        let skippedResults: RuleResult[] = [];
+        const skippedResults: RuleResult[] = [];
         if (skippedTasks.length > 0) {
             debug("engine", `Retrieving results for ${skippedTasks.length} skipped tasks...`);
 
@@ -356,7 +356,7 @@ const runAnalysisParallel = async (
 
             worker.on("error", (err) => {
                 updateSpinner();
-                reject(err);
+                reject(err instanceof Error ? err : new Error(String(err)));
             });
             worker.on("exit", (code) => {
                 if (code !== 0) {
@@ -539,7 +539,7 @@ const extractInlineTemplate = (program: any): string => {
  * @param keyName - Key name
  * @returns Value node or null
  */
-const findObjectPropertyValue = (properties: any[] | undefined, keyName: string): any | null => {
+const findObjectPropertyValue = (properties: any, keyName: string): any | null => {
     if (!Array.isArray(properties)) return null;
 
     for (const prop of properties) {

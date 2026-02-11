@@ -55,7 +55,7 @@ export const getDecoratorNameUnsafe = (decorator: Decorator): string | undefined
     if (!expr) return undefined;
 
     if (expr.type === 'CallExpression') {
-        const callee = (expr as CallExpression).callee;
+        const callee = expr.callee;
 
         // Simple: @Component
         if (callee.type === 'Identifier') {
@@ -85,7 +85,7 @@ export const getDecoratorObjectArgUnsafe = (
     const expr = decorator.expression;
     if (!expr || expr.type !== 'CallExpression') return undefined;
 
-    const args = (expr as CallExpression).arguments;
+    const args = expr.arguments;
     if (!args || args.length === 0) return undefined;
 
     const first = args[0];

@@ -24,7 +24,7 @@ export const preferSignalInputsRule = createDecoratedPropertyRule(
 
             if (name === 'Input') {
                 hasInputDecorator = true;
-                decoratorStart = decorator.span?.start ?? 0;
+                decoratorStart = decorator.start ?? decorator.span?.start ?? 0;
                 break;
             }
         }

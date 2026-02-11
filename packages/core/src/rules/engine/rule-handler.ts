@@ -16,9 +16,9 @@
  */
 
 import type { RuleFailure, RuleContext } from '../types.js';
-import type { AngularComponentNode, DecoratedPropertyNode } from './node-streams.js';
+import type { AngularComponentNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode } from './node-streams.js';
 
-export type StreamType = 'AngularComponent' | 'DecoratedProperty';
+export type StreamType = 'AngularComponent' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute';
 
 /**
  * Rule handler for a specific stream type.
@@ -41,6 +41,7 @@ export interface RuleHandler<TNode> {
      * - No expensive string operations
      */
     handle(node: TNode, context: RuleContext): RuleFailure | null;
+    readonly meta?: Partial<import('../types.js').RuleMetadata>;
 }
 
 /**
@@ -65,4 +66,32 @@ export const createDecoratedPropertyRule = (
     name,
     streamType: 'DecoratedProperty',
     handle: handler,
+});
+
+/**
+ * Helper to create template expression rule handlers.
+ */
+export const createTemplateExpressionRule = (
+    name: string,
+    handler: (node: TemplateExpressionNode, context: RuleContext) => RuleFailure | null,
+    meta?: Partial<import('../types.js').RuleMetadata>
+): RuleHandler<TemplateExpressionNode> => ({
+    name,
+    streamType: 'TemplateExpression',
+    handle: handler,
+    meta,
+});
+
+/**
+ * Helper to create template attribute rule handlers.
+ */
+export const createTemplateAttributeRule = (
+    name: string,
+    handler: (node: TemplateAttributeNode, context: RuleContext) => RuleFailure | null,
+    meta?: Partial<import('../types.js').RuleMetadata>
+): RuleHandler<TemplateAttributeNode> => ({
+    name,
+    streamType: 'TemplateAttribute',
+    handle: handler,
+    meta,
 });

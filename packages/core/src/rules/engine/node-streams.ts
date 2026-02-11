@@ -10,12 +10,23 @@
  * - Rules checking node types (dispatcher handles this)
  */
 
-import type { ClassDeclaration, PropertyDefinition, Decorator } from '../ast/types.js';
+import type { ClassDeclaration, PropertyDefinition, Decorator, Expression } from '../ast/types.js';
 import { analyzeComponent, type ComponentMetadata } from '../analyzers/component-analyzer.js';
 
 // ============================================
 // STREAM DEFINITIONS
 // ============================================
+
+export interface TemplateExpressionNode {
+    readonly expression: Expression;
+    readonly sourceSpan: { start: number, end: number };
+}
+
+export interface TemplateAttributeNode {
+    readonly name: string;
+    readonly value?: string;
+    readonly sourceSpan: { start: number, end: number };
+}
 
 /**
  * Angular Component Stream: ClassDeclaration nodes with @Component.
