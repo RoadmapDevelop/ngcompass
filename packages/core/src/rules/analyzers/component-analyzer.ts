@@ -12,7 +12,7 @@
  * - Call this analyzer multiple times (it's cached!)
  */
 
-import type { ClassDeclaration, Expression } from '../ast/types.js';
+import type { ClassDeclaration } from '../ast/types.js';
 import {
     hasDecorator,
     getDecoratorNameUnsafe,
@@ -22,6 +22,7 @@ import {
     getLiteralStringValueUnsafe,
     getLiteralBooleanValueUnsafe,
 } from '../ast/matchers.js';
+import type { ArrayExpression, ObjectExpression, Expression, Identifier } from '../ast/types.js';
 
 // ============================================
 // TRI-STATE METADATA (Literal | Non-Literal | Missing)
@@ -55,6 +56,15 @@ export enum ChangeDetectionStrategy {
 }
 
 /**
+ * Host directive metadata.
+ */
+export interface HostDirectiveMetadata {
+    readonly directive: string | undefined;
+    readonly inputs: ReadonlyArray<{ readonly internal: string; readonly external: string }>;
+    readonly outputs: ReadonlyArray<{ readonly internal: string; readonly external: string }>;
+}
+
+/**
  * Component metadata (tri-state for all fields).
  *
  * PERFORMANCE: Allocated once per component, cached in WeakMap.
@@ -66,7 +76,9 @@ export interface ComponentMetadata {
     readonly standalone: MetadataValue<boolean>;
     readonly templateUrl: MetadataValue<string>;
     readonly template: MetadataValue<string>;
-    readonly decoratorStart: number;  // Position of @Component decorator for error reporting
+    readonly hostDirectives: MetadataValue<ReadonlyArray<HostDirectiveMetadata>>;
+    readonly decoratorStart: number;  // Position of decorator for error reporting
+    readonly type: 'Component' | 'Directive';
 }
 
 // ============================================
@@ -82,13 +94,17 @@ export interface ComponentMetadata {
 const componentCache = new WeakMap<ClassDeclaration, ComponentMetadata | null>();
 
 /**
- * Cache statistics (instrumentation).
+ * Cache statistics (scoped accumulator – avoids loose mutable globals).
  */
-let cacheHits = 0;
-let cacheMisses = 0;
+interface CacheStatsAccumulator {
+    hits: number;
+    misses: number;
+}
 
-export const getComponentCacheStats = () => ({ hits: cacheHits, misses: cacheMisses });
-export const resetComponentCacheStats = () => { cacheHits = 0; cacheMisses = 0; };
+const cacheStats: CacheStatsAccumulator = { hits: 0, misses: 0 };
+
+export const getComponentCacheStats = (): Readonly<CacheStatsAccumulator> => ({ hits: cacheStats.hits, misses: cacheStats.misses });
+export const resetComponentCacheStats = (): void => { cacheStats.hits = 0; cacheStats.misses = 0; };
 
 // ============================================
 // MAIN ANALYZER (Cached)
@@ -117,17 +133,22 @@ export const analyzeComponent = (classNode: ClassDeclaration): ComponentMetadata
     // Check cache (O(1))
     const cached = componentCache.get(classNode);
     if (cached !== undefined) {
-        cacheHits++;
+        cacheStats.hits++;
         return cached;
     }
 
-    cacheMisses++;
+    cacheStats.misses++;
 
-    // Not a component? Cache negative result.
-    if (!hasDecorator(classNode, 'Component')) {
+    // Not a component or directive? Cache negative result.
+    const isComp = hasDecorator(classNode, 'Component');
+    const isDir = !isComp && hasDecorator(classNode, 'Directive');
+
+    if (!isComp && !isDir) {
         componentCache.set(classNode, null);
         return null;
     }
+
+    const decoratorName = isComp ? 'Component' : 'Directive';
 
     // Find @Component decorator
     const decorators = classNode.decorators;
@@ -136,32 +157,34 @@ export const analyzeComponent = (classNode: ClassDeclaration): ComponentMetadata
         return null;
     }
 
-    let componentDecorator = undefined;
+    let angularDecorator = undefined;
     for (let i = 0; i < decorators.length; i++) {
         const name = getDecoratorNameUnsafe(decorators[i]);
-        if (name === 'Component') {
-            componentDecorator = decorators[i];
+        if (name === decoratorName) {
+            angularDecorator = decorators[i];
             break;
         }
     }
 
-    if (!componentDecorator) {
+    if (!angularDecorator) {
         componentCache.set(classNode, null);
         return null;
     }
 
     // Extract metadata object
-    const metadataObject = getDecoratorObjectArgUnsafe(componentDecorator);
+    const metadataObject = getDecoratorObjectArgUnsafe(angularDecorator);
 
     // Build metadata (allocated once, cached)
     const metadata: ComponentMetadata = {
         className: classNode.id?.name,
         selector: metadataObject ? extractSelector(metadataObject) : MISSING,
-        changeDetection: metadataObject ? extractChangeDetection(metadataObject) : MISSING,
+        changeDetection: isComp && metadataObject ? extractChangeDetection(metadataObject) : MISSING,
         standalone: metadataObject ? extractStandalone(metadataObject) : MISSING,
-        templateUrl: metadataObject ? extractTemplateUrl(metadataObject) : MISSING,
-        template: metadataObject ? extractTemplate(metadataObject) : MISSING,
-        decoratorStart: componentDecorator.start ?? componentDecorator.span?.start ?? 0,  // Track decorator position
+        templateUrl: isComp && metadataObject ? extractTemplateUrl(metadataObject) : MISSING,
+        template: isComp && metadataObject ? extractTemplate(metadataObject) : MISSING,
+        hostDirectives: metadataObject ? extractHostDirectives(metadataObject) : MISSING,
+        decoratorStart: angularDecorator.start ?? angularDecorator.span?.start ?? 0,  // Track decorator position
+        type: decoratorName,
     };
 
     componentCache.set(classNode, metadata);
@@ -234,6 +257,70 @@ const extractTemplate = (metadataObject: any): MetadataValue<string> => {
     if (value !== undefined) return literal(value);
 
     return NON_LITERAL;
+};
+
+const extractHostDirectives = (metadataObject: any): MetadataValue<ReadonlyArray<HostDirectiveMetadata>> => {
+    const hostNode = getObjectPropertyUnsafe(metadataObject, 'hostDirectives');
+    if (!hostNode) return MISSING;
+
+    if (hostNode.type !== 'ArrayExpression') return NON_LITERAL;
+
+    const hostArr = hostNode as ArrayExpression;
+    const results: HostDirectiveMetadata[] = [];
+    const elements = hostArr.elements;
+
+    for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (!el) continue;
+
+        // Case 1: Class reference [MyDir]
+        if (el.type === 'Identifier') {
+            results.push({ directive: (el as Identifier).name, inputs: [], outputs: [] });
+            continue;
+        }
+
+        // Case 2: Object { directive: MyDir, inputs: [...], outputs: [...] }
+        if (el.type === 'ObjectExpression') {
+            const objEl = el as ObjectExpression;
+            const dirNode = getObjectPropertyUnsafe(objEl, 'directive');
+            const directive = dirNode?.type === 'Identifier' ? (dirNode as Identifier).name : undefined;
+
+            const inputs = extractRenames(getObjectPropertyUnsafe(objEl, 'inputs'));
+            const outputs = extractRenames(getObjectPropertyUnsafe(objEl, 'outputs'));
+
+            results.push({ directive, inputs, outputs });
+            continue;
+        }
+
+        // Unknown type
+    }
+
+    return literal(results);
+};
+
+const extractRenames = (node: Expression | undefined): ReadonlyArray<{ internal: string, external: string }> => {
+    if (!node || node.type !== 'ArrayExpression') return [];
+
+    const arrNode = node as ArrayExpression;
+    const renames: { internal: string, external: string }[] = [];
+    const elements = arrNode.elements;
+
+    for (let i = 0; i < elements.length; i++) {
+        const el = elements[i];
+        if (!el) continue;
+
+        const value = getLiteralStringValueUnsafe(el);
+        if (!value) continue;
+
+        if (value.includes(':')) {
+            const [internal, external] = value.split(':').map(s => s.trim());
+            renames.push({ internal, external });
+        } else {
+            renames.push({ internal: value, external: value });
+        }
+    }
+
+    return renames;
 };
 
 // ============================================

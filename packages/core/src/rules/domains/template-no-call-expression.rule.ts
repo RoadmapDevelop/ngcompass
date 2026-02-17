@@ -3,7 +3,6 @@ import { createTemplateExpressionRule } from '../engine/rule-handler.js';
 import type { TemplateExpressionNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
-import { Locator } from '../../utils/locator.js';
 
 /**
  * template-no-call-expression
@@ -17,9 +16,6 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
     (node: TemplateExpressionNode, context: RuleContext): RuleFailure | null => {
         let failure: RuleFailure | null = null;
 
-        // Locator for mapping offsets to line/col
-        const locator = new Locator(context.fileContent);
-
         walkProgram(node.expression, (child) => {
             if (failure) return false;
 
@@ -29,7 +25,7 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
                 // child.start: offset of call within expression
                 const absoluteOffset = node.sourceSpan.start + (child.start || 0);
 
-                const { line, column } = locator.location(absoluteOffset);
+                const { line, column } = context.locator.location(absoluteOffset);
 
                 failure = {
                     filePath: context.filePath,

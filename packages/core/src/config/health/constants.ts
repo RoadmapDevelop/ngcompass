@@ -1,8 +1,11 @@
 export const SEVERITY_LEVELS: Record<string, number> = {
     info: 0,
     low: 1,
+    warning: 2,
+    warn: 2,
     moderate: 2,
     high: 3,
+    error: 4,
     critical: 4,
 };
 

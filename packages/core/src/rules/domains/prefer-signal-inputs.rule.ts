@@ -8,8 +8,8 @@
 import { createDecoratedPropertyRule } from '../engine/rule-handler.js';
 import type { DecoratedPropertyNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
-import { Locator } from '../../utils/locator.js';
 import { getDecoratorNameUnsafe } from '../ast/matchers.js';
+import type { Identifier } from '../ast/types.js';
 
 export const preferSignalInputsRule = createDecoratedPropertyRule(
     'prefer-signal-inputs',
@@ -33,10 +33,10 @@ export const preferSignalInputsRule = createDecoratedPropertyRule(
         if (!hasInputDecorator) return null;
 
         // Report: recommend signal-based input()
-        const locator = new Locator(context.fileContent);
-        const { line, column } = locator.location(decoratorStart);
+        const { line, column } = context.locator.location(decoratorStart);
 
-        const propertyName = (propertyNode.node.key as any)?.name ?? 'Unknown';
+        const key = propertyNode.node.key;
+        const propertyName = key.type === 'Identifier' ? (key as Identifier).name : 'Unknown';
 
         return {
             filePath: context.filePath,

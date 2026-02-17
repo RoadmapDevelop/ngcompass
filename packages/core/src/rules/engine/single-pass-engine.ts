@@ -17,7 +17,7 @@
 
 import type { RuleContext, RuleResult, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
-import { toAngularComponentStream, toDecoratedPropertyStream } from './node-streams.js';
+import { toAngularClassStream, toDecoratedPropertyStream } from './node-streams.js';
 import type { RuleHandler } from './rule-handler.js';
 import { resetComponentCacheStats, getComponentCacheStats } from '../analyzers/component-analyzer.js';
 import { analyzeTemplate } from '../analyzers/template-analyzer.js';
@@ -34,7 +34,7 @@ const BUDGET_MS_PER_FILE_WITH_TYPES = 5;     // p95
 // ============================================
 
 interface RuleRegistry {
-    angularComponentHandlers: RuleHandler<any>[];
+    angularClassHandlers: RuleHandler<any>[];
     decoratedPropertyHandlers: RuleHandler<any>[];
     templateExpressionHandlers: RuleHandler<any>[];
     templateAttributeHandlers: RuleHandler<any>[];
@@ -43,7 +43,7 @@ interface RuleRegistry {
 
 const createRegistry = (rules: ReadonlyArray<RuleHandler<any>>): RuleRegistry => {
     const registry: RuleRegistry = {
-        angularComponentHandlers: [],
+        angularClassHandlers: [],
         decoratedPropertyHandlers: [],
         templateExpressionHandlers: [],
         templateAttributeHandlers: [],
@@ -51,8 +51,8 @@ const createRegistry = (rules: ReadonlyArray<RuleHandler<any>>): RuleRegistry =>
 
     for (const rule of rules) {
         switch (rule.streamType) {
-            case 'AngularComponent':
-                registry.angularComponentHandlers.push(rule);
+            case 'AngularClass':
+                registry.angularClassHandlers.push(rule);
                 break;
             case 'DecoratedProperty':
                 registry.decoratedPropertyHandlers.push(rule);
@@ -86,6 +86,50 @@ export interface PerformanceReport {
     cacheStats: { hits: number; misses: number };
     budgetViolations: string[];
 }
+
+// ============================================
+// SHARED DISPATCH (DRY – single implementation)
+// ============================================
+
+/**
+ * Dispatches a pre-filtered node to all matching handlers,
+ * collecting failures and recording per-rule timing.
+ *
+ * PERFORMANCE: O(H) where H = handlers.length.
+ * Zero-allocation on the hot path (failure arrays reused).
+ */
+const dispatchToHandlers = <T>(
+    node: T,
+    handlers: ReadonlyArray<RuleHandler<any>>,
+    context: RuleContext,
+    failuresByRule: Map<string, RuleFailure[]>,
+    ruleTimings: Map<string, RuleTiming>,
+): void => {
+    for (let i = 0; i < handlers.length; i++) {
+        const handler = handlers[i];
+        const ruleStart = performance.now();
+
+        try {
+            const failure = handler.handle(node, context);
+            if (failure) {
+                const existing = failuresByRule.get(handler.name) ?? [];
+                if (Array.isArray(failure)) {
+                    existing.push(...failure);
+                } else {
+                    existing.push(failure);
+                }
+                failuresByRule.set(handler.name, existing);
+            }
+        } catch (e) {
+            console.error(`Rule ${handler.name} failed:`, e);
+        }
+
+        const elapsed = performance.now() - ruleStart;
+        const timing = ruleTimings.get(handler.name)!;
+        timing.totalMs += elapsed;
+        timing.invocations++;
+    }
+};
 
 // ============================================
 // MAIN ENGINE
@@ -139,29 +183,11 @@ export const runSinglePassAnalysis = (
 
         nodesVisited++;
 
-        // Dispatch to Angular component stream
+        // Dispatch to Angular class stream (Components & Directives)
         if (node.type === 'ClassDeclaration') {
-            const componentNode = toAngularComponentStream(node);
-            if (componentNode) {
-                for (const handler of registry.angularComponentHandlers) {
-                    const ruleStartTime = performance.now();
-
-                    try {
-                        const failure = handler.handle(componentNode, context);
-                        if (failure) {
-                            const existing = failuresByRule.get(handler.name) ?? [];
-                            existing.push(failure);
-                            failuresByRule.set(handler.name, existing);
-                        }
-                    } catch (error) {
-                        console.error(`Rule ${handler.name} failed:`, error);
-                    }
-
-                    const ruleEndTime = performance.now();
-                    const timing = ruleTimings.get(handler.name)!;
-                    timing.totalMs += (ruleEndTime - ruleStartTime);
-                    timing.invocations++;
-                }
+            const classNode = toAngularClassStream(node);
+            if (classNode) {
+                dispatchToHandlers(classNode, registry.angularClassHandlers, context, failuresByRule, ruleTimings);
             }
         }
 
@@ -169,25 +195,7 @@ export const runSinglePassAnalysis = (
         if (node.type === 'PropertyDefinition') {
             const decoratedNode = toDecoratedPropertyStream(node);
             if (decoratedNode) {
-                for (const handler of registry.decoratedPropertyHandlers) {
-                    const ruleStartTime = performance.now();
-
-                    try {
-                        const failure = handler.handle(decoratedNode, context);
-                        if (failure) {
-                            const existing = failuresByRule.get(handler.name) ?? [];
-                            existing.push(failure);
-                            failuresByRule.set(handler.name, existing);
-                        }
-                    } catch (error) {
-                        console.error(`Rule ${handler.name} failed:`, error);
-                    }
-
-                    const ruleEndTime = performance.now();
-                    const timing = ruleTimings.get(handler.name)!;
-                    timing.totalMs += (ruleEndTime - ruleStartTime);
-                    timing.invocations++;
-                }
+                dispatchToHandlers(decoratedNode, registry.decoratedPropertyHandlers, context, failuresByRule, ruleTimings);
             }
         }
 
@@ -197,53 +205,15 @@ export const runSinglePassAnalysis = (
     // Dispatch to template streams (Expressions and Attributes)
     if (context.template && (registry.templateExpressionHandlers.length > 0 || registry.templateAttributeHandlers.length > 0)) {
         const templateAnalysis = analyzeTemplate(context.template);
-        const expressions = templateAnalysis.expressions;
-        const attributes = templateAnalysis.attributes;
 
         // Dispatch Expressions
-        for (const templateNode of expressions) {
-            for (const handler of registry.templateExpressionHandlers) {
-                const ruleStartTime = performance.now();
-
-                try {
-                    const failure = handler.handle(templateNode, context);
-                    if (failure) {
-                        const existing = failuresByRule.get(handler.name) ?? [];
-                        existing.push(failure);
-                        failuresByRule.set(handler.name, existing);
-                    }
-                } catch (error) {
-                    console.error(`Rule ${handler.name} failed:`, error);
-                }
-
-                const ruleEndTime = performance.now();
-                const timing = ruleTimings.get(handler.name)!;
-                timing.totalMs += (ruleEndTime - ruleStartTime);
-                timing.invocations++;
-            }
+        for (const templateNode of templateAnalysis.expressions) {
+            dispatchToHandlers(templateNode, registry.templateExpressionHandlers, context, failuresByRule, ruleTimings);
         }
 
         // Dispatch Attributes
-        for (const attributeNode of attributes) {
-            for (const handler of registry.templateAttributeHandlers) {
-                const ruleStartTime = performance.now();
-
-                try {
-                    const failure = handler.handle(attributeNode, context);
-                    if (failure) {
-                        const existing = failuresByRule.get(handler.name) ?? [];
-                        existing.push(failure);
-                        failuresByRule.set(handler.name, existing);
-                    }
-                } catch (error) {
-                    console.error(`Rule ${handler.name} failed:`, error);
-                }
-
-                const ruleEndTime = performance.now();
-                const timing = ruleTimings.get(handler.name)!;
-                timing.totalMs += (ruleEndTime - ruleStartTime);
-                timing.invocations++;
-            }
+        for (const attributeNode of templateAnalysis.attributes) {
+            dispatchToHandlers(attributeNode, registry.templateAttributeHandlers, context, failuresByRule, ruleTimings);
         }
     }
 
