@@ -5,7 +5,7 @@
  * Rules must subscribe to the most specific stream possible.
  *
  * FORBIDDEN:
- * - Rules checking "is this a component?" (use AngularComponentStream)
+ * - Rules checking "is this a component?" (use AngularClassStream)
  * - Rules checking "is this decorated?" (use DecoratedPropertyStream)
  * - Rules checking node types (dispatcher handles this)
  */
@@ -29,16 +29,16 @@ export interface TemplateAttributeNode {
 }
 
 /**
- * Angular Component Stream: ClassDeclaration nodes with @Component.
+ * Angular Decorator Stream: ClassDeclaration nodes with @Component or @Directive.
  *
  * Rules subscribing to this stream are guaranteed:
  * - Node is a ClassDeclaration
- * - Node has @Component decorator
- * - ComponentMetadata is pre-analyzed and cached
+ * - Node has @Component or @Directive decorator
+ * - Metadata is pre-analyzed and cached
  */
-export interface AngularComponentNode {
+export interface AngularClassNode {
     readonly node: ClassDeclaration;
-    readonly metadata: ComponentMetadata;  // Pre-analyzed!
+    readonly metadata: ComponentMetadata;  // Covers both Components and Directives
 }
 
 /**
@@ -58,14 +58,14 @@ export interface DecoratedPropertyNode {
 // ============================================
 
 /**
- * Filters ClassDeclaration nodes to Angular components.
+ * Filters ClassDeclaration nodes to Angular components or directives.
  *
  * PERFORMANCE: O(1) after first call (cached).
  * Called by engine during traversal, not by rules.
  */
-export const toAngularComponentStream = (
+export const toAngularClassStream = (
     classNode: ClassDeclaration
-): AngularComponentNode | null => {
+): AngularClassNode | null => {
     const metadata = analyzeComponent(classNode);
     if (!metadata) return null;
 

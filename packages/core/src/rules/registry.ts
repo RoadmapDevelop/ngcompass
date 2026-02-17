@@ -1,8 +1,10 @@
 /**
  * Rule Registry
  *
- * Central registry of all available rules with their metadata
- * This will be populated as rules are implemented
+ * Central registry of all available rules with their metadata.
+ * Rules are registered dynamically via registerRuleImplementation() —
+ * there is no static known-rules list. The engine adapter is the
+ * sole source of truth for rule registration.
  */
 
 import type { RuleRegistry, RuleRegistryEntry, RuleMetadata, RuleContext, RuleResult, RuleFailure } from './types.js';
@@ -19,6 +21,13 @@ export type RuleExecutor = (context: RuleContext) => RuleResult | Iterable<RuleF
 const ruleExecutors = new Map<string, RuleExecutor>();
 
 /**
+ * Global rule registry instance.
+ * Populated dynamically via registerRuleImplementation().
+ */
+const mutableRegistry = new Map<string, RuleRegistryEntry>();
+export const ruleRegistry: RuleRegistry = mutableRegistry;
+
+/**
  * Register a rule implementation
  */
 export const registerRuleImplementation = (
@@ -28,49 +37,27 @@ export const registerRuleImplementation = (
 ): void => {
     ruleExecutors.set(name, executor);
 
-    // Also update the metadata registry if needed
-    if (!ruleRegistry.has(name)) {
-        // If it's a new rule not in our static list, add it
-        // This supports plugins in the future
-        const entry = createRegistryEntry(name, metadataOverrides);
-        (ruleRegistry as Map<string, RuleRegistryEntry>).set(name, entry);
-    }
+    // Always update metadata registry — overwrite with latest metadata
+    const entry = createRegistryEntry(name, metadataOverrides);
+    mutableRegistry.set(name, entry);
 };
 
 /**
  * Get a rule executor by name
- *
- * Automatically falls back to new engine if rule is registered there
  */
 export const getRuleExecutor = (name: string): RuleExecutor | undefined => {
-    // Check old-style executors first
-    const executor = ruleExecutors.get(name);
-    if (executor) return executor;
-
-    // Fall back to new engine adapter
-    // Import dynamically to avoid circular dependency
-    try {
-        const { isNewEngineRule, executeNewEngineRule } = require('./engine/adapter.js');
-
-        if (isNewEngineRule(name)) {
-            return (ctx: RuleContext) => executeNewEngineRule(name, ctx);
-        }
-    } catch (e) {
-        // Adapter not available, continue
-    }
-
-    return undefined;
+    return ruleExecutors.get(name);
 };
 
 /**
- * Placeholder rule metadata (will be replaced with actual implementations)
+ * Create metadata for a rule (uses overrides or defaults)
  */
 const createPlaceholderMetadata = (
     name: string,
     overrides: Partial<RuleMetadata> = {}
 ): RuleMetadata => ({
     name,
-    description: overrides.description || `Rule: ${name} (to be implemented)`,
+    description: overrides.description || `Rule: ${name}`,
     category: overrides.category || 'general',
     dependencyType: overrides.dependencyType || 'standalone',
     requires: {
@@ -94,36 +81,6 @@ const createRegistryEntry = (
         options: {},
     },
 });
-
-/**
- * List of all known rules (will be expanded as rules are implemented)
- */
-const knownRules = [
-    // --- Angular Components & Directives ---
-    'prefer-on-push-component-change-detection',
-    'prefer-standalone',
-] as const;
-
-/**
- * Build the rule registry
- */
-const buildRegistry = (): RuleRegistry => {
-    const entries = new Map<string, RuleRegistryEntry>();
-
-    for (const ruleName of knownRules) {
-        entries.set(ruleName, createRegistryEntry(ruleName, {
-            dependencyType: 'component',
-            requires: { tsAst: true }
-        }));
-    }
-
-    return entries;
-};
-
-/**
- * Global rule registry instance
- */
-export const ruleRegistry: RuleRegistry = buildRegistry();
 
 /**
  * Check if a rule exists in the registry

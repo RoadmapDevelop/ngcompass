@@ -122,9 +122,9 @@ const config: AnalyzerConfig = {
     // ==========================================================================
 
     rules: {
-        // Example rules - uncomment and configure as needed:
-        // 'component-selector': { severity: 'high', options: { type: 'kebab-case', prefix: 'app' } },
-        // 'directive-selector': { severity: 'high', options: { type: 'camelCase', prefix: 'app' } },
+        // Example rules with configurable prefixes:
+        'component-selector': { severity: 'moderate', options: { prefix: 'app', type: 'element' } },
+        'directive-selector': { severity: 'high', options: { prefix: 'app', type: 'attribute' } },
         // 'no-input-rename': 'moderate',
         // 'no-output-rename': 'moderate',
         // 'use-lifecycle-interface': 'low',

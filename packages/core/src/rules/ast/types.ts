@@ -49,6 +49,11 @@ export interface SpreadElement extends Node {
     readonly type: 'SpreadElement';
 }
 
+export interface ArrayExpression extends Node {
+    readonly type: 'ArrayExpression';
+    readonly elements: ReadonlyArray<Expression | SpreadElement | null>;
+}
+
 export interface StringLiteral extends Node {
     readonly type: 'StringLiteral' | 'Literal';
     readonly value: string;
@@ -88,6 +93,7 @@ export type Expression =
     | CallExpression
     | MemberExpression
     | ObjectExpression
+    | ArrayExpression
     | StringLiteral
     | BooleanLiteral
     | Node;

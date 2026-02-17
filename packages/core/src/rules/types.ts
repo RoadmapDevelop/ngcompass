@@ -6,6 +6,7 @@
  */
 
 import { Severity, Result, Ok, Err } from "@ngcompass/common";
+import type { Locator } from "../utils/locator.js";
 
 // ==============================================================================
 // RULE CONFIGURATION
@@ -187,6 +188,7 @@ export interface RuleContext {
     readonly sourceFile?: import('typescript').SourceFile; // Deprecated
     readonly filePath: string; // The file being analyzed
     readonly fileContent: string; // Raw content for line/col mapping
+    readonly locator: Locator; // Line/column mapping helper
     readonly program?: import('oxc-parser').Program;
     readonly template?: import('../parsers/html').HtmlParserResult;
     readonly style?: import('../parsers/css').CssParserResult;
