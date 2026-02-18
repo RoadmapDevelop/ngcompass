@@ -49,7 +49,9 @@ export const buildExecutionPlan = async (
         const context = createTaskBuilderContext();
         const fileTypeCache = new Map<string, FileType>();
 
-        if (options.cache) {
+        const cachedPlan = await tryLoadPlanFromCache(options, context);
+
+        if (!cachedPlan && options.cache) {
             debug("planner", "Warming up hash cache from metadata index...");
             const start = performance.now();
             await warmupHashCache(
@@ -60,8 +62,13 @@ export const buildExecutionPlan = async (
             debug("planner", `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
         }
 
-        const cachedPlan = await tryLoadPlanFromCache(options, context);
         let allTasks: ReadonlyArray<Task>;
+
+        if (cachedPlan && cachedPlan.precomputedAnalysis) {
+            // Fast path: full analysis result is cached, skip everything
+            timeLog(timerLabel, "planner", "Full analysis cached — returning precomputed result");
+            return Ok(cachedPlan);
+        }
 
         if (cachedPlan) {
             timeLog(timerLabel, "planner", "Execution plan loaded from cache");
@@ -79,7 +86,8 @@ export const buildExecutionPlan = async (
                     tasks: allTasks,
                     plan: fullPlan,
                     indexes: fullIndexes,
-                    skippedTasks: []
+                    skippedTasks: [],
+                    globalHash: context.globalHash
                 };
                 await savePlanToCacheIfEnabled(options, context, fullOutput);
             }
@@ -107,7 +115,14 @@ export const buildExecutionPlan = async (
         debug("planner", `Building indexes for ${tasks.length} tasks...`);
         const indexes = buildIndexes(plan, tasks);
 
-        const output: ExecutionPlanOutput = { tasks, plan, indexes, skippedTasks, cachedResults };
+        const output: ExecutionPlanOutput = {
+            tasks,
+            plan,
+            indexes,
+            skippedTasks,
+            cachedResults,
+            globalHash: context.globalHash
+        };
         // Note: We do NOT save the filtered plan to the main plan cache, as it is state-dependent.
         // The main cache stores the full plan.
 
@@ -202,6 +217,40 @@ const tryLoadPlanFromCache = async (
     const globalHash = await calculateGlobalHash(files, rules, context.hashCache!);
     context.globalHash = globalHash;
 
+    // Check precomputed analysis first (Short-circuit)
+    const analysisCache = options.cache.analysis;
+    const precomputedAnalysis = await analysisCache.get(globalHash);
+
+    if (precomputedAnalysis) {
+        if (options.debug) {
+            debug("planner", "Analysis results cached (Short-circuit enabled)");
+        }
+        return {
+            tasks: [],
+            plan: {},
+            indexes: {
+                stats: {
+                    totalFiles: 0,
+                    totalTasks: 0,
+                    avgTasksPerFile: 0,
+                    filesWithTemplates: 0,
+                    filesWithStyles: 0,
+                    filesWithSpecs: 0
+                },
+                tasksBySeverity: {
+                    critical: 0,
+                    high: 0,
+                    moderate: 0,
+                    low: 0,
+                    info: 0
+                }
+            },
+            skippedTasks: [],
+            globalHash,
+            precomputedAnalysis: precomputedAnalysis as any
+        } as unknown as ExecutionPlanOutput;
+    }
+
     const tCacheStart = performance.now();
     const cachedData = await options.cache.plans.get(globalHash);
     const tIOEnd = performance.now();
@@ -212,7 +261,7 @@ const tryLoadPlanFromCache = async (
 
     const tDeserStart = performance.now();
     const output =
-        (cachedData as any).v === 1 ? deserializePlan(cachedData as any) : (cachedData as ExecutionPlanOutput);
+        cachedData.v === 1 ? deserializePlan(cachedData) : (cachedData as ExecutionPlanOutput);
     const tDeserEnd = performance.now();
 
     if (options.debug) {
@@ -222,7 +271,10 @@ const tryLoadPlanFromCache = async (
         debug("planner", `  Deser:  ${(tDeserEnd - tDeserStart).toFixed(2)}ms`);
     }
 
-    return output;
+    return {
+        ...output,
+        globalHash, // Ensure globalHash is passed through
+    };
 };
 
 /**
@@ -369,7 +421,7 @@ const tryBuildAllTasksParallel = async (
         debug("planner", `Workers completed. Generated ${tasks.length} tasks.`);
         return tasks;
     } catch (error) {
-        debug("planner", `Parallel execution failed, falling back to sequential: ${error}`);
+        debug("planner", `Parallel execution failed, falling back to sequential: ${String(error)}`);
         return null;
     }
 };

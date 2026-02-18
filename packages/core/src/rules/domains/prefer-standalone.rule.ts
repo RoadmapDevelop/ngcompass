@@ -6,14 +6,13 @@
  */
 
 import { createComponentRule } from '../engine/rule-handler.js';
-import type { AngularComponentNode } from '../engine/node-streams.js';
+import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
-import { Locator } from '../../utils/locator.js';
 
 export const preferStandaloneRule = createComponentRule(
     'prefer-standalone',
-    (componentNode: AngularComponentNode, context: RuleContext): RuleFailure | null => {
-        const standalone = componentNode.metadata.standalone;
+    (classNode: AngularClassNode, context: RuleContext): RuleFailure | null => {
+        const standalone = classNode.metadata.standalone;
 
         // Already standalone: true? Pass.
         if (standalone.kind === 'literal' && standalone.value === true) return null;
@@ -22,12 +21,11 @@ export const preferStandaloneRule = createComponentRule(
         if (standalone.kind === 'non-literal') return null;
 
         // Missing or false? Report.
-        const locator = new Locator(context.fileContent);
-        const { line, column } = locator.location(componentNode.metadata.decoratorStart);
+        const { line, column } = context.locator.location(classNode.metadata.decoratorStart);
 
         return {
             filePath: context.filePath,
-            message: `Component '${componentNode.metadata.className ?? 'Unknown'}' should be standalone`,
+            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should be standalone`,
             line,
             column,
             severity: 'critical',

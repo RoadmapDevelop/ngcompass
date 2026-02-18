@@ -50,7 +50,7 @@ export const createJsonFileDriver = <T>(
         savePromise = (async () => {
             try {
                 await fs.mkdir(config.path, { recursive: true });
-                const data = Object.fromEntries(cache!);
+                const data = Object.fromEntries(cache);
                 await writeFileAtomic(filePath, JSON.stringify(data));
             } catch {
                 // Ignore
@@ -99,7 +99,9 @@ export const createJsonFileDriver = <T>(
             cache = new Map();
             try {
                 await fs.unlink(filePath);
-            } catch { }
+            } catch {
+                // Ignore
+            }
         },
         getStats: async (): Promise<DriverStats> => {
             await load();

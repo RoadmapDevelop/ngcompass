@@ -6,9 +6,10 @@
  */
 
 import { Task } from "../planner/index.js";
-import { RuleResult, RuleContext } from "../rules/types.js";
-import { debug, error, warn } from "@ngcompass/common";
+import { RuleResult, RuleContext, RuleSeverity } from "../rules/types.js";
+import { error, warn } from "@ngcompass/common";
 import { isNewEngineRule, executeBatchedNewEngineRules } from "../rules/engine/adapter.js";
+import { Locator } from "../utils/locator.js";
 import type { Program } from "oxc-parser";
 import type { HtmlParserResult } from "../parsers/html.js";
 import type { CssResult } from "../parsers/css.js";
@@ -39,7 +40,12 @@ export const executeBatchedTasks = async (
     if (tasks.length === 0) return [];
 
     // 1. Group tasks by options (and filter for new engine)
-    const batches = new Map<string, { options: any, ruleNames: string[], taskIds: string[] }>();
+    const batches = new Map<string, {
+        options: any,
+        ruleNames: string[],
+        taskIds: string[],
+        severities: Map<string, RuleSeverity>
+    }>();
     const results: RuleResult[] = [];
 
     for (const task of tasks) {
@@ -56,11 +62,13 @@ export const executeBatchedTasks = async (
         const optionsKey = JSON.stringify(task.options || {});
         const batch = batches.get(optionsKey) ?? {
             options: task.options,
-            ruleNames: [],
-            taskIds: []
+            ruleNames: [] as string[],
+            taskIds: [] as string[],
+            severities: new Map<string, RuleSeverity>()
         };
         batch.ruleNames.push(task.ruleName);
         batch.taskIds.push(task.taskId);
+        batch.severities.set(task.ruleName, task.severity);
         batches.set(optionsKey, batch);
     }
 
@@ -79,6 +87,8 @@ export const executeBatchedTasks = async (
             if (!fileContent) fileContent = await context.readFile(tasks[0].filePath);
             if (!program) program = await context.getProgram(tasks[0].filePath);
 
+            const locator = new Locator(fileContent);
+
             // Check if any rule in this batch needs template
             // We don't have easy access to rule metadata here to check `requires.template` 
             // without importing the registry or checking the task inputs.
@@ -94,6 +104,7 @@ export const executeBatchedTasks = async (
             const ruleContext: RuleContext = {
                 filePath: tasks[0].filePath,
                 fileContent,
+                locator,
                 program,
                 template, // Might be undefined if not needed/found
                 options: batch.options,
@@ -113,11 +124,29 @@ export const executeBatchedTasks = async (
 
             for (const result of batchResults) {
                 const ids = taskIdMap.get(result.ruleName);
+
+                // Override severity from configuration
+                const configuredSeverity = batch.severities.get(result.ruleName);
+                let finalResult = result;
+
+                if (configuredSeverity) {
+                    // Create new failures with overridden severity
+                    const newFailures = result.failures.map(f => ({
+                        ...f,
+                        severity: configuredSeverity
+                    }));
+
+                    finalResult = {
+                        ...result,
+                        failures: newFailures
+                    };
+                }
+
                 if (ids && ids.length > 0) {
                     const taskId = ids.shift();
-                    results.push({ ...result, taskId });
+                    results.push({ ...finalResult, taskId });
                 } else {
-                    results.push(result);
+                    results.push(finalResult);
                 }
             }
         } catch (e) {

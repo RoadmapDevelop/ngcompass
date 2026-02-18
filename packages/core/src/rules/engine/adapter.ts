@@ -26,11 +26,15 @@ export const registerNewEngineRule = (handler: RuleHandler<any>): void => {
     // Also register in the global registry so it's "known"
     registerRuleImplementation(
         handler.name,
-        (context: RuleContext) => executeNewEngineRule(handler.name, context),
+        (context: RuleContext) => {
+            const { results } = runSinglePassAnalysis([handler], context);
+            return results[0] || { ruleName: handler.name, failures: [] };
+        },
         {
             // Extract metadata if available from handler
             category: 'best-practice', // Default, should ideally come from handler
             dependencyType: 'component', // Default
+            ...handler.meta,
         }
     );
 
@@ -56,39 +60,6 @@ export const getNewEngineRuleNames = (): ReadonlyArray<string> => {
     return Array.from(newEngineRules.keys());
 };
 
-/**
- * Executes a single rule using the new engine (for backward compatibility).
- *
- * This adapter allows new-style rules to work with the existing
- * one-rule-per-task execution model.
- * 
- * @deprecated Use `executeBatchedNewEngineRules` for better performance.
- *
- * @param ruleName - Rule to execute
- * @param context - Rule context
- * @returns Rule result
- */
-export const executeNewEngineRule = (ruleName: string, context: RuleContext): RuleResult => {
-    const handler = newEngineRules.get(ruleName);
-
-    if (!handler) {
-        return {
-            ruleName,
-            failures: [],
-        };
-    }
-
-    // Run single rule through the engine
-    const { results, performance } = runSinglePassAnalysis([handler], context);
-
-    // Log performance metrics if available
-    if (performance.budgetViolations.length > 0) {
-        debug('engine', `Performance budget violations for ${ruleName}:`, performance.budgetViolations);
-    }
-
-    // Return first result (should only be one)
-    return results[0] || { ruleName, failures: [] };
-};
 
 /**
  * Executes multiple rules in a single pass (optimal path).
@@ -141,26 +112,38 @@ export interface EngineStats {
     readonly avgCacheHitRate: number;
 }
 
-// Internal stats tracking
-let totalExecutions = 0;
-let totalBatchedExecutions = 0;
-let totalTraversalMs = 0;
-let totalCacheHits = 0;
-let totalCacheMisses = 0;
+/**
+ * Scoped stats accumulator – avoids loose mutable module-level variables.
+ */
+interface EngineStatsAccumulator {
+    totalExecutions: number;
+    totalBatchedExecutions: number;
+    totalTraversalMs: number;
+    totalCacheHits: number;
+    totalCacheMisses: number;
+}
+
+const stats: EngineStatsAccumulator = {
+    totalExecutions: 0,
+    totalBatchedExecutions: 0,
+    totalTraversalMs: 0,
+    totalCacheHits: 0,
+    totalCacheMisses: 0,
+};
 
 /**
  * Gets engine performance statistics.
  *
- * @returns Current statistics
+ * @returns Current statistics snapshot
  */
 export const getEngineStats = (): EngineStats => {
-    const totalCache = totalCacheHits + totalCacheMisses || 1;
+    const totalCache = stats.totalCacheHits + stats.totalCacheMisses || 1;
 
     return {
-        totalExecutions,
-        totalBatchedExecutions,
-        avgTraversalMs: totalExecutions > 0 ? totalTraversalMs / totalExecutions : 0,
-        avgCacheHitRate: (totalCacheHits / totalCache) * 100,
+        totalExecutions: stats.totalExecutions,
+        totalBatchedExecutions: stats.totalBatchedExecutions,
+        avgTraversalMs: stats.totalExecutions > 0 ? stats.totalTraversalMs / stats.totalExecutions : 0,
+        avgCacheHitRate: (stats.totalCacheHits / totalCache) * 100,
     };
 };
 
@@ -168,9 +151,9 @@ export const getEngineStats = (): EngineStats => {
  * Resets engine statistics (for testing).
  */
 export const resetEngineStats = (): void => {
-    totalExecutions = 0;
-    totalBatchedExecutions = 0;
-    totalTraversalMs = 0;
-    totalCacheHits = 0;
-    totalCacheMisses = 0;
+    stats.totalExecutions = 0;
+    stats.totalBatchedExecutions = 0;
+    stats.totalTraversalMs = 0;
+    stats.totalCacheHits = 0;
+    stats.totalCacheMisses = 0;
 };

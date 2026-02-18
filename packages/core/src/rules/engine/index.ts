@@ -6,4 +6,4 @@
 
 export { runSinglePassAnalysis, type PerformanceReport } from './single-pass-engine.js';
 export { createComponentRule, createDecoratedPropertyRule, type RuleHandler, type StreamType } from './rule-handler.js';
-export { type AngularComponentNode, type DecoratedPropertyNode } from './node-streams.js';
+export { type AngularClassNode, type DecoratedPropertyNode } from './node-streams.js';

@@ -8,6 +8,8 @@
 export interface Node {
     readonly type: string;
     readonly span?: { start: number; end: number };
+    readonly start?: number;
+    readonly end?: number;
 }
 
 export interface Identifier extends Node {
@@ -45,6 +47,11 @@ export interface ObjectProperty extends Node {
 
 export interface SpreadElement extends Node {
     readonly type: 'SpreadElement';
+}
+
+export interface ArrayExpression extends Node {
+    readonly type: 'ArrayExpression';
+    readonly elements: ReadonlyArray<Expression | SpreadElement | null>;
 }
 
 export interface StringLiteral extends Node {
@@ -86,6 +93,7 @@ export type Expression =
     | CallExpression
     | MemberExpression
     | ObjectExpression
+    | ArrayExpression
     | StringLiteral
     | BooleanLiteral
     | Node;

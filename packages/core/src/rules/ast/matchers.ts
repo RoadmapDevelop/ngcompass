@@ -15,8 +15,12 @@ import type {
     ClassDeclaration,
     ObjectExpression,
     Expression,
-    CallExpression,
     MemberExpression,
+    CallExpression,
+    Identifier,
+    ObjectProperty,
+    StringLiteral,
+    BooleanLiteral,
 } from './types.js';
 
 // ============================================
@@ -55,11 +59,11 @@ export const getDecoratorNameUnsafe = (decorator: Decorator): string | undefined
     if (!expr) return undefined;
 
     if (expr.type === 'CallExpression') {
-        const callee = (expr as CallExpression).callee;
+        const callee = expr.callee;
 
         // Simple: @Component
         if (callee.type === 'Identifier') {
-            return (callee as any).name;
+            return (callee as Identifier).name;
         }
 
         // Member: @core.Component
@@ -85,7 +89,7 @@ export const getDecoratorObjectArgUnsafe = (
     const expr = decorator.expression;
     if (!expr || expr.type !== 'CallExpression') return undefined;
 
-    const args = (expr as CallExpression).arguments;
+    const args = expr.arguments;
     if (!args || args.length === 0) return undefined;
 
     const first = args[0];
@@ -110,10 +114,10 @@ export const hasObjectProperty = (
 
     for (let i = 0; i < properties.length; i++) {
         const prop = properties[i];
-        if (!prop || !('key' in prop)) continue;
+        if (!prop || prop.type === 'SpreadElement') continue;
 
-        const key = (prop as any).key;
-        const actualKeyName = getKeyNameUnsafe(key);
+        const objectProp = prop as ObjectProperty;
+        const actualKeyName = getKeyNameUnsafe(objectProp.key);
 
         if (actualKeyName === keyName) return true;
     }
@@ -135,13 +139,13 @@ export const getObjectPropertyUnsafe = (
 
     for (let i = 0; i < properties.length; i++) {
         const prop = properties[i];
-        if (!prop || !('key' in prop) || !('value' in prop)) continue;
+        if (!prop || prop.type === 'SpreadElement') continue;
 
-        const key = (prop as any).key;
-        const actualKeyName = getKeyNameUnsafe(key);
+        const objectProp = prop as ObjectProperty;
+        const actualKeyName = getKeyNameUnsafe(objectProp.key);
 
         if (actualKeyName === keyName) {
-            return (prop as any).value;
+            return objectProp.value;
         }
     }
 
@@ -157,14 +161,12 @@ export const getKeyNameUnsafe = (key: Expression): string | undefined => {
     if (!key) return undefined;
 
     // Identifier: { foo: ... }
-    if (key.type === 'Identifier') return (key as any).name;
+    if (key.type === 'Identifier') return (key as Identifier).name;
 
     // String literal: { "foo": ... }
-    if (key.type === 'StringLiteral') return (key as any).value;
-
-    // Generic Literal
-    if (key.type === 'Literal' && typeof (key as any).value === 'string') {
-        return (key as any).value;
+    if (key.type === 'StringLiteral' || key.type === 'Literal') {
+        const lit = key as StringLiteral;
+        return typeof lit.value === 'string' ? lit.value : undefined;
     }
 
     return undefined;
@@ -203,7 +205,7 @@ export const matchesMemberExpression = (
     if (!obj) return false;
 
     // Simple: ChangeDetectionStrategy.OnPush
-    if (obj.type === 'Identifier' && (obj as any).name === objectName) {
+    if (obj.type === 'Identifier' && (obj as Identifier).name === objectName) {
         return true;
     }
 
@@ -226,7 +228,7 @@ export const getLiteralStringValueUnsafe = (node: Expression): string | undefine
     if (!node) return undefined;
 
     if (node.type === 'StringLiteral' || node.type === 'Literal') {
-        const value = (node as any).value;
+        const value = (node as StringLiteral).value;
         return typeof value === 'string' ? value : undefined;
     }
 
@@ -242,8 +244,66 @@ export const getLiteralBooleanValueUnsafe = (node: Expression): boolean | undefi
     if (!node) return undefined;
 
     if (node.type === 'BooleanLiteral' || node.type === 'Literal') {
-        const value = (node as any).value;
+        const value = (node as BooleanLiteral).value;
         return typeof value === 'boolean' ? value : undefined;
+    }
+
+    return undefined;
+};
+
+/**
+ * Checks if expression is an Angular input() signal call.
+ */
+export const isInputSignal = (expr: Expression): boolean => {
+    if (!expr || expr.type !== 'CallExpression') return false;
+    const callee = (expr as CallExpression).callee;
+
+    // input()
+    if (callee.type === 'Identifier' && (callee as Identifier).name === 'input') return true;
+
+    // input.required()
+    if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
+        const member = callee as MemberExpression;
+        return member.object.type === 'Identifier' &&
+            (member.object as Identifier).name === 'input' &&
+            member.property.type === 'Identifier' &&
+            member.property.name === 'required';
+    }
+
+    return false;
+};
+
+/**
+ * Extracts alias from input() signal call if present.
+ */
+export const getInputSignalAliasUnsafe = (callExpr: CallExpression): string | undefined => {
+    const callee = callExpr.callee;
+    const args = callExpr.arguments;
+    if (!args || args.length === 0) return undefined;
+
+    const isRequired = callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression';
+
+    if (isRequired) {
+        // input.required({ alias: 'alias' })
+        const first = args[0];
+        if (first && first.type === 'ObjectExpression') {
+            return getLiteralStringValueUnsafe(getObjectPropertyUnsafe(first as ObjectExpression, 'alias') as Expression);
+        }
+    } else {
+        // input('alias')
+        if (args.length === 1) {
+            const first = args[0];
+            if (first.type === 'StringLiteral' || first.type === 'Literal') {
+                return getLiteralStringValueUnsafe(first);
+            }
+        }
+        // input(val, { alias: 'alias' })
+        if (args.length >= 2) {
+            const second = args[1];
+            if (second && second.type === 'ObjectExpression') {
+                return getLiteralStringValueUnsafe(getObjectPropertyUnsafe(second as ObjectExpression, 'alias') as Expression);
+            }
+        }
     }
 
     return undefined;

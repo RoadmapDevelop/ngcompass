@@ -1,7 +1,7 @@
 import { AsyncDriver } from '../drivers/types.js';
 
 export interface PlanCache {
-    get: (key: string) => Promise<any | undefined>;
+    get: (key: string) => Promise<any>;
     set: (key: string, plan: any) => Promise<void>;
     delete: (key: string) => Promise<void>;
 }
