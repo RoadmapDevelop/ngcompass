@@ -11,7 +11,7 @@ import pLimit from "p-limit";
 
 import { Task, ExecutionPlanOutput } from "../planner/index.js";
 import { CacheContext } from "../cache/index.js";
-import { RuleResult, Result, Ok, Err } from "../rules/types.js";
+import { RuleResult, Result, Ok, Err, AnalysisResult } from "../rules/types.js";
 import { parseTs, parseHtml } from "../parsers/index.js";
 import { warn, error, debug } from "@ngcompass/common";
 
@@ -20,18 +20,7 @@ import type { HtmlParserResult } from "../parsers/html.js";
 import type { CssResult } from "../parsers/css.js";
 import { executeBatchedTasks } from './runner.js';
 
-/**
- * Analysis aggregate output.
- */
-export interface AnalysisResult {
-    readonly results: ReadonlyArray<RuleResult>;
-    readonly stats: {
-        readonly totalFiles: number;
-        readonly totalErrors: number;
-        readonly totalWarnings: number;
-        readonly duration: number;
-    };
-}
+
 
 /**
  * Memoized, deterministic accessors for file and parser artifacts.
@@ -123,6 +112,9 @@ export interface AnalysisOptions {
 
     /** Optional cache context for retrieving skipped task results */
     readonly cache?: CacheContext;
+
+    /** Enable debug logging */
+    readonly debug?: boolean;
 }
 
 /**
@@ -139,6 +131,15 @@ export const runAnalysis = async (
     options: AnalysisOptions
 ): Promise<Result<AnalysisResult>> => {
     try {
+        // 0. Short-circuit: Return cached analysis if available
+        if (plan.precomputedAnalysis) {
+            debug("engine", "Returning precomputed analysis from cache (global hash match)");
+            // Ensure duration reflects that it was instant, or maybe preserve original duration? 
+            // Better to return as is, or maybe update duration to 0 to show it was cached?
+            // Let's keep original stats but log that it was cached.
+            return Ok(plan.precomputedAnalysis);
+        }
+
         const startTime = performance.now();
         const { tasks, skippedTasks, cachedResults } = plan;
 
@@ -185,7 +186,7 @@ export const runAnalysis = async (
         }
 
         // 2. Retrieve Cached Results for Skipped Tasks
-        let skippedResults: RuleResult[] = [];
+        const skippedResults: RuleResult[] = [];
         if (skippedTasks.length > 0) {
             debug("engine", `Retrieving results for ${skippedTasks.length} skipped tasks...`);
 
@@ -229,13 +230,30 @@ export const runAnalysis = async (
         // 3. Aggregate Results
         const successful = [...executedResults, ...skippedResults];
 
-        // DEBUG: Explicit log to see what's happening
-        // console.log(`[orchestrator] tasks: ${tasks.length}, skipped: ${skippedTasks.length}, executed: ${executedResults.length}, retrieved: ${skippedResults.length}, total: ${successful.length}`);
-
-        return Ok({
+        const finalResult: AnalysisResult = {
             results: successful,
             stats: calculateStats(successful, startTime),
-        });
+        };
+
+        // 4. Cache the full analysis result if global hash is present
+        if (options.cache && plan.globalHash) {
+            debug("engine", "Caching full analysis result for global hash...");
+
+            if (options.debug) {
+                debug("engine", `Analysis Results: ${finalResult.results.length} items`);
+                if (finalResult.results.length > 0) {
+                    debug("engine", `Sample item keys: ${Object.keys(finalResult.results[0]).join(', ')}`);
+                }
+            }
+
+            try {
+                await options.cache.analysis.set(plan.globalHash, finalResult);
+            } catch (err) {
+                debug("engine", `Failed to cache analysis result: ${err instanceof Error ? err.message : String(err)}`);
+            }
+        }
+
+        return Ok(finalResult);
 
     } catch (e) {
         return Err(e instanceof Error ? e : new Error(String(e)));
@@ -356,7 +374,7 @@ const runAnalysisParallel = async (
 
             worker.on("error", (err) => {
                 updateSpinner();
-                reject(err);
+                reject(err instanceof Error ? err : new Error(String(err)));
             });
             worker.on("exit", (code) => {
                 if (code !== 0) {
@@ -539,7 +557,7 @@ const extractInlineTemplate = (program: any): string => {
  * @param keyName - Key name
  * @returns Value node or null
  */
-const findObjectPropertyValue = (properties: any[] | undefined, keyName: string): any | null => {
+const findObjectPropertyValue = (properties: any, keyName: string): any | null => {
     if (!Array.isArray(properties)) return null;
 
     for (const prop of properties) {

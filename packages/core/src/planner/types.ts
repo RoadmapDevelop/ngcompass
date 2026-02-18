@@ -36,6 +36,12 @@ export interface ExecutionPlanOutput {
 
     /** Pre-loaded cached results (taskId → result) */
     readonly cachedResults?: ReadonlyMap<string, unknown>;
+
+    /** Global content hash for the entire plan */
+    readonly globalHash?: string;
+
+    /** Pre-computed analysis result (if fully cached) */
+    readonly precomputedAnalysis?: import('../rules/types.js').AnalysisResult;
 }
 
 /**

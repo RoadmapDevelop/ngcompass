@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG, DEFAULT_CACHE_OPTIONS, getDefaultMaxWorkers } from './d
 /**
  * Zod definitions matching @ngcompass/common types
  */
-const SeveritySchema = z.enum(['critical', 'high', 'moderate', 'low', 'info']);
+const SeveritySchema = z.enum(['critical', 'high', 'moderate', 'low', 'info', 'warning', 'error']);
 const OutputFormatSchema = z.enum(['json', 'text', 'sarif', 'html']);
 
 const CacheOptionsSchema = z.object({

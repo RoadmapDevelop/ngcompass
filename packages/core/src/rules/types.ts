@@ -6,6 +6,7 @@
  */
 
 import { Severity, Result, Ok, Err } from "@ngcompass/common";
+import type { Locator } from "../utils/locator.js";
 
 // ==============================================================================
 // RULE CONFIGURATION
@@ -120,7 +121,7 @@ export type BuiltinPreset =
 /**
  * Preset reference (builtin or file path)
  */
-export type PresetReference = BuiltinPreset | string;
+export type PresetReference = string;
 
 // ==============================================================================
 // RESOLUTION RESULT
@@ -187,9 +188,23 @@ export interface RuleContext {
     readonly sourceFile?: import('typescript').SourceFile; // Deprecated
     readonly filePath: string; // The file being analyzed
     readonly fileContent: string; // Raw content for line/col mapping
+    readonly locator: Locator; // Line/column mapping helper
     readonly program?: import('oxc-parser').Program;
     readonly template?: import('../parsers/html').HtmlParserResult;
     readonly style?: import('../parsers/css').CssParserResult;
     readonly options?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Analysis aggregate output.
+ */
+export interface AnalysisResult {
+    readonly results: ReadonlyArray<RuleResult>;
+    readonly stats: {
+        readonly totalFiles: number;
+        readonly totalErrors: number;
+        readonly totalWarnings: number;
+        readonly duration: number;
+    };
 }
 
