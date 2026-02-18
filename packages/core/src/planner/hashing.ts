@@ -52,7 +52,7 @@ export const warmupHashCache = async (
     metaCache: MetaCache,
     hashCache: Map<string, string>
 ): Promise<void> => {
-    const batchSize = 50;
+    const batchSize = 500;
 
     for (let i = 0; i < filePaths.length; i += batchSize) {
         const batch = filePaths.slice(i, i + batchSize);

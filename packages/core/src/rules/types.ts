@@ -195,3 +195,16 @@ export interface RuleContext {
     readonly options?: Readonly<Record<string, unknown>>;
 }
 
+/**
+ * Analysis aggregate output.
+ */
+export interface AnalysisResult {
+    readonly results: ReadonlyArray<RuleResult>;
+    readonly stats: {
+        readonly totalFiles: number;
+        readonly totalErrors: number;
+        readonly totalWarnings: number;
+        readonly duration: number;
+    };
+}
+
