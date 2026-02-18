@@ -111,14 +111,19 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     return;
                 }
 
-                console.log(chalk.dim(`  Generated ${planResult.data.tasks.length} tasks in ${(tPlanEnd - tPlanStart).toFixed(0)}ms`));
+                if (planResult.data.precomputedAnalysis) {
+                    console.log(chalk.dim(`  Using cached analysis plan (short-circuit)`));
+                } else {
+                    console.log(chalk.dim(`  Generated ${planResult.data.tasks.length} tasks in ${(tPlanEnd - tPlanStart).toFixed(0)}ms`));
+                }
 
                 // 5. Run Analysis
                 const tExecStart = performance.now();
                 console.log(chalk.blue('→ Running analysis...'));
                 const result = await runAnalysis(planResult.data, {
                     rootDir: process.cwd(),
-                    cache
+                    cache,
+                    debug: options.debug
                 });
                 const tExecEnd = performance.now();
 
@@ -151,7 +156,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 await reporter.report([...analysis.results]);
 
                 // 7. Save Results to Cache
-                if (cache) {
+                if (cache && !planResult.data.precomputedAnalysis) {
                     const tCacheStart = performance.now();
                     const cacheEntries: [string, any][] = [];
 

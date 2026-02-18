@@ -35,6 +35,10 @@ export interface CacheContext {
     plans: PlanCache;
     files: FileCache;
     /**
+     * Stores full analysis results keyed by global hash (for warm run short-circuiting)
+     */
+    analysis: ResultCache;
+    /**
      * Computes a hash suitable for caching keys
      */
     computeHash: (content: string, salt?: string) => string;
@@ -113,6 +117,12 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
     const plans = createPlanCache(planDriver);
     const files = createFileCache(fileDriver);
 
+    // Analysis results cache (disk driver, keyed by global hash)
+    const analysisDriver = createDiskDriver<unknown>({
+        path: path.join(config.disk?.path ?? defaultBaseDir, 'analysis')
+    });
+    const analysis = createResultCache(analysisDriver);
+
     return {
         sources,
         asts,
@@ -121,6 +131,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         metas,
         plans,
         files,
+        analysis,
         computeHash: computeCompositeHash,
         prune: async () => {
             await astL2.prune();
@@ -134,6 +145,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
             await metaDriver.clear();
             await planDriver.clear();
             await fileDriver.clear();
+            await analysisDriver.clear();
         },
         clearType: async (type) => {
             switch (type) {
@@ -146,6 +158,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
                     break;
                 case 'results':
                     await resultDriver.clear();
+                    await analysisDriver.clear();
                     break;
                 case 'all':
                     sourceDriver.clear();
@@ -156,6 +169,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
                     await metaDriver.clear();
                     await planDriver.clear();
                     await fileDriver.clear();
+                    await analysisDriver.clear();
                     break;
             }
         },
