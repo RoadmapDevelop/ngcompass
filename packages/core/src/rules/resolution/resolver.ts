@@ -15,7 +15,7 @@ import { Ok, Err } from '../types.js';
 import { resolveExtendsChain } from './loader.js';
 import { mergeRulesConfigs, applyOverrides } from './merger.js';
 import { isRuleEnabled } from './normalize.js';
-import { isKnownRule, getRuleMetadata } from '../registry.js';
+import { isKnownRule, getRuleMetadata } from '../registry/rule-registry.js';
 import { debug, time, timeEnd } from '@ngcompass/common';
 import type { NormalizedAnalyzerConfig } from '@ngcompass/common';
 

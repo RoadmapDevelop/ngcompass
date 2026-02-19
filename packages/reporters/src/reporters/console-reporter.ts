@@ -1,22 +1,40 @@
 import type { Reporter, ResultSummary } from '../types.js';
 import type { RuleResult } from '@ngcompass/core';
+import type { ReporterOutput } from '../output.js';
+import { processOutput } from '../output.js';
 import pc from 'picocolors';
 import path from 'node:path';
 import process from 'node:process';
 
+/**
+ * ConsoleReporter
+ *
+ * Produces ESLint-style human-readable terminal output.
+ *
+ * Output is injected via ReporterOutput so the reporter is fully
+ * testable without mocking console globals:
+ *
+ * ```ts
+ * const lines: string[] = [];
+ * const out: ReporterOutput = { write: l => lines.push(l), error: l => lines.push(l) };
+ * const reporter = new ConsoleReporter(out);
+ * reporter.report(fixtures);
+ * ```
+ */
 export class ConsoleReporter implements Reporter {
+    constructor(private readonly out: ReporterOutput = processOutput) {}
+
     report(results: RuleResult[]): void {
         // Flatten all failures
         const allFailures = results.flatMap(r => r.failures);
 
         if (allFailures.length === 0) {
-            console.log(pc.green('✔ No violations found!'));
+            this.out.write(pc.green('✔ No violations found!'));
             return;
         }
 
-        // Group by file
+        // Group by relative file path
         const failuresByFile = new Map<string, typeof allFailures>();
-
         allFailures.forEach(failure => {
             const relativePath = path.relative(process.cwd(), failure.filePath);
             const current = failuresByFile.get(relativePath) || [];
@@ -30,20 +48,20 @@ export class ConsoleReporter implements Reporter {
         let errorCount = 0;
         let warningCount = 0;
 
-        console.log(''); // Initial spacer
+        this.out.write(''); // Initial spacer
 
         sortedFiles.forEach(filePath => {
             const failures = failuresByFile.get(filePath)!;
 
-            // Sort by line and column
+            // Sort by line then column
             failures.sort((a, b) => {
                 if (a.line === b.line) return a.column - b.column;
                 return a.line - b.line;
             });
 
-            console.log(pc.underline(filePath));
+            this.out.write(pc.underline(filePath));
 
-            // Calculate padding
+            // Calculate alignment padding
             const maxLocationWidth = failures.reduce((max, f) => {
                 const loc = `${f.line}:${f.column}`;
                 return Math.max(max, loc.length);
@@ -51,7 +69,7 @@ export class ConsoleReporter implements Reporter {
 
             const maxTypeWidth = failures.reduce((max, f) => {
                 const isError = this.isError(f.severity as string);
-                return Math.max(max, isError ? 5 : 7); // "error" is 5, "warning" is 7
+                return Math.max(max, isError ? 5 : 7); // 'error'=5, 'warning'=7
             }, 0);
 
             failures.forEach(failure => {
@@ -63,50 +81,41 @@ export class ConsoleReporter implements Reporter {
                 const type = isError ? 'error' : 'warning';
                 const colorFn = isError ? pc.red : pc.yellow;
 
-                // Format:   line:col  type  message  ruleId
                 const locPadding = ' '.repeat(maxLocationWidth - loc.length);
                 const typePadding = ' '.repeat(maxTypeWidth - type.length);
 
-                console.log(
+                this.out.write(
                     `  ${pc.gray(loc)}${locPadding}  ` +
                     `${colorFn(type)}${typePadding}  ` +
-                    `${failure.message.replace(/\.$/, '')}  ` + // Remove trailing dot for consistency
+                    `${failure.message.replace(/\.$/, '')}  ` +
                     `${pc.gray(failure.ruleName)}`
                 );
             });
 
-            console.log(''); // Spacer between files
+            this.out.write(''); // Spacer between files
         });
 
-        // Summary
+        // Summary line
         const total = errorCount + warningCount;
         const color = errorCount > 0 ? pc.red : pc.yellow;
+        const summary =
+            `${color('✖')} ${total} problem${total !== 1 ? 's' : ''} ` +
+            `(${errorCount} error${errorCount !== 1 ? 's' : ''}, ` +
+            `${warningCount} warning${warningCount !== 1 ? 's' : ''})`;
 
-        let summary = `${color('✖')} ${total} problem${total !== 1 ? 's' : ''} (${errorCount} error${errorCount !== 1 ? 's' : ''}, ${warningCount} warning${warningCount !== 1 ? 's' : ''})`;
-
-        console.log(pc.bold(summary));
+        this.out.write(pc.bold(summary));
     }
 
     summary(stats: ResultSummary): void {
-        // Optional: Can verify if we want to print additional execution stats 
-        // similar to eslint's --print-config or timing, currently keeping it minimal 
-        // or effectively merging it with the report summary if needed. 
-        // For now, let's keep a cleaner version of the stats if requested.
-
-        // If the main report already prints the error/warning count summary, 
-        // this method might be redundant for that purpose, 
-        // but it provides timing info which is useful.
-
-        // We can just print the timing in a subtle way.
         const cachedInfo = stats.cachedTasks ? ` (${stats.cachedTasks} cached)` : '';
-        console.log(pc.gray(`Analyzed ${stats.totalTasks} tasks${cachedInfo} in ${stats.duration.toFixed(0)}ms`));
+        this.out.write(pc.gray(`Analyzed ${stats.totalTasks} tasks${cachedInfo} in ${stats.duration.toFixed(0)}ms`));
     }
 
     error(error: Error): void {
-        console.error(pc.red(`\nOops! Something went wrong! :(`));
-        console.error(`\n${error.message}`);
+        this.out.error(pc.red(`\nOops! Something went wrong! :(`));
+        this.out.error(`\n${error.message}`);
         if (error.stack) {
-            console.error(pc.gray(error.stack.split('\n').slice(1).join('\n')));
+            this.out.error(pc.gray(error.stack.split('\n').slice(1).join('\n')));
         }
     }
 

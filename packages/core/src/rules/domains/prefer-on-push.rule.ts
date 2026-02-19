@@ -1,4 +1,4 @@
-/**
+﻿/**
  * prefer-on-push-component-change-detection
  *
  * BEFORE: 307 lines (manual traversal, parsing)
@@ -31,6 +31,7 @@ export const preferOnPushRule = createComponentRule(
             column,
             severity: 'critical',
             ruleName: 'prefer-on-push-component-change-detection',
+            fix: `Add changeDetection: ChangeDetectionStrategy.OnPush to @Component({ changeDetection: ChangeDetectionStrategy.OnPush, ... })`,
         };
     }
 );

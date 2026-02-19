@@ -40,3 +40,29 @@ export class RuleError extends AnalyzerError {
     this.name = 'RuleError';
   }
 }
+
+/**
+ * Thrown when a rule handler crashes during execution.
+ *
+ * Unlike ParseError (which is collected and surfaced as a warning),
+ * RuleExecutionError indicates a bug in the rule itself and is re-thrown
+ * so the caller can decide whether to fail loudly or skip the rule.
+ */
+export class RuleExecutionError extends AnalyzerError {
+  constructor(
+    public readonly ruleName: string,
+    public readonly filePath: string,
+    cause: unknown
+  ) {
+    const causeMessage = cause instanceof Error ? cause.message : String(cause);
+    super(
+      `Rule "${ruleName}" crashed on ${filePath}: ${causeMessage}`,
+      'RULE_EXECUTION_ERROR'
+    );
+    this.name = 'RuleExecutionError';
+    // Preserve original cause for stack traces
+    if (cause instanceof Error && 'stack' in cause) {
+      this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+    }
+  }
+}

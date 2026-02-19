@@ -6,7 +6,9 @@ import {
     resolveRules,
     getEnabledRules,
     buildExecutionPlan,
-    runAnalysis
+    runAnalysis,
+    loadPlugins,
+    getGlobalRegistry,
 } from '@ngcompass/core';
 import { getReporter } from '@ngcompass/reporters';
 import chalk from 'chalk';
@@ -24,6 +26,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--force', 'Force re-execution of all tasks')
         .option('--show', 'Display the first 50 tasks')
         .option('--debug', 'Enable debug timing output')
+        .option('--format <fmt>', 'Output format: console|json', 'console')
         .action(async (options) => {
             const startTime = performance.now();
 
@@ -55,6 +58,16 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 }
 
                 const config = configResult.config;
+
+                // 1.5 Load Plugins (between config and rule resolution)
+                const pluginList = (config as any).plugins as string[] | undefined;
+                if (pluginList && pluginList.length > 0) {
+                    console.log(chalk.blue(`→ Loading ${pluginList.length} plugin(s)...`));
+                    // configDir is the directory containing ngcompass.config.ts
+                    const configDir = configResult.config ? process.cwd() : process.cwd();
+                    await loadPlugins(pluginList, configDir, getGlobalRegistry());
+                    console.log(chalk.dim(`  Loaded ${pluginList.length} plugin(s)`));
+                }
 
                 // 2. Discover Files
                 const tScanStart = performance.now();
@@ -151,8 +164,16 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 console.log(`  Errors:     ${analysis.stats.totalErrors}`);
                 console.log(`  Warnings:   ${analysis.stats.totalWarnings}`);
 
-                // 6. Report Results
-                const reporter = getReporter((config as any).reporter || 'default');
+                // Print parse errors if any (Change 3)
+                if (analysis.parseErrors && analysis.parseErrors.length > 0) {
+                    console.log(chalk.red(`\nParse Errors (${analysis.parseErrors.length}):`));
+                    for (const pe of analysis.parseErrors) {
+                        console.log(chalk.red(`  ${pe.filePath}: ${pe.message}`));
+                    }
+                }
+
+                // 6. Report Results — format determined by --format flag
+                const reporter = getReporter(options.format || 'console');
                 await reporter.report([...analysis.results]);
 
                 // 7. Save Results to Cache

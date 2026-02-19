@@ -1,4 +1,4 @@
-/**
+﻿/**
  * prefer-signal-inputs
  *
  * Enforces signal-based input() function over @Input() decorator.
@@ -45,6 +45,7 @@ export const preferSignalInputsRule = createDecoratedPropertyRule(
             column,
             severity: 'moderate',
             ruleName: 'prefer-signal-inputs',
+            fix: `Replace @Input() ${propertyName}: Type with a signal input: ${propertyName} = input<Type>()`,
         };
     }
 );

@@ -23,7 +23,8 @@ export type Namespace =
     | 'planner'
     | 'incremental'
     | 'dry-run'
-    | 'engine';
+    | 'engine'
+    | 'plugin-loader';
 
 interface LoggerConfig {
     enabled: boolean;

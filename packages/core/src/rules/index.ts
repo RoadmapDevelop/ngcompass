@@ -21,7 +21,6 @@ export type {
     PresetConfig,
     PresetReference,
     BuiltinPreset,
-    RuleRegistry,
     RuleRegistryEntry,
     RuleResult,
     RuleFailure,
@@ -30,13 +29,22 @@ export type {
 export { Ok, Err } from './types.js';
 export type { Result } from './types.js';
 
-// Registry
+// Registry (unified — all from rule-registry.ts)
 export {
-    ruleRegistry,
     isKnownRule,
     getRuleMetadata,
     getAllRuleNames,
-} from './registry.js';
+    getRuleRegistryMap as ruleRegistry,
+} from './registry/rule-registry.js';
+
+// Plugin registry
+export {
+    RuleRegistry,
+    getGlobalRegistry,
+    resetGlobalRegistry,
+    type RulePlugin,
+    type RegisterOptions,
+} from './registry/rule-registry.js';
 
 // Presets
 export {
