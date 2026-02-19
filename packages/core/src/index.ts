@@ -92,5 +92,15 @@ export type {
 export * from './engine/orchestrator.js';
 export * from './parsers/index.js';
 
+// Plugin registry (public API for custom rule authors and CLI)
+export {
+    getGlobalRegistry,
+    resetGlobalRegistry,
+    RuleRegistry,
+    type RulePlugin,
+    type RegisterOptions,
+} from './rules/registry/rule-registry.js';
+export { RuleContextFactory } from './rules/engine/rule-context-factory.js';
+
 // Register built-in rules
 import './rules/register-all.js';

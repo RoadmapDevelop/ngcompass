@@ -1,4 +1,4 @@
-/**
+﻿/**
  * prefer-standalone
  *
  * Enforces standalone: true on all @Component classes.
@@ -30,6 +30,7 @@ export const preferStandaloneRule = createComponentRule(
             column,
             severity: 'critical',
             ruleName: 'prefer-standalone',
+            fix: `Add standalone: true to @Component({ standalone: true, ... })`,
         };
     }
 );

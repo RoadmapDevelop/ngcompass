@@ -142,6 +142,13 @@ export interface AnalyzerConfig {
     ignorePatterns?: string[];
 
     /**
+     * External rule plugins to load.
+     * Each entry is a package name or file path that exports a RulePlugin or RulePlugin[].
+     * Example: ['@my-org/ngcompass-rules', './tools/local-rules']
+     */
+    plugins?: string[];
+
+    /**
      * Rule configuration
      */
     rules?: Record<string, RuleConfig | Severity | 'off'>;

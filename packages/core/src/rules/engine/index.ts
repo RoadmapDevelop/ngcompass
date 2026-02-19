@@ -5,5 +5,13 @@
  */
 
 export { runSinglePassAnalysis, type PerformanceReport } from './single-pass-engine.js';
-export { createComponentRule, createDecoratedPropertyRule, type RuleHandler, type StreamType } from './rule-handler.js';
+export {
+    createComponentRule,
+    createDecoratedPropertyRule,
+    createTemplateExpressionRule,
+    createTemplateAttributeRule,
+    type RuleHandler,
+    type StreamType,
+} from './rule-handler.js';
 export { type AngularClassNode, type DecoratedPropertyNode } from './node-streams.js';
+export { buildVisitorMap, STREAM_TO_NODE_TYPE, type VisitorMap, type VisitorEntry } from './visitor-registry.js';
