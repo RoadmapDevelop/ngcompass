@@ -1,6 +1,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 import {
     getDecoratorNameUnsafe,
     getLiteralStringValueUnsafe,
@@ -76,6 +77,7 @@ export const noInputRenameRule = createComponentRule(
                         column,
                         severity: 'moderate',
                         ruleName: 'no-input-rename',
+                        fix: RECOMMENDATIONS['no-input-rename'],
                     });
                 }
             }
@@ -95,6 +97,7 @@ export const noInputRenameRule = createComponentRule(
                             column,
                             severity: 'moderate',
                             ruleName: 'no-input-rename',
+                            fix: RECOMMENDATIONS['no-input-rename'],
                         });
                     }
                 }

@@ -10,6 +10,7 @@
 import { createTemplateAttributeRule } from '../engine/rule-handler.js';
 import type { TemplateAttributeNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * Stateful tracker for *ngFor attributes in a single template analysis.
@@ -39,6 +40,7 @@ export const templateUseTrackByFunctionRule = createTemplateAttributeRule(
                     column,
                     severity: 'moderate',
                     ruleName: 'template-use-track-by-function',
+                    fix: RECOMMENDATIONS['template-use-track-by-function'],
                 };
             }
         }

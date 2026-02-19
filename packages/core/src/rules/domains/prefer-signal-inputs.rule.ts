@@ -10,6 +10,7 @@ import type { DecoratedPropertyNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { getDecoratorNameUnsafe } from '../ast/matchers.js';
 import type { Identifier } from '../ast/types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 export const preferSignalInputsRule = createDecoratedPropertyRule(
     'prefer-signal-inputs',
@@ -45,7 +46,7 @@ export const preferSignalInputsRule = createDecoratedPropertyRule(
             column,
             severity: 'moderate',
             ruleName: 'prefer-signal-inputs',
-            fix: `Replace @Input() ${propertyName}: Type with a signal input: ${propertyName} = input<Type>()`,
+            fix: RECOMMENDATIONS['prefer-signal-inputs'],
         };
     }
 );

@@ -18,6 +18,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 const DEFAULT_PREFIX = 'app';
 const KEBAB_CASE_REGEX = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
@@ -112,5 +113,6 @@ const buildFailure = (
         column,
         severity: 'moderate',
         ruleName: 'component-selector',
+        fix: RECOMMENDATIONS['component-selector'],
     };
 };

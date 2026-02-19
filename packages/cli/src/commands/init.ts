@@ -18,7 +18,7 @@ export function registerInitCommand(program: Command, _cache: CacheContext) {
                     force: options.force
                 });
 
-                const reporter = getConfigReporter('text');
+                const reporter = getConfigReporter();
                 await reporter.renderInitResult(result);
 
                 if (!result.success && !result.alreadyExists) {

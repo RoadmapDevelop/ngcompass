@@ -9,6 +9,7 @@ import { createComponentRule } from '../engine/rule-handler.js';
 import { ChangeDetectionStrategy } from '../analyzers/component-analyzer.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 export const preferOnPushRule = createComponentRule(
     'prefer-on-push-component-change-detection',
@@ -31,7 +32,7 @@ export const preferOnPushRule = createComponentRule(
             column,
             severity: 'critical',
             ruleName: 'prefer-on-push-component-change-detection',
-            fix: `Add changeDetection: ChangeDetectionStrategy.OnPush to @Component({ changeDetection: ChangeDetectionStrategy.OnPush, ... })`,
+            fix: RECOMMENDATIONS['prefer-on-push-component-change-detection'],
         };
     }
 );

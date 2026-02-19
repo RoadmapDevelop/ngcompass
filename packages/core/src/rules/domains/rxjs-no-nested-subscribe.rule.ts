@@ -14,6 +14,7 @@ import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * Checks if a CallExpression is a .subscribe() call.
@@ -62,6 +63,7 @@ export const rxjsNoNestedSubscribeRule = createComponentRule(
                                 column,
                                 severity: 'high',
                                 ruleName: 'rxjs-no-nested-subscribe',
+                                fix: RECOMMENDATIONS['rxjs-no-nested-subscribe'],
                             });
                             // Don't descend into *this* nested subscribe's args
                             return false;

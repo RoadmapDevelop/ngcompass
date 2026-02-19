@@ -8,6 +8,7 @@
 import { createTemplateAttributeRule } from '../engine/rule-handler.js';
 import type { TemplateAttributeNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 const LEGACY_DIRECTIVES = new Set([
     '*ngIf',
@@ -31,6 +32,7 @@ export const templatePreferControlFlowRule = createTemplateAttributeRule(
                 column,
                 severity: 'high',
                 ruleName: 'template-prefer-control-flow',
+                fix: RECOMMENDATIONS['template-prefer-control-flow'],
             };
         }
 
