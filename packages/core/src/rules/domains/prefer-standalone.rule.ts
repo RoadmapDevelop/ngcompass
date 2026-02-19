@@ -26,7 +26,7 @@ export const preferStandaloneRule = createComponentRule(
 
         return {
             filePath: context.filePath,
-            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should be standalone`,
+            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should be standalone.`,
             line,
             column,
             severity: 'critical',

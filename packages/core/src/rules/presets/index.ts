@@ -5,6 +5,7 @@
 import type { PresetConfig, BuiltinPreset } from '../types.js';
 import { recommendedPreset } from './recommended.js';
 import { strictPreset } from './strict.js';
+import { allPreset } from './all.js';
 
 /**
  * Registry of built-in presets
@@ -12,6 +13,7 @@ import { strictPreset } from './strict.js';
 export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map([
     ['recommended', recommendedPreset],
     ['strict', strictPreset],
+    ['all', allPreset],
 ]);
 
 /**

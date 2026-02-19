@@ -27,7 +27,7 @@ export const templatePreferControlFlowRule = createTemplateAttributeRule(
 
             return {
                 filePath: context.filePath,
-                message: `Use modern control flow (@if, @for, @switch) instead of legacy structural directive '${node.name}' for better performance and readability.`,
+                message: `Use modern control flow (@if, @for) instead of '${node.name}'.`,
                 line,
                 column,
                 severity: 'high',

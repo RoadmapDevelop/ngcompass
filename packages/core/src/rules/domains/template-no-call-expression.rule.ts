@@ -30,7 +30,7 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
 
                 failure = {
                     filePath: context.filePath,
-                    message: 'Avoid function calls in templates. Use signals, computed properties, or pure pipes instead.',
+                    message: 'Avoid function calls in templates. Use signals or pure pipes.',
                     line,
                     column,
                     severity: 'moderate', // Configurable, default to moderate/high

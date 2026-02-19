@@ -35,7 +35,7 @@ export const templateUseTrackByFunctionRule = createTemplateAttributeRule(
 
                 return {
                     filePath: context.filePath,
-                    message: `*ngFor is missing a trackBy function. Add 'trackBy: yourTrackFn' to improve rendering performance.`,
+                    message: `*ngFor is missing a trackBy function.`,
                     line,
                     column,
                     severity: 'moderate',
