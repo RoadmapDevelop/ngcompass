@@ -27,7 +27,7 @@ export const preferOnPushRule = createComponentRule(
 
         return {
             filePath: context.filePath,
-            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should use ChangeDetectionStrategy.OnPush`,
+            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should use ChangeDetectionStrategy.OnPush.`,
             line,
             column,
             severity: 'critical',

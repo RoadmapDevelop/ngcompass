@@ -102,7 +102,7 @@ export class ConsoleReporter implements Reporter {
                 this.out.write(buildFailureLine(failure, locationWidth, typeWidth));
 
                 if (this.verbose && failure.fix) {
-                    this.out.write(`     ${pc.magenta('→')} ${pc.gray(failure.fix)}`);
+                    this.out.write(`      ${pc.yellow('→')} ${pc.gray(failure.fix)}`);
                 }
             }
 

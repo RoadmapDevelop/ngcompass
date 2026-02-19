@@ -129,7 +129,7 @@ export const rxjsPreferTakeuntilRule = createComponentRule(
 
                         failures.push({
                             filePath: context.filePath,
-                            message: `RxJS subscription in '${className}' should be managed with 'takeUntil()'.`,
+                            message: `Subscription in '${className}' missing takeUntil or takeUntilDestroyed.`,
                             line,
                             column,
                             severity: 'high',

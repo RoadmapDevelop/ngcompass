@@ -116,7 +116,8 @@ export type BuiltinPreset =
     | 'recommended'
     | 'strict'
     | 'performance'
-    | 'accessibility';
+    | 'accessibility'
+    | 'all';
 
 /**
  * Preset reference (builtin or file path)

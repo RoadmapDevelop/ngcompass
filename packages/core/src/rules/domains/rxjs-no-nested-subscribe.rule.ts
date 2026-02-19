@@ -40,7 +40,7 @@ export const rxjsNoNestedSubscribeRule = createComponentRule(
         if (!classBody) return null;
 
         const failures: RuleFailure[] = [];
-        const className = classNode.metadata.className ?? 'Unknown';
+
 
         // Walk the class body looking for subscribe calls
         walkProgram(classBody, (node) => {
@@ -58,7 +58,7 @@ export const rxjsNoNestedSubscribeRule = createComponentRule(
 
                             failures.push({
                                 filePath: context.filePath,
-                                message: `Nested subscribe() detected in component '${className}'. Use higher-order mapping operators (switchMap, mergeMap, concatMap) instead.`,
+                                message: `Nested subscribe() detected. Use transformation operators (switchMap, etc).`,
                                 line,
                                 column,
                                 severity: 'high',

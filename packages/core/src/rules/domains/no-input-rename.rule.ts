@@ -72,7 +72,7 @@ export const noInputRenameRule = createComponentRule(
                     const { line, column } = context.locator.location(errorStart);
                     failures.push({
                         filePath: context.filePath,
-                        message: `Input '${propertyName}' should not be renamed to '${aliasName}'. Avoid aliasing inputs to maintain a consistent and predictable API.`,
+                        message: `Input '${propertyName}' should not be aliased to '${aliasName}'.`,
                         line,
                         column,
                         severity: 'moderate',
@@ -92,7 +92,7 @@ export const noInputRenameRule = createComponentRule(
                         const { line, column } = context.locator.location(classNode.metadata.decoratorStart);
                         failures.push({
                             filePath: context.filePath,
-                            message: `Host directive input '${input.internal}' should not be renamed to '${input.external}'.`,
+                            message: `Host input '${input.internal}' should not be aliased to '${input.external}'.`,
                             line,
                             column,
                             severity: 'moderate',
