@@ -24,6 +24,7 @@ export type {
     RuleRegistryEntry,
     RuleResult,
     RuleFailure,
+    AnalysisResult,
 } from './types.js';
 
 export { Ok, Err } from './types.js';

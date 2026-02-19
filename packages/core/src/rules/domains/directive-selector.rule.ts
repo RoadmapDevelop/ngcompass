@@ -18,6 +18,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 const DEFAULT_PREFIX = 'app';
 const CAMEL_CASE_REGEX = /^[a-z][a-zA-Z0-9]*$/;
@@ -130,5 +131,6 @@ const buildFailure = (
         column,
         severity: 'high',
         ruleName: 'directive-selector',
+        fix: RECOMMENDATIONS['directive-selector'],
     };
 };

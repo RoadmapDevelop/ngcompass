@@ -48,6 +48,7 @@ export {
     type RuleRegistryEntry,
     type RuleResult,
     type RuleFailure,
+    type AnalysisResult,
 } from './rules/index.js';
 
 // Execution Plan (Phase 1.75 + Phase 2.0)

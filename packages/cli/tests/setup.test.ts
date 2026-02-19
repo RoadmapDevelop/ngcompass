@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { common } from '@ngcompass/common';
 import { core } from '@ngcompass/core';
 import { rules } from '@ngcompass/rules';
-import { reporters } from '@ngcompass/reporters';
+import { TextConfigReporter } from '@ngcompass/reporters';
 
 describe('CLI Setup', () => {
     it('should link to common', () => {
@@ -15,6 +15,6 @@ describe('CLI Setup', () => {
         expect(rules).toBe('@ngcompass/rules');
     });
     it('should link to reporters', () => {
-        expect(reporters).toBe('@ngcompass/reporters');
+        expect(TextConfigReporter).toBeDefined();
     });
 });

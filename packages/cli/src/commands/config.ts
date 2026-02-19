@@ -23,7 +23,7 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
                     profile: options.profile
                 });
 
-                const reporter = getConfigReporter('text');
+                const reporter = getConfigReporter();
                 await reporter.renderHealthReport(result.report);
 
                 const shouldFail = !result.report.valid;

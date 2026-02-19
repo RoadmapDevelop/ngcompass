@@ -8,6 +8,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 export const preferStandaloneRule = createComponentRule(
     'prefer-standalone',
@@ -30,7 +31,7 @@ export const preferStandaloneRule = createComponentRule(
             column,
             severity: 'critical',
             ruleName: 'prefer-standalone',
-            fix: `Add standalone: true to @Component({ standalone: true, ... })`,
+            fix: RECOMMENDATIONS['prefer-standalone'],
         };
     }
 );
