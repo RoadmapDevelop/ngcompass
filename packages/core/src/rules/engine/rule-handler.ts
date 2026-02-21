@@ -16,9 +16,9 @@
  */
 
 import type { RuleFailure, RuleContext } from '../types.js';
-import type { AngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode } from './node-streams.js';
+import type { AngularClassNode, AnyAngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode } from './node-streams.js';
 
-export type StreamType = 'AngularClass' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute';
+export type StreamType = 'AngularClass' | 'AnyAngularClass' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute';
 
 /**
  * Rule handler for a specific stream type.
@@ -53,6 +53,22 @@ export const createComponentRule = (
 ): RuleHandler<AngularClassNode> => ({
     name,
     streamType: 'AngularClass',
+    handle: handler,
+});
+
+/**
+ * Helper to create rules that handle ANY Angular-decorated class:
+ * @Component, @Directive, @Pipe, @Injectable, @NgModule.
+ *
+ * Use this instead of createComponentRule when the rule applies to
+ * classes beyond just @Component and @Directive.
+ */
+export const createAnyAngularClassRule = (
+    name: string,
+    handler: (node: AnyAngularClassNode, context: RuleContext) => RuleFailure | RuleFailure[] | null
+): RuleHandler<AnyAngularClassNode> => ({
+    name,
+    streamType: 'AnyAngularClass',
     handle: handler,
 });
 

@@ -24,9 +24,10 @@ interface AnalyzeOptions {
     force?: boolean;
     show?: boolean;
     debug?: boolean;
-    format: string;
+    format?: string;
     verbose?: boolean;
     compact?: boolean;
+    rule?: string;
 }
 
 /**
@@ -44,6 +45,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--format <fmt>', 'Output format: console|json', 'console')
         .option('--verbose', 'Show an actionable recommendation for each violation')
         .option('--compact', 'Use compact ESLint-style output instead of the rich default')
+        .option('--rule <id>', 'Run only a single rule in isolation')
         .action(async (options: AnalyzeOptions) => {
             const startTime = performance.now();
             const format = (options.format ?? 'console') as ReporterFormat;
@@ -61,7 +63,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!files) return;
 
                 // 3. Resolve Rules
-                const enabledRules = await resolveRulesStep(config, reporter);
+                const enabledRules = await resolveRulesStep(config, options, reporter);
                 if (!enabledRules) return;
 
                 // 4. Build Execution Plan
@@ -75,8 +77,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 const duration = performance.now() - startTime;
 
                 // 6. Report Results
-                reporter.parseErrors(analysis.parseErrors || []);
-                reporter.report([...analysis.results]);
+                reporter.parseErrors(analysis.parseErrors as any);
+                reporter.report(analysis.results as any);
 
                 const summary: ResultSummary = {
                     totalFiles: analysis.stats.totalFiles,
@@ -176,10 +178,25 @@ async function discoverFilesStep(
 
 async function resolveRulesStep(
     config: any,
+    options: AnalyzeOptions,
     reporter: Reporter
 ): Promise<ResolvedRulesMap | null> {
     const tStart = performance.now();
     reporter.step('Resolving rules...');
+
+    // If --rule <id> is specified, override config to only run that rule
+    if (options.rule) {
+        reporter.info(`Filtering analysis to single rule: ${options.rule}`);
+        // Create a deep copy or just override the rules object
+        config = {
+            ...config,
+            rules: {
+                [options.rule]: 'error' // Ensure it's active
+            },
+            // Disable extends for isolation if needed, but usually overrides are enough
+            extends: []
+        };
+    }
 
     const rulesResult = await resolveRules(config);
 

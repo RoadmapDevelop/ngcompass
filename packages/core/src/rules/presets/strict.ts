@@ -22,14 +22,32 @@ export const strictPreset: PresetConfig = {
         'explicit-function-return-type': 'moderate',
         'no-explicit-any': 'high',
 
-        // Angular strict
+        // Angular strict — naming
         'component-class-suffix': 'high',
         'directive-class-suffix': 'high',
+        'pipe-class-suffix': 'high',
+        'service-class-suffix': 'high',
+        'guard-class-suffix': 'high',
         'no-input-rename': 'moderate',
         'no-output-rename': 'moderate',
 
         // Template strict
         'template-no-negated-async': 'moderate',
         'template-use-track-by-function': 'high',
+        'template-no-any-cast': 'high',
+        'template-no-inline-styles': 'moderate',
+
+        // Security strict
+        'no-inner-html': 'high',
+        'no-bypass-security-trust': 'high',
+
+        // Signals strict
+        'prefer-signal-outputs': 'moderate',
+        'prefer-computed': 'moderate',
+        'no-ngonchanges-for-derived-state': 'high',
+
+        // RxJS strict
+        'rxjs-no-async-subscribe': 'high',
+        'rxjs-no-subject-value': 'high',
     },
 };

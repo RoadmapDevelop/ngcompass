@@ -44,5 +44,28 @@ export const allPreset: PresetConfig = {
         'directive-class-suffix': 'moderate',
         'no-output-on-prefix': 'low',
         'no-output-rename': 'moderate',
+
+        // ── Phase 2: Priority 1 — Critical Gaps ─────────────
+        'prefer-signal-outputs': 'moderate',
+        'no-inner-html': 'high',
+        'no-bypass-security-trust': 'high',
+
+        // ── Phase 2: Priority 2 — Naming Conventions ────────
+        'pipe-class-suffix': 'moderate',
+        'service-class-suffix': 'moderate',
+        'guard-class-suffix': 'moderate',
+
+        // ── Phase 2: Priority 3 — Template Coverage ─────────
+        'template-no-any-cast': 'high',
+        'template-no-inline-styles': 'low',
+        'prefer-async-pipe': 'low',
+
+        // ── Phase 2: Priority 4 — Signal Modernisation ──────
+        'prefer-computed': 'low',
+        'no-ngonchanges-for-derived-state': 'moderate',
+
+        // ── Phase 2: Priority 5 — RxJS Safety ───────────────
+        'rxjs-no-async-subscribe': 'high',
+        'rxjs-no-subject-value': 'moderate',
     },
 };
