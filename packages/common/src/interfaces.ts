@@ -1,5 +1,70 @@
 import { Severity } from './types.js';
 
+// ============================================================
+// PLUGIN MANIFEST (RFC §7.6)
+// ============================================================
+
+/**
+ * Optional manifest that a plugin can export alongside its rules.
+ *
+ * When present the engine validates:
+ *  - That the current tool version satisfies engineVersionRange
+ *  - That required capabilities (typeInfo, templateAST) are available
+ *
+ * Plugins without a manifest are loaded with a deprecation warning.
+ * Enforcement (hard error on missing manifest) is reserved for the next major.
+ */
+export interface PluginManifest {
+    /** Package name (must match the plugin's npm package name) */
+    readonly name: string;
+    /** Plugin semver version (e.g. "2.1.0") */
+    readonly version: string;
+    /** Engine API semver version this plugin was built against */
+    readonly apiVersion: string;
+    /**
+     * Semver range of ngcompass versions this plugin is compatible with.
+     * Examples: ">=1.0.0 <2.0.0",  "^1.2.0",  "*"
+     */
+    readonly engineVersionRange: string;
+    /** Optional capability declarations */
+    readonly capabilities?: {
+        /** Plugin uses the TypeScript type-checker (expensive) */
+        readonly requiresTypeInfo?: boolean;
+        /** Plugin needs the full HTML template AST */
+        readonly requiresTemplateAST?: boolean;
+        /** Plugin needs the CSS/SCSS AST */
+        readonly requiresCssAST?: boolean;
+    };
+}
+
+// ============================================================
+// TELEMETRY CONFIGURATION (RFC §7.7)
+// ============================================================
+
+/** Minimal telemetry event shape used in config (avoids circular dep with core) */
+export interface TelemetryEventBase {
+    readonly phase: 'config' | 'planner' | 'engine';
+    readonly operation: string;
+    readonly durationMs: number;
+    readonly cacheHit?: boolean;
+    readonly workerId?: number;
+    readonly metadata?: Readonly<Record<string, string | number | boolean>>;
+}
+
+export interface TelemetryConfig {
+    /** Whether telemetry collection is active (default: false) */
+    enabled?: boolean;
+    /**
+     * Called synchronously for every emitted event.
+     * Use this to pipe events to a file, stdout, or an external collector.
+     */
+    onEvent?: (event: TelemetryEventBase) => void;
+}
+
+// ============================================================
+// RULE CONFIGURATION
+// ============================================================
+
 /**
  * Rule configuration with severity and options
  */
@@ -167,6 +232,34 @@ export interface AnalyzerConfig {
      * Environment-specific profiles
      */
     profiles?: Record<string, ProfileConfig>;
+
+    /**
+     * When true, any unrecoverable infrastructure error (worker crash,
+     * cache corruption, serialization failure) causes a non-zero exit code
+     * even if partial results were produced.
+     *
+     * Recommended for CI pipelines that require full correctness guarantees.
+     * Default: false (recoverable errors are logged but do not fail the run).
+     */
+    failOnInfrastructureError?: boolean;
+
+    /**
+     * Structured telemetry collection.
+     * Disabled by default — enabling it adds a small per-event overhead.
+     */
+    telemetry?: TelemetryConfig;
+
+    /**
+     * Engine execution thresholds.
+     * Override the built-in defaults for parallelism decisions.
+     */
+    engine?: {
+        /**
+         * Number of tasks above which the worker pool is used instead of
+         * local pLimit execution.  Default: 150.
+         */
+        parallelThreshold?: number;
+    };
 }
 
 /**
@@ -206,7 +299,7 @@ export interface InitResult {
     alreadyExists?: boolean;
 }
 
-export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' | 'maxWorkers' | 'outputFormat' | 'failOnSeverity' | 'maxWarnings' | 'reportUnusedDisableDirectives' | 'rules'> {
+export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' | 'maxWorkers' | 'outputFormat' | 'failOnSeverity' | 'maxWarnings' | 'reportUnusedDisableDirectives' | 'rules' | 'failOnInfrastructureError'> {
     /**
      * Cache configuration.
      * Guaranteed to be a full object, never boolean.
@@ -243,6 +336,11 @@ export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' |
      * Resolved rule configuration.
      */
     rules: Record<string, RuleConfig | Severity | 'off'>;
+
+    /**
+     * Guaranteed to be a boolean after normalization. Default: false.
+     */
+    failOnInfrastructureError: boolean;
 }
 
 

@@ -10,7 +10,8 @@
 
 import { Task } from "../planner/index.js";
 import { RuleResult, RuleSeverity } from "../rules/types.js";
-import { error, warn } from "@ngcompass/common";
+import { error, warn, createInfrastructureError, type InfrastructureErrorCollector } from "@ngcompass/common";
+import { stableSerialize, SerializationError } from "../utils/stable-serialize.js";
 import { isNewEngineRule, executeBatchedNewEngineRules } from "../rules/engine/adapter.js";
 import { RuleContextFactory } from "../rules/engine/rule-context-factory.js";
 import type { Program } from "oxc-parser";
@@ -42,7 +43,8 @@ export interface ExecutionContext {
  */
 export const executeBatchedTasks = async (
     tasks: ReadonlyArray<Task>,
-    context: ExecutionContext
+    context: ExecutionContext,
+    errorCollector?: InfrastructureErrorCollector
 ): Promise<RuleResult[]> => {
     if (tasks.length === 0) return [];
 
@@ -64,7 +66,25 @@ export const executeBatchedTasks = async (
             continue;
         }
 
-        const optionsKey = JSON.stringify(task.options || {});
+        // RFC §7.2: Use stableSerialize instead of JSON.stringify so that object
+        // key insertion order does not affect batch grouping. Two tasks with the
+        // same options but different key orderings now correctly share a batch.
+        let optionsKey: string;
+        try {
+            optionsKey = stableSerialize(task.options || {});
+        } catch (serErr) {
+            // SerializationError means the rule's options contain something
+            // illegal (circular ref, function, etc.). Skip gracefully.
+            const msg = serErr instanceof SerializationError ? serErr.message : String(serErr);
+            warn("engine", `Skipping task ${task.taskId}: failed to serialize options — ${msg}`);
+            errorCollector?.record(createInfrastructureError('SerializationError', {
+                cause: msg,
+                phase: 'engine',
+                recoverable: true,
+            }));
+            results.push({ ruleName: task.ruleName, taskId: task.taskId, failures: [] });
+            continue;
+        }
         const batch = batches.get(optionsKey) ?? {
             options: task.options as Record<string, unknown>,
             ruleNames: [] as string[],
@@ -125,7 +145,14 @@ export const executeBatchedTasks = async (
                 }
             }
         } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
             error("engine", `Failed to execute batch for ${tasks[0].filePath}:`, e);
+            errorCollector?.record(createInfrastructureError('ParseError', {
+                filePath: tasks[0].filePath,
+                cause: msg,
+                phase: 'engine',
+                recoverable: true,
+            }));
             // Produce empty results for all tasks in the failed batch
             for (let i = 0; i < batch.ruleNames.length; i++) {
                 results.push({

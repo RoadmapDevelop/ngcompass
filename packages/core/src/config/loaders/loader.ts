@@ -2,6 +2,7 @@ import { findAndLoadConfig, ConfigDiscoveryResult } from './discovery.js';
 import { validateConfiguration } from '../health/index.js';
 import { createDefaultContext } from '../health/context.js';
 import type { ConfigValidationResult } from '@ngcompass/common';
+import { PACKAGE_VERSION, CACHE_VERSION } from '@ngcompass/common';
 import process from 'node:process';
 import { ValidateConfigOptions } from '../actions/healthcheck.js';
 import { CacheContext } from '../../cache/index.js';
@@ -9,6 +10,14 @@ import { debug, time, timeEnd } from '@ngcompass/common';
 
 /**
  * Resolves the configuration by searching, merging profiles, and performing full validation.
+ *
+ * Cache key formula (RFC §7.1):
+ *   key = computeHash(
+ *     contentHash                  // SHA-1 of raw config file bytes — catches any content change
+ *     + "::" + (profile ?? "")    // profile name (empty string for default)
+ *     + "::" + toolVersion        // package version — invalidates on tool upgrade
+ *     + "::" + schemaVersion      // CACHE_VERSION — invalidates on schema change
+ *   )
  */
 export const resolveConfig = async (options: ValidateConfigOptions): Promise<ConfigValidationResult> => {
     time('config-resolution');
@@ -52,12 +61,15 @@ async function tryLoadFromCache(
 ): Promise<{ hash?: string; cachedResult?: ConfigValidationResult }> {
     if (!cache) return {};
 
-    // Hash includes content to catch layout changes (lines/columns), and profile
-    const hashInput = JSON.stringify({
-        contentHash: loaded?.contentHash,
-        profile
-        // Note: rawConfig isn't strictly needed if content is hashed, but might be safer if content is missing
-    });
+    // RFC §7.1: Cache key includes content hash, profile, tool version, and schema version.
+    // This guarantees that upgrading the tool or changing the config schema automatically
+    // invalidates the cached validation result — no manual cache clearing required.
+    const hashInput = [
+        loaded?.contentHash ?? '',
+        profile ?? '',
+        PACKAGE_VERSION,   // tool version — bumped on every release
+        CACHE_VERSION,     // schema version — bumped when cached shape changes
+    ].join('::');
 
     const hash = cache.computeHash(hashInput);
     debug('loader', `Cache lookup: key=${hash.substring(0, 8)}...`);

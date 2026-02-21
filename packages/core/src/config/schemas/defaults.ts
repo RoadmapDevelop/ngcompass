@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG = {
     failOnSeverity: 'high' as FailSeverity,
     maxWarnings: 10,
     reportUnusedDisableDirectives: true,
+    failOnInfrastructureError: false,
     include: ['src/**/*.ts'],
     exclude: ['node_modules/**', 'dist/**', '**/*.spec.ts', '**/*.test.ts'],
 };

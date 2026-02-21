@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG, DEFAULT_CACHE_OPTIONS, getDefaultMaxWorkers } from './d
 /**
  * Zod definitions matching @ngcompass/common types
  */
-const SeveritySchema = z.enum(['critical', 'high', 'moderate', 'low', 'info', 'warning', 'error']);
+const SeveritySchema = z.enum(['critical', 'high', 'moderate', 'low', 'info', 'warning', 'error', 'hint']);
 const OutputFormatSchema = z.enum(['json', 'text', 'sarif', 'html']);
 
 const CacheOptionsSchema = z.object({
@@ -63,6 +63,7 @@ export const AnalyzerConfigSchema = z.object({
     failOnSeverity: SeveritySchema.default(DEFAULT_CONFIG.failOnSeverity as any),
     maxWarnings: z.number().default(DEFAULT_CONFIG.maxWarnings),
     reportUnusedDisableDirectives: z.boolean().default(DEFAULT_CONFIG.reportUnusedDisableDirectives),
+    failOnInfrastructureError: z.boolean().default(DEFAULT_CONFIG.failOnInfrastructureError),
     ignorePatterns: z.array(z.string()).optional(),
 
     // Rules & Overrides

@@ -1,6 +1,6 @@
 import { defu } from "defu";
 
-import { ConfigIssue, ConfigValidationResult } from "@ngcompass/common";
+import { ConfigIssue, ConfigValidationResult, NormalizedAnalyzerConfig } from "@ngcompass/common";
 import { AnalyzerConfigSchema } from "../schemas/schema.js";
 import { createDefaultContext } from "./context.js";
 import { ValidatedConfig, ValidationContext } from "./types.js";
@@ -151,7 +151,7 @@ export async function validateConfiguration(
     const isValid = !uniqueIssues.some(i => i.severity === "error");
 
     return {
-        config: isValid ? finalConfig : undefined,
+        config: isValid ? (finalConfig as unknown as NormalizedAnalyzerConfig) : undefined,
         report: {
             valid: isValid,
             issues: uniqueIssues
