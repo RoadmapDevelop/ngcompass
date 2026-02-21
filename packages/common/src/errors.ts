@@ -66,3 +66,81 @@ export class RuleExecutionError extends AnalyzerError {
     }
   }
 }
+
+// ============================================================
+// INFRASTRUCTURE ERROR MODEL (RFC §7.5)
+// ============================================================
+
+/**
+ * Categories of infrastructure failures that can occur during analysis.
+ *
+ *  ParseError        — AST parsing failed for a source file
+ *  IOError           — File read / write failed
+ *  WorkerCrash       — A worker thread exited with a non-zero code
+ *  CacheCorruption   — A cached entry could not be deserialized
+ *  SerializationError — stableSerialize() threw (indicates a rule authoring bug)
+ */
+export type InfrastructureErrorType =
+  | 'ParseError'
+  | 'IOError'
+  | 'WorkerCrash'
+  | 'CacheCorruption'
+  | 'SerializationError';
+
+/**
+ * Structured record of an infrastructure failure.
+ *
+ * recoverable: true  → the pipeline can continue (file is skipped / cold rebuild)
+ * recoverable: false → the pipeline cannot produce correct results and should abort
+ *                      when failOnInfrastructureError is enabled.
+ */
+export interface InfrastructureError {
+  readonly type: InfrastructureErrorType;
+  readonly filePath?: string;
+  readonly cause: string;
+  readonly timestamp: number;
+  readonly recoverable: boolean;
+  readonly phase: 'config' | 'planner' | 'engine';
+  readonly details?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Factory that stamps a timestamp and freezes the error object.
+ */
+export function createInfrastructureError(
+  type: InfrastructureErrorType,
+  fields: Omit<InfrastructureError, 'type' | 'timestamp'>
+): InfrastructureError {
+  return Object.freeze({ type, timestamp: Date.now(), ...fields });
+}
+
+/**
+ * Per-run accumulator of infrastructure errors.
+ *
+ * Passed through the pipeline so callers can inspect failures at the end
+ * and honour the failOnInfrastructureError config flag.
+ */
+export class InfrastructureErrorCollector {
+  private readonly _errors: InfrastructureError[] = [];
+
+  record(error: InfrastructureError): void {
+    this._errors.push(error);
+  }
+
+  get errors(): ReadonlyArray<InfrastructureError> {
+    return this._errors;
+  }
+
+  get hasFatalErrors(): boolean {
+    return this._errors.some(e => !e.recoverable);
+  }
+
+  get hasAnyErrors(): boolean {
+    return this._errors.length > 0;
+  }
+
+  /** Returns only errors in a specific phase. */
+  forPhase(phase: InfrastructureError['phase']): ReadonlyArray<InfrastructureError> {
+    return this._errors.filter(e => e.phase === phase);
+  }
+}

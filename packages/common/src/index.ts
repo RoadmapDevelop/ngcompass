@@ -17,7 +17,11 @@ export {
     OutputFormat,
     ConfigIssue,
     HealthReport,
-    RuleConfig
+    RuleConfig,
+    AnalyzerConfig,
+    PluginManifest,
+    TelemetryConfig,
+    TelemetryEventBase,
 } from './interfaces.js';
 export * from './errors';
 export * from './types';
