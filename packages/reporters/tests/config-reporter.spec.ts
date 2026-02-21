@@ -1,9 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TextConfigReporter } from '../src/reporters/config.js';
 import { createTestOutput } from '../src/output.js';
-import type { HealthReport, InitResult } from '@ngcompass/common';
+import type { HealthReport, InitResult, ConfigReport } from '@ngcompass/common';
 
 function makeHealthReport(overrides: Partial<HealthReport> = {}): HealthReport {
+    return { valid: true, issues: [], ...overrides };
+}
+
+function makeConfigReport(overrides: Partial<ConfigReport> = {}): ConfigReport {
     return { valid: true, issues: [], ...overrides };
 }
 
@@ -16,15 +20,15 @@ describe('TextConfigReporter', () => {
         reporter = new TextConfigReporter(out.output);
     });
 
-    describe('report()', () => {
+    describe('reportConfig()', () => {
         it('does nothing for a valid config', () => {
-            reporter.report(makeHealthReport({ valid: true }));
+            reporter.reportConfig(makeConfigReport({ valid: true }));
             expect(out.errors).toHaveLength(0);
             expect(out.lines).toHaveLength(0);
         });
 
         it('outputs error prefix for invalid config', () => {
-            reporter.report(makeHealthReport({
+            reporter.reportConfig(makeConfigReport({
                 valid: false,
                 issues: [{ code: 'E001', message: 'Bad value', severity: 'error', path: ['rules', 0] }],
             }));
@@ -39,20 +43,19 @@ describe('TextConfigReporter', () => {
             const result: InitResult = { success: true, filePath: 'ngcompass.json' };
             reporter.renderInitResult(result);
             expect(out.lines[0]).toContain('ngcompass.json');
-            expect(out.lines[0]).toContain('✔');
+            expect(out.lines[0]).toContain('✓');
         });
 
-        it('outputs warning diamond when file already exists', () => {
+        it('outputs middot with (exists) when file already exists', () => {
             const result: InitResult = { success: false, filePath: 'ngcompass.json', alreadyExists: true };
             reporter.renderInitResult(result);
-            expect(out.lines[0]).toContain('◆');
             expect(out.lines[0]).toContain('(exists)');
         });
 
         it('outputs error cross for a failed initialization', () => {
             const result: InitResult = { success: false, filePath: 'ngcompass.json' };
             reporter.renderInitResult(result);
-            expect(out.errors[0]).toContain('✘');
+            expect(out.errors[0]).toContain('×');
         });
     });
 

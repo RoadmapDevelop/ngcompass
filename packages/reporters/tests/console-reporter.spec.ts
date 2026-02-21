@@ -25,7 +25,7 @@ const stats: ResultSummary = {
     cachedTasks: 5,
     totalErrors: 1,
     totalWarnings: 2,
-    duration: 123,
+    duration: 123,  // renamed from durationMs — matches ResultSummary.duration
 };
 
 describe('ConsoleReporter', () => {
@@ -107,7 +107,7 @@ describe('ConsoleReporter', () => {
     describe('error()', () => {
         it('outputs error prefix and message', () => {
             reporter.error(new Error('Something broke'));
-            expect(out.errors[0]).toContain('✗ Analysis failed');
+            expect(out.errors[0]).toContain('× Analysis failed');
             expect(out.errors[1]).toContain('Something broke');
         });
     });

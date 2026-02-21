@@ -5,7 +5,7 @@
 /**
  * Severity levels for violations
  */
-export type Severity = 'critical' | 'high' | 'moderate' | 'low' | 'info' | 'warning' | 'error';
+export type Severity = 'critical' | 'high' | 'moderate' | 'low' | 'info' | 'warning' | 'error' | 'hint';
 
 /**
  * Rule categories for organization

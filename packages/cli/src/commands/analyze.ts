@@ -26,6 +26,7 @@ interface AnalyzeOptions {
     debug?: boolean;
     format: string;
     verbose?: boolean;
+    compact?: boolean;
 }
 
 /**
@@ -42,10 +43,11 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--debug', 'Enable debug timing output')
         .option('--format <fmt>', 'Output format: console|json', 'console')
         .option('--verbose', 'Show an actionable recommendation for each violation')
+        .option('--compact', 'Use compact ESLint-style output instead of the rich default')
         .action(async (options: AnalyzeOptions) => {
             const startTime = performance.now();
             const format = (options.format ?? 'console') as ReporterFormat;
-            const reporter = getReporter(format, { verbose: !!options.verbose });
+            const reporter = getReporter(format, { verbose: !!options.verbose, compact: !!options.compact });
 
             try {
                 // 1. Load Config & Plugins
