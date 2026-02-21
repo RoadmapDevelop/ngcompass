@@ -1,8 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { JsonReporter } from '../src/reporters/json-reporter.js';
 import { createTestOutput } from '../src/output.js';
-import type { RuleResult } from '../src/types.js';
-import type { EslintFileResult } from '../src/types.js';
+import type { FileDiagnosticResult, RuleResult } from '../src/types.js';
 
 function makeResult(filePath: string, overrides: Partial<RuleResult['failures'][0]> = {}): RuleResult {
     return {
@@ -38,7 +37,7 @@ describe('JsonReporter', () => {
 
         it('maps error severity to ESLint severity 2', () => {
             reporter.report([makeResult('/a.ts', { severity: 'error' })]);
-            const parsed: EslintFileResult[] = JSON.parse(out.lines[0]);
+            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
             expect(parsed[0].messages[0].severity).toBe(2);
             expect(parsed[0].errorCount).toBe(1);
             expect(parsed[0].warningCount).toBe(0);
@@ -46,13 +45,13 @@ describe('JsonReporter', () => {
 
         it('maps critical severity to ESLint severity 2', () => {
             reporter.report([makeResult('/a.ts', { severity: 'critical' })]);
-            const parsed: EslintFileResult[] = JSON.parse(out.lines[0]);
+            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
             expect(parsed[0].messages[0].severity).toBe(2);
         });
 
         it('maps warning severity to ESLint severity 1', () => {
             reporter.report([makeResult('/a.ts', { severity: 'warning' })]);
-            const parsed: EslintFileResult[] = JSON.parse(out.lines[0]);
+            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
             expect(parsed[0].messages[0].severity).toBe(1);
             expect(parsed[0].warningCount).toBe(1);
             expect(parsed[0].errorCount).toBe(0);
@@ -60,7 +59,7 @@ describe('JsonReporter', () => {
 
         it('sorts files alphabetically', () => {
             reporter.report([makeResult('/z.ts'), makeResult('/a.ts')]);
-            const parsed: EslintFileResult[] = JSON.parse(out.lines[0]);
+            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
             expect(parsed[0].filePath).toBe('/a.ts');
             expect(parsed[1].filePath).toBe('/z.ts');
         });
@@ -73,14 +72,14 @@ describe('JsonReporter', () => {
                     { filePath: '/a.ts', message: 'a', line: 1, column: 5, severity: 'warning', ruleName: 'rule' },
                 ],
             }]);
-            const parsed: EslintFileResult[] = JSON.parse(out.lines[0]);
+            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
             expect(parsed[0].messages[0].line).toBe(1);
             expect(parsed[0].messages[1].line).toBe(10);
         });
 
         it('includes ruleId in each message', () => {
             reporter.report([makeResult('/a.ts')]);
-            const parsed: EslintFileResult[] = JSON.parse(out.lines[0]);
+            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
             expect(parsed[0].messages[0].ruleId).toBe('test-rule');
         });
     });
