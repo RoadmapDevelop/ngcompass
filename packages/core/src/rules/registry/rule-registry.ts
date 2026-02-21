@@ -35,6 +35,7 @@
  * ```
  */
 
+import type { PluginManifest } from '@ngcompass/common';
 import type { RuleHandler } from '../engine/rule-handler.js';
 import type { RuleMetadata, RuleRegistryEntry } from '../types.js';
 
@@ -52,6 +53,8 @@ export interface RulePlugin {
     readonly handler: RuleHandler<any>;
     /** Optional metadata overrides (category, description, dependencyType, etc.) */
     readonly meta?: Partial<RuleMetadata>;
+    /** Optional manifest (RFC §7.6) */
+    readonly manifest?: PluginManifest;
 }
 
 /**

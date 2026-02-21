@@ -11,17 +11,23 @@
  * - runner.ts            (batched single-pass rule execution)
  */
 
+import os from "node:os";
 import pLimit from "p-limit";
 
 import { Task, ExecutionPlanOutput } from "../planner/index.js";
 import { CacheContext } from "../cache/index.js";
 import { RuleResult, Result, Ok, Err, AnalysisResult } from "../rules/types.js";
-import { debug } from "@ngcompass/common";
+import { debug, createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
 
 import { createAnalysisContext } from "./analysis-context.js";
 import { runAnalysisParallel, groupTasksByFile } from "./worker-pool.js";
 import { calculateStats } from "./analysis-stats.js";
 import { executeBatchedTasks } from "./runner.js";
+import {
+    createTelemetryCollector,
+    withTelemetry,
+    type TelemetryCollector,
+} from "../telemetry/index.js";
 
 // Re-export for backward compatibility (public API)
 export type { AnalysisContext } from "./analysis-context.js";
@@ -39,6 +45,32 @@ export interface AnalysisOptions {
 
     /** Enable debug logging */
     readonly debug?: boolean;
+
+    /**
+     * Maximum number of worker threads to use.
+     * Clamped to [1, os.cpus().length] (RFC §7.3 unified concurrency model).
+     * Defaults to os.cpus().length.
+     */
+    readonly maxWorkers?: number;
+
+    /**
+     * Number of tasks above which the worker pool is used instead of local
+     * pLimit execution.  Default: 150.
+     */
+    readonly parallelThreshold?: number;
+
+    /**
+     * Optional telemetry collector.
+     * Pass a NoOpTelemetryCollector (the default) to add zero overhead.
+     */
+    readonly telemetry?: TelemetryCollector;
+
+    /**
+     * Accumulator for infrastructure errors encountered during analysis.
+     * If provided, structured errors are recorded here instead of being
+     * silently swallowed.
+     */
+    readonly errorCollector?: InfrastructureErrorCollector;
 }
 
 /**
@@ -54,6 +86,8 @@ export const runAnalysis = async (
     plan: ExecutionPlanOutput,
     options: AnalysisOptions
 ): Promise<Result<AnalysisResult>> => {
+    const telemetry = options.telemetry ?? createTelemetryCollector();
+
     try {
         // 0. Short-circuit: Return cached analysis if available
         if (plan.precomputedAnalysis) {
@@ -64,13 +98,26 @@ export const runAnalysis = async (
         const startTime = performance.now();
         const { tasks, skippedTasks, cachedResults } = plan;
 
+        // RFC §7.3: Resolve effective concurrency — single source of truth
+        const cpuCount = os.cpus().length;
+        const effectiveMaxWorkers = Math.max(1, Math.min(options.maxWorkers ?? cpuCount, cpuCount));
+        const parallelThreshold = options.parallelThreshold ?? 150;
+
         // 1. Execute Pending Tasks
         let executedResults: RuleResult[] = [];
         if (tasks.length > 0) {
-            if (tasks.length > 150) {
+            if (tasks.length > parallelThreshold) {
                 // Worker pool for heavy loads
-                debug("engine", `Running analysis on ${tasks.length} tasks using workers...`);
-                const result = await runAnalysisParallel(tasks, options.rootDir, startTime);
+                debug("engine", `Running analysis on ${tasks.length} tasks using workers (max: ${effectiveMaxWorkers})...`);
+                const result = await withTelemetry(
+                    telemetry,
+                    {
+                        phase: 'engine',
+                        operation: 'runAnalysisParallel',
+                        metadata: { taskCount: tasks.length, workerCount: effectiveMaxWorkers },
+                    },
+                    () => runAnalysisParallel(tasks, options.rootDir, startTime, effectiveMaxWorkers)
+                );
                 if (result.ok) {
                     executedResults = result.data.results as RuleResult[];
                 } else {
@@ -78,13 +125,29 @@ export const runAnalysis = async (
                 }
             } else {
                 // Sequential/Local for small loads with batching by file
-                debug("engine", `Running analysis on ${tasks.length} tasks locally with batching...`);
-                executedResults = await executeTasksLocally(tasks, options.rootDir);
+                debug("engine", `Running analysis on ${tasks.length} tasks locally with batching (concurrency: ${effectiveMaxWorkers})...`);
+                executedResults = await withTelemetry(
+                    telemetry,
+                    {
+                        phase: 'engine',
+                        operation: 'executeTasksLocally',
+                        metadata: { taskCount: tasks.length, concurrency: effectiveMaxWorkers },
+                    },
+                    () => executeTasksLocally(tasks, options.rootDir, effectiveMaxWorkers, options.errorCollector)
+                );
             }
         }
 
         // 2. Retrieve Cached Results for Skipped Tasks
-        const skippedResults = await retrieveSkippedResults(skippedTasks, cachedResults, options.cache);
+        const skippedResults = await withTelemetry(
+            telemetry,
+            {
+                phase: 'engine',
+                operation: 'retrieveSkippedResults',
+                metadata: { skippedCount: skippedTasks.length },
+            },
+            () => retrieveSkippedResults(skippedTasks, cachedResults, options.cache)
+        );
 
         // 3. Aggregate Results
         const successful = [...executedResults, ...skippedResults];
@@ -109,7 +172,13 @@ export const runAnalysis = async (
             try {
                 await options.cache.analysis.set(plan.globalHash, finalResult);
             } catch (err) {
-                debug("engine", `Failed to cache analysis result: ${err instanceof Error ? err.message : String(err)}`);
+                const msg = err instanceof Error ? err.message : String(err);
+                debug("engine", `Failed to cache analysis result: ${msg}`);
+                options.errorCollector?.record(createInfrastructureError('IOError', {
+                    cause: `Failed to write analysis cache: ${msg}`,
+                    phase: 'engine',
+                    recoverable: true,
+                }));
             }
         }
 
@@ -120,23 +189,44 @@ export const runAnalysis = async (
     }
 };
 
-// ============================================
+// ============================================================
 // INTERNAL HELPERS
-// ============================================
+// ============================================================
 
 /**
  * Executes tasks locally using batched single-pass analysis.
+ *
+ * RFC §7.3: concurrency is driven by effectiveMaxWorkers (= clamp(1, config.maxWorkers, CPUs))
+ * instead of the previous hardcoded pLimit(4).
  */
-const executeTasksLocally = async (tasks: ReadonlyArray<Task>, rootDir: string): Promise<RuleResult[]> => {
+const executeTasksLocally = async (
+    tasks: ReadonlyArray<Task>,
+    rootDir: string,
+    concurrency: number,
+    errorCollector?: InfrastructureErrorCollector
+): Promise<RuleResult[]> => {
     const context = createAnalysisContext(rootDir);
     const tasksByFile = groupTasksByFile(tasks);
 
     debug("engine", `Grouped ${tasks.length} tasks into ${tasksByFile.size} file batches`);
 
-    const limit = pLimit(4);
+    const limit = pLimit(concurrency);
     const results = await Promise.all(
         Array.from(tasksByFile.values()).map(fileTasks =>
-            limit(() => executeBatchedTasks(fileTasks, context))
+            limit(async () => {
+                try {
+                    return await executeBatchedTasks(fileTasks, context);
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    errorCollector?.record(createInfrastructureError('IOError', {
+                        filePath: fileTasks[0]?.filePath,
+                        cause: `Batch execution failed: ${msg}`,
+                        phase: 'engine',
+                        recoverable: true,
+                    }));
+                    return [];
+                }
+            })
         )
     );
 

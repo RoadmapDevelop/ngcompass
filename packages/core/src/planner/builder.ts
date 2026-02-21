@@ -20,6 +20,7 @@ import { detectFileType } from "./file-type.js";
 import { filterCachedTasks } from "./incremental.js";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
 import { calculateFileHash, initHasher, calculateGlobalHash, warmupHashCache } from "./hashing.js";
+import { createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
 import { buildIndexes } from "./indexes.js";
 import { serializePlan, deserializePlan } from "./serialize.js";
 
@@ -49,7 +50,8 @@ export const buildExecutionPlan = async (
         const context = createTaskBuilderContext();
         const fileTypeCache = new Map<string, FileType>();
 
-        const cachedPlan = await tryLoadPlanFromCache(options, context);
+        const errorCollector = new InfrastructureErrorCollector();
+        const cachedPlan = await tryLoadPlanFromCache(options, context, errorCollector);
 
         if (!cachedPlan && options.cache) {
             debug("planner", "Warming up hash cache from metadata index...");
@@ -208,13 +210,15 @@ const createTaskBuilderContext = (): TaskBuilderContext => {
  */
 const tryLoadPlanFromCache = async (
     options: ExecutionPlanOptions,
-    context: TaskBuilderContext
+    context: TaskBuilderContext,
+    errorCollector?: InfrastructureErrorCollector
 ): Promise<ExecutionPlanOutput | null> => {
     if (!options.cache) return null;
 
     const { files, rules } = options;
 
-    const globalHash = await calculateGlobalHash(files, rules, context.hashCache!);
+    // Pass CacheKeyContext so tool/parser/rule-set version changes invalidate the global hash
+    const globalHash = await calculateGlobalHash(files, rules, context.hashCache!, options.cacheKeyCtx);
     context.globalHash = globalHash;
 
     // Check precomputed analysis first (Short-circuit)
@@ -260,8 +264,27 @@ const tryLoadPlanFromCache = async (
     const planSize = JSON.stringify(cachedData).length;
 
     const tDeserStart = performance.now();
-    const output =
-        cachedData.v === 1 ? deserializePlan(cachedData) : (cachedData as ExecutionPlanOutput);
+    let output: ExecutionPlanOutput;
+    try {
+        output = cachedData.v === 1 ? deserializePlan(cachedData) : (cachedData as ExecutionPlanOutput);
+    } catch (deserErr) {
+        // Cache corruption: delete the bad entry and trigger a cold rebuild.
+        // This self-heals without user intervention (same pattern as the AST cache).
+        debug("planner", `Plan cache deserialization failed — deleting corrupted entry and rebuilding`);
+        try {
+            await options.cache.plans.delete?.(globalHash);
+        } catch { /* best-effort delete */ }
+
+        if (errorCollector) {
+            errorCollector.record(createInfrastructureError('CacheCorruption', {
+                cause: deserErr instanceof Error ? deserErr.message : String(deserErr),
+                phase: 'planner',
+                recoverable: true,
+                details: { globalHash },
+            }));
+        }
+        return null;
+    }
     const tDeserEnd = performance.now();
 
     if (options.debug) {

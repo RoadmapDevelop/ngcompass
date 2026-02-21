@@ -13,6 +13,7 @@ import { debug } from "@ngcompass/common";
 import type { TaskInputs } from "./types.js";
 import type { ResolvedRule } from "../rules/types.js";
 import type { MetaCache } from "../cache/index.js";
+import type { CacheKeyContext } from "../cache/key-context.js";
 
 let h64: ((input: string | Uint8Array) => string) | undefined;
 
@@ -246,18 +247,32 @@ export const hashFileStats = async (filePath: string): Promise<string> => {
 /**
  * Calculates content-based task ID for task-centric caching.
  *
+ * When a CacheKeyContext is provided the toolVersion and ruleRegistryHash are
+ * prepended to the hash inputs. This is CRITICAL: without them, upgrading the
+ * tool or a plugin would leave stale per-task results in the result cache even
+ * though the plan cache correctly misses (globalHash changes).
+ *
  * @param ruleName - Rule name
  * @param inputs - Task inputs with hashes
  * @param options - Rule options
+ * @param ctx - Optional version context (strongly recommended; omitting risks stale results)
  * @returns Content-based task ID
  */
 export const calculateTaskId = (
     ruleName: string,
     inputs: TaskInputs,
-    options: Readonly<Record<string, unknown>>
+    options: Readonly<Record<string, unknown>>,
+    ctx?: CacheKeyContext
 ): string => {
-    const parts: string[] = [ruleName];
+    const parts: string[] = [];
 
+    // Version scope — ensures result cache is isolated per engine + rule-set version
+    if (ctx) {
+        parts.push(ctx.toolVersion);
+        parts.push(ctx.ruleRegistryHash);
+    }
+
+    parts.push(ruleName);
     parts.push(inputs.typescript.path);
     parts.push(inputs.typescript.hash);
 
@@ -278,15 +293,22 @@ export const calculateTaskId = (
 /**
  * Calculates a global hash for the entire project state.
  *
+ * When a CacheKeyContext is provided the version information is appended to
+ * the hash inputs so that tool upgrades, parser upgrades, and rule-set changes
+ * all produce a new globalHash — causing the plan cache and analysis cache to
+ * miss and rebuild correctly.
+ *
  * @param files - All discovered files
  * @param rules - All resolved rules
  * @param hashCache - Current hash cache
+ * @param ctx - Optional version context (strongly recommended)
  * @returns Global state hash
  */
 export const calculateGlobalHash = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, ResolvedRule>,
-    hashCache: Map<string, string>
+    hashCache: Map<string, string>,
+    ctx?: CacheKeyContext
 ): Promise<string> => {
     const fileEntries = await Promise.all(
         files.map(async (f) => `${f}:${hashCache.get(f) ?? (await hashFile(f, hashCache))}`)
@@ -297,6 +319,15 @@ export const calculateGlobalHash = async (
     const parts: string[] = [];
     parts.push(...fileEntries);
     parts.push(hashRules(Array.from(rules.values())));
+
+    // Append version context so that tool/parser/rule-set changes invalidate
+    // the plan cache and analysis cache even when file content is unchanged.
+    if (ctx) {
+        parts.push(`tool:${ctx.toolVersion}`);
+        parts.push(`parser:${ctx.parserVersion}`);
+        parts.push(`registry:${ctx.ruleRegistryHash}`);
+        parts.push(`platform:${ctx.platform}`);
+    }
 
     return computeHash(parts.join("||"));
 };

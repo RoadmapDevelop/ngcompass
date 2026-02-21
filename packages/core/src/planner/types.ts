@@ -7,6 +7,7 @@
 
 import type { RuleSeverity, ResolvedRule } from '../rules/types.js';
 import type { CacheContext } from '../cache/index.js';
+import type { CacheKeyContext } from '../cache/key-context.js';
 import { Result, Ok, Err } from '@ngcompass/common';
 
 // ==============================================================================
@@ -296,6 +297,16 @@ export interface ExecutionPlanOptions {
 
     /** Options for incremental filtering */
     readonly incremental?: IncrementalFilterOptions;
+
+    /**
+     * Version context for cache key generation.
+     * When provided, toolVersion and ruleRegistryHash are embedded in taskIds
+     * and globalHash, ensuring caches are invalidated on tool / rule-set upgrades.
+     *
+     * Strongly recommended for production use. Omitting risks stale result-cache
+     * hits after an upgrade.
+     */
+    readonly cacheKeyCtx?: CacheKeyContext;
 }
 
 // ==============================================================================
