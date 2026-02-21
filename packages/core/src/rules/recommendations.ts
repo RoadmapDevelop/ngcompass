@@ -90,4 +90,53 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
 
     'no-output-rename':
         'Remove the alias from `@Output()` so the binding name matches the property name, keeping the API predictable and refactoring-safe.',
+
+    // ── Priority 1: Critical Gaps ────────────────────────────────────────────
+
+    'prefer-signal-outputs':
+        'Replace `@Output()` / EventEmitter with `output<T>()` signal (Angular 17.3+) to complete the signals trilogy alongside input() and viewChild().',
+
+    'no-inner-html':
+        'Remove `[innerHTML]` / `[outerHTML]` bindings and restructure the template, or sanitise explicitly with DomSanitizer only when truly unavoidable.',
+
+    'no-bypass-security-trust':
+        'Remove the `bypassSecurityTrust*()` call — sanitise user data upstream or restructure so Angular never receives untrusted HTML, URLs, or scripts.',
+
+    // ── Priority 2: Complete Naming Conventions ──────────────────────────────
+
+    'pipe-class-suffix':
+        "Rename the class to end with 'Pipe' (e.g. `CurrencyFormatPipe`) following the Angular Style Guide.",
+
+    'service-class-suffix':
+        "Rename the class to end with 'Service', 'Guard', 'Resolver', or 'Interceptor' as appropriate (e.g. `AuthService`) following the Angular Style Guide.",
+
+    'guard-class-suffix':
+        "Rename the class to end with 'Guard' or 'Resolver' (e.g. `AuthGuard`, `UserDataResolver`) so its routing role is immediately clear.",
+
+    // ── Priority 3: Template Coverage ────────────────────────────────────────
+
+    'template-no-any-cast':
+        'Remove `$any()` — fix the underlying type annotation so the template compiler understands it without casting.',
+
+    'template-no-inline-styles':
+        'Replace `[ngStyle]` / `[style]` object bindings with CSS classes and `[class]` bindings to keep presentation logic in stylesheets.',
+
+    'prefer-async-pipe':
+        'Use the `async` pipe in the template (`obs$ | async`) and remove the manual subscription — Angular manages the subscription lifecycle automatically.',
+
+    // ── Priority 4: Signal Modernisation ─────────────────────────────────────
+
+    'prefer-computed':
+        'Replace the getter with a `computed()` signal so Angular memoises the result and tracks reactive dependencies automatically.',
+
+    'no-ngonchanges-for-derived-state':
+        'Replace `ngOnChanges()` derived-state assignments with `input()` signals and `computed()` — Angular tracks dependencies automatically with no lifecycle hook needed.',
+
+    // ── Priority 5: RxJS Safety ──────────────────────────────────────────────
+
+    'rxjs-no-async-subscribe':
+        'Replace `subscribe(async fn)` with `switchMap` or `concatMap` — async callbacks inside subscribe() break RxJS error propagation.',
+
+    'rxjs-no-subject-value':
+        'Replace `subject.value` with `pipe(take(1))` or a signal-based store — imperative value reads bypass the reactive graph and create temporal coupling.',
 };

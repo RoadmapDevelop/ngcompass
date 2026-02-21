@@ -29,6 +29,7 @@ type StreamToNodeType = { [K in StreamType]: string };
 
 export const STREAM_TO_NODE_TYPE: StreamToNodeType = {
     AngularClass: 'ClassDeclaration',
+    AnyAngularClass: 'ClassDeclaration',     // same Oxc node type, different filter
     DecoratedProperty: 'PropertyDefinition',
     TemplateExpression: '__template_expression__', // dispatched post-walk
     TemplateAttribute: '__template_attribute__',   // dispatched post-walk

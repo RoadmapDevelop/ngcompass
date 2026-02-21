@@ -12,6 +12,7 @@
 
 import type { ClassDeclaration, PropertyDefinition, Decorator, Expression } from '../ast/types.js';
 import { analyzeComponent, type ComponentMetadata } from '../analyzers/component-analyzer.js';
+import { getDecoratorNameUnsafe } from '../ast/matchers.js';
 
 // ============================================
 // STREAM DEFINITIONS
@@ -39,6 +40,23 @@ export interface TemplateAttributeNode {
 export interface AngularClassNode {
     readonly node: ClassDeclaration;
     readonly metadata: ComponentMetadata;  // Covers both Components and Directives
+}
+
+/**
+ * Any Angular Decorated Class Stream: ClassDeclaration nodes with ANY Angular decorator.
+ *
+ * Rules subscribing to this stream are guaranteed:
+ * - Node is a ClassDeclaration
+ * - Node has at least one of: @Component, @Directive, @Pipe, @Injectable, @NgModule
+ *
+ * Use this when the rule applies beyond @Component/@Directive (e.g. naming rules
+ * for pipes, services, or guards).
+ */
+export interface AnyAngularClassNode {
+    readonly node: ClassDeclaration;
+    readonly decoratorName: string;   // e.g. 'Pipe', 'Injectable', 'Component', …
+    readonly className: string | undefined;
+    readonly decoratorStart: number;
 }
 
 /**
@@ -73,6 +91,36 @@ export const toAngularClassStream = (
         node: classNode,
         metadata,  // Already analyzed, zero-copy reference
     };
+};
+
+/** Angular decorators that qualify a class for the AnyAngularClass stream. */
+const ANY_ANGULAR_DECORATORS = new Set(['Component', 'Directive', 'Pipe', 'Injectable', 'NgModule']);
+
+/**
+ * Filters ClassDeclaration nodes to ANY Angular-decorated class.
+ *
+ * PERFORMANCE: O(D) where D = number of decorators on the class (usually 1).
+ * Called by engine during traversal, not by rules.
+ */
+export const toAnyAngularClassStream = (
+    classNode: ClassDeclaration
+): AnyAngularClassNode | null => {
+    const decorators = classNode.decorators;
+    if (!decorators) return null;
+
+    for (let i = 0; i < decorators.length; i++) {
+        const name = getDecoratorNameUnsafe(decorators[i]);
+        if (name && ANY_ANGULAR_DECORATORS.has(name)) {
+            return {
+                node: classNode,
+                decoratorName: name,
+                className: classNode.id?.name,
+                decoratorStart: decorators[i].start ?? decorators[i].span?.start ?? 0,
+            };
+        }
+    }
+
+    return null;
 };
 
 /**

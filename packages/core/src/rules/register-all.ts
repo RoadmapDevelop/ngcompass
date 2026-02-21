@@ -23,7 +23,7 @@ import { componentSelectorRule } from './domains/component-selector.rule.js';
 import { directiveSelectorRule } from './domains/directive-selector.rule.js';
 import { rxjsPreferTakeuntilRule } from './domains/rxjs-prefer-takeuntil.rule.js';
 
-// ── Phase 1: Differentiation (15 rules — NEW) ─────────────────────────────────
+// ── Phase 1: Differentiation (15 rules — COMPLETE) ────────────────────────────
 
 // P2: Migration Support
 import { preferSignalQueriesRule } from './domains/prefer-signal-queries.rule.js';
@@ -44,6 +44,31 @@ import { componentClassSuffixRule } from './domains/component-class-suffix.rule.
 import { directiveClassSuffixRule } from './domains/directive-class-suffix.rule.js';
 import { noOutputOnPrefixRule } from './domains/no-output-on-prefix.rule.js';
 import { noOutputRenameRule } from './domains/no-output-rename.rule.js';
+
+// ── Phase 2: Evaluation Improvements (13 rules — NEW) ─────────────────────────
+
+// Priority 1: Critical Gaps
+import { preferSignalOutputsRule } from './domains/prefer-signal-outputs.rule.js';
+import { noInnerHtmlRule } from './domains/no-inner-html.rule.js';
+import { noBypassSecurityTrustRule } from './domains/no-bypass-security-trust.rule.js';
+
+// Priority 2: Complete Naming Conventions
+import { pipeClassSuffixRule } from './domains/pipe-class-suffix.rule.js';
+import { serviceClassSuffixRule } from './domains/service-class-suffix.rule.js';
+import { guardClassSuffixRule } from './domains/guard-class-suffix.rule.js';
+
+// Priority 3: Template Coverage
+import { templateNoAnyCastRule } from './domains/template-no-any-cast.rule.js';
+import { templateNoInlineStylesRule } from './domains/template-no-inline-styles.rule.js';
+import { preferAsyncPipeRule } from './domains/prefer-async-pipe.rule.js';
+
+// Priority 4: Signal Modernisation
+import { preferComputedRule } from './domains/prefer-computed.rule.js';
+import { noNgOnChangesForDerivedStateRule } from './domains/no-ngonchanges-for-derived-state.rule.js';
+
+// Priority 5: RxJS Safety
+import { rxjsNoAsyncSubscribeRule } from './domains/rxjs-no-async-subscribe.rule.js';
+import { rxjsNoSubjectValueRule } from './domains/rxjs-no-subject-value.rule.js';
 
 // ── Registration: Phase 0 ──────────────────────────────────────────────────────
 
@@ -83,3 +108,28 @@ registerNewEngineRule(componentClassSuffixRule);
 registerNewEngineRule(directiveClassSuffixRule);
 registerNewEngineRule(noOutputOnPrefixRule);
 registerNewEngineRule(noOutputRenameRule);
+
+// ── Registration: Phase 2 ──────────────────────────────────────────────────────
+
+// Priority 1: Critical Gaps
+registerNewEngineRule(preferSignalOutputsRule);
+registerNewEngineRule(noInnerHtmlRule);
+registerNewEngineRule(noBypassSecurityTrustRule);
+
+// Priority 2: Complete Naming Conventions
+registerNewEngineRule(pipeClassSuffixRule);
+registerNewEngineRule(serviceClassSuffixRule);
+registerNewEngineRule(guardClassSuffixRule);
+
+// Priority 3: Template Coverage
+registerNewEngineRule(templateNoAnyCastRule);
+registerNewEngineRule(templateNoInlineStylesRule);
+registerNewEngineRule(preferAsyncPipeRule);
+
+// Priority 4: Signal Modernisation
+registerNewEngineRule(preferComputedRule);
+registerNewEngineRule(noNgOnChangesForDerivedStateRule);
+
+// Priority 5: RxJS Safety
+registerNewEngineRule(rxjsNoAsyncSubscribeRule);
+registerNewEngineRule(rxjsNoSubjectValueRule);
