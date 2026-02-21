@@ -3,16 +3,22 @@
  *
  * RESPONSIBILITIES:
  * 1. Traverse AST exactly once
- * 2. Dispatch nodes to analyzers (cached)
- * 3. Dispatch pre-filtered nodes to rules
+ * 2. Dispatch nodes via O(1) VisitorMap (no if/else chain)
+ * 3. Dispatch pre-filtered template nodes after main walk
  * 4. Track per-rule timing
  * 5. Enforce performance budgets
  *
  * PERFORMANCE GUARANTEE:
  * - O(N) traversal where N = AST nodes
- * - O(1) stream dispatch per node
+ * - O(1) stream dispatch per node (Map lookup)
  * - <2ms/file p95 (syntax-only rules)
  * - <5ms/file p95 (type-aware rules)
+ *
+ * EXTENSIBILITY:
+ * Adding a new StreamType requires only:
+ *  1. A new entry in STREAM_TO_NODE_TYPE (visitor-registry.ts)
+ *  2. A stream filter function passed to buildVisitorMap()
+ * This file does NOT change when new stream types are added.
  */
 
 import type { RuleContext, RuleResult, RuleFailure } from '../types.js';
@@ -21,6 +27,7 @@ import { toAngularClassStream, toDecoratedPropertyStream } from './node-streams.
 import type { RuleHandler } from './rule-handler.js';
 import { resetComponentCacheStats, getComponentCacheStats } from '../analyzers/component-analyzer.js';
 import { analyzeTemplate } from '../analyzers/template-analyzer.js';
+import { buildVisitorMap } from './visitor-registry.js';
 
 // ============================================
 // PERFORMANCE BUDGETS (Enforced by CI)
@@ -28,46 +35,6 @@ import { analyzeTemplate } from '../analyzers/template-analyzer.js';
 
 const BUDGET_MS_PER_FILE_WITHOUT_TYPES = 2;  // p95
 const BUDGET_MS_PER_FILE_WITH_TYPES = 5;     // p95
-
-// ============================================
-// RULE REGISTRY (By Stream Type)
-// ============================================
-
-interface RuleRegistry {
-    angularClassHandlers: RuleHandler<any>[];
-    decoratedPropertyHandlers: RuleHandler<any>[];
-    templateExpressionHandlers: RuleHandler<any>[];
-    templateAttributeHandlers: RuleHandler<any>[];
-    // Add more stream types as needed
-}
-
-const createRegistry = (rules: ReadonlyArray<RuleHandler<any>>): RuleRegistry => {
-    const registry: RuleRegistry = {
-        angularClassHandlers: [],
-        decoratedPropertyHandlers: [],
-        templateExpressionHandlers: [],
-        templateAttributeHandlers: [],
-    };
-
-    for (const rule of rules) {
-        switch (rule.streamType) {
-            case 'AngularClass':
-                registry.angularClassHandlers.push(rule);
-                break;
-            case 'DecoratedProperty':
-                registry.decoratedPropertyHandlers.push(rule);
-                break;
-            case 'TemplateExpression':
-                registry.templateExpressionHandlers.push(rule);
-                break;
-            case 'TemplateAttribute':
-                registry.templateAttributeHandlers.push(rule);
-                break;
-        }
-    }
-
-    return registry;
-};
 
 // ============================================
 // PERFORMANCE INSTRUMENTATION
@@ -88,46 +55,49 @@ export interface PerformanceReport {
 }
 
 // ============================================
-// SHARED DISPATCH (DRY – single implementation)
+// TEMPLATE STREAM DISPATCH (post-walk)
 // ============================================
 
 /**
- * Dispatches a pre-filtered node to all matching handlers,
- * collecting failures and recording per-rule timing.
+ * Dispatches pre-filtered template nodes to handlers that opted into a
+ * template stream (TemplateExpression or TemplateAttribute).
  *
- * PERFORMANCE: O(H) where H = handlers.length.
- * Zero-allocation on the hot path (failure arrays reused).
+ * Called after the main AST walk because template nodes come from a
+ * different parser (angular-html-parser) not the Oxc AST.
  */
-const dispatchToHandlers = <T>(
-    node: T,
+const dispatchTemplateHandlers = (
+    nodes: ReadonlyArray<any>,
     handlers: ReadonlyArray<RuleHandler<any>>,
     context: RuleContext,
     failuresByRule: Map<string, RuleFailure[]>,
     ruleTimings: Map<string, RuleTiming>,
 ): void => {
-    for (let i = 0; i < handlers.length; i++) {
-        const handler = handlers[i];
-        const ruleStart = performance.now();
-
-        try {
-            const failure = handler.handle(node, context);
-            if (failure) {
-                const existing = failuresByRule.get(handler.name) ?? [];
-                if (Array.isArray(failure)) {
-                    existing.push(...failure);
-                } else {
-                    existing.push(failure);
+    if (handlers.length === 0) return;
+    for (const templateNode of nodes) {
+        for (let i = 0; i < handlers.length; i++) {
+            const handler = handlers[i];
+            const ruleStart = performance.now();
+            try {
+                const failure = handler.handle(templateNode, context);
+                if (failure) {
+                    const existing = failuresByRule.get(handler.name) ?? [];
+                    if (Array.isArray(failure)) {
+                        existing.push(...failure);
+                    } else {
+                        existing.push(failure);
+                    }
+                    failuresByRule.set(handler.name, existing);
                 }
-                failuresByRule.set(handler.name, existing);
+            } catch (e) {
+                console.error(`Rule ${handler.name} failed on template node:`, e);
             }
-        } catch (e) {
-            console.error(`Rule ${handler.name} failed:`, e);
+            const elapsed = performance.now() - ruleStart;
+            const timing = ruleTimings.get(handler.name)!;
+            if (timing) {
+                timing.totalMs += elapsed;
+                timing.invocations++;
+            }
         }
-
-        const elapsed = performance.now() - ruleStart;
-        const timing = ruleTimings.get(handler.name)!;
-        timing.totalMs += elapsed;
-        timing.invocations++;
     }
 };
 
@@ -139,6 +109,7 @@ const dispatchToHandlers = <T>(
  * Executes all rules in a single AST traversal.
  *
  * COMPLEXITY: O(N + R) where N = nodes, R = rule registration
+ * DISPATCH:   O(1) per node via VisitorMap (Map.get)
  *
  * @returns Results + performance report
  */
@@ -163,8 +134,15 @@ export const runSinglePassAnalysis = (
 
     const startTime = performance.now();
 
-    // Phase 1: Build registry (O(R))
-    const registry = createRegistry(rules);
+    // Phase 1: Build O(1) dispatch map and separate template handlers (O(R))
+    const visitorMap = buildVisitorMap(rules, {
+        AngularClass: toAngularClassStream,
+        DecoratedProperty: toDecoratedPropertyStream,
+    });
+
+    // Separate template-stream handlers (post-walk dispatch)
+    const templateExpressionHandlers = rules.filter(r => r.streamType === 'TemplateExpression');
+    const templateAttributeHandlers = rules.filter(r => r.streamType === 'TemplateAttribute');
 
     // Phase 2: Initialize tracking
     const failuresByRule = new Map<string, RuleFailure[]>();
@@ -177,47 +155,56 @@ export const runSinglePassAnalysis = (
 
     resetComponentCacheStats();
 
-    // Phase 3: Single traversal (O(N))
+    // Phase 3: Single traversal — O(N) with O(1) dispatch per node
     walkProgram(program, (node) => {
-        if (!node || !node.type) return;
+        if (!node?.type) return;
 
         nodesVisited++;
 
-        // Dispatch to Angular class stream (Components & Directives)
-        if (node.type === 'ClassDeclaration') {
-            const classNode = toAngularClassStream(node);
-            if (classNode) {
-                dispatchToHandlers(classNode, registry.angularClassHandlers, context, failuresByRule, ruleTimings);
+        // O(1) lookup — no if/else chain
+        const visitors = visitorMap.get(node.type);
+        if (visitors) {
+            for (let i = 0; i < visitors.length; i++) {
+                const entry = visitors[i];
+                const ruleStart = performance.now();
+
+                try {
+                    // filter() converts raw Oxc node → typed stream node (or null)
+                    const streamNode = entry.filter(node);
+                    if (streamNode !== null) {
+                        const failure = entry.handle(streamNode, context);
+                        if (failure) {
+                            const existing = failuresByRule.get(entry.ruleName) ?? [];
+                            if (Array.isArray(failure)) {
+                                existing.push(...failure);
+                            } else {
+                                existing.push(failure);
+                            }
+                            failuresByRule.set(entry.ruleName, existing);
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Rule ${entry.ruleName} failed:`, e);
+                }
+
+                const elapsed = performance.now() - ruleStart;
+                const timing = ruleTimings.get(entry.ruleName)!;
+                if (timing) {
+                    timing.totalMs += elapsed;
+                    timing.invocations++;
+                }
             }
         }
-
-        // Dispatch to decorated property stream
-        if (node.type === 'PropertyDefinition') {
-            const decoratedNode = toDecoratedPropertyStream(node);
-            if (decoratedNode) {
-                dispatchToHandlers(decoratedNode, registry.decoratedPropertyHandlers, context, failuresByRule, ruleTimings);
-            }
-        }
-
-        // Add more stream dispatches as needed
     });
 
-    // Dispatch to template streams (Expressions and Attributes)
-    if (context.template && (registry.templateExpressionHandlers.length > 0 || registry.templateAttributeHandlers.length > 0)) {
+    // Phase 4: Dispatch to template streams (post-walk, different parser)
+    if (context.template && (templateExpressionHandlers.length > 0 || templateAttributeHandlers.length > 0)) {
         const templateAnalysis = analyzeTemplate(context.template);
-
-        // Dispatch Expressions
-        for (const templateNode of templateAnalysis.expressions) {
-            dispatchToHandlers(templateNode, registry.templateExpressionHandlers, context, failuresByRule, ruleTimings);
-        }
-
-        // Dispatch Attributes
-        for (const attributeNode of templateAnalysis.attributes) {
-            dispatchToHandlers(attributeNode, registry.templateAttributeHandlers, context, failuresByRule, ruleTimings);
-        }
+        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, context, failuresByRule, ruleTimings);
+        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, context, failuresByRule, ruleTimings);
     }
 
-    // Phase 4: Collect results
+    // Phase 5: Collect results
     const results: RuleResult[] = [];
     for (const rule of rules) {
         results.push({
@@ -228,7 +215,7 @@ export const runSinglePassAnalysis = (
 
     const traversalMs = performance.now() - startTime;
 
-    // Phase 5: Check budgets
+    // Phase 6: Check budgets
     const budgetViolations: string[] = [];
     const budget = context.options?.typeChecker ? BUDGET_MS_PER_FILE_WITH_TYPES : BUDGET_MS_PER_FILE_WITHOUT_TYPES;
 

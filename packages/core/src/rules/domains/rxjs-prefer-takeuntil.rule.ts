@@ -17,6 +17,7 @@ import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * Checks if a pipe chain contains takeUntil or takeUntilDestroyed.
@@ -128,11 +129,12 @@ export const rxjsPreferTakeuntilRule = createComponentRule(
 
                         failures.push({
                             filePath: context.filePath,
-                            message: `RxJS subscription in '${className}' should be managed with 'takeUntil()'.`,
+                            message: `Subscription in '${className}' missing takeUntil or takeUntilDestroyed.`,
                             line,
                             column,
                             severity: 'high',
                             ruleName: 'rxjs-prefer-takeuntil',
+                            fix: RECOMMENDATIONS['rxjs-prefer-takeuntil'],
                         });
                     }
 

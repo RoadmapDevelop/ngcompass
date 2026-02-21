@@ -14,6 +14,7 @@ import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * Checks if a CallExpression is a .subscribe() call.
@@ -39,7 +40,7 @@ export const rxjsNoNestedSubscribeRule = createComponentRule(
         if (!classBody) return null;
 
         const failures: RuleFailure[] = [];
-        const className = classNode.metadata.className ?? 'Unknown';
+
 
         // Walk the class body looking for subscribe calls
         walkProgram(classBody, (node) => {
@@ -57,11 +58,12 @@ export const rxjsNoNestedSubscribeRule = createComponentRule(
 
                             failures.push({
                                 filePath: context.filePath,
-                                message: `Nested subscribe() detected in component '${className}'. Use higher-order mapping operators (switchMap, mergeMap, concatMap) instead.`,
+                                message: `Nested subscribe() detected. Use transformation operators (switchMap, etc).`,
                                 line,
                                 column,
                                 severity: 'high',
                                 ruleName: 'rxjs-no-nested-subscribe',
+                                fix: RECOMMENDATIONS['rxjs-no-nested-subscribe'],
                             });
                             // Don't descend into *this* nested subscribe's args
                             return false;

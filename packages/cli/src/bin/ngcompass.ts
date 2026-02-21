@@ -38,10 +38,9 @@ export async function run() {
         .description(packageJson.description || 'Angular Analysis Toolkit')
         .version(packageJson.version)
         .option('--debug', 'Enable debug output (all namespaces)')
-        .option('--verbose', 'Enable verbose output (alias for --debug)')
         .hook('preAction', (thisCommand) => {
             const opts = thisCommand.opts();
-            if (opts.debug || opts.verbose) {
+            if (opts.debug) {
                 enableDebug('debug', 'all');
             }
         });

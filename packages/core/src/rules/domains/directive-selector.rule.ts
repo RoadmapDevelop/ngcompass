@@ -18,6 +18,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 const DEFAULT_PREFIX = 'app';
 const CAMEL_CASE_REGEX = /^[a-z][a-zA-Z0-9]*$/;
@@ -60,14 +61,14 @@ export const directiveSelectorRule = createComponentRule(
             if (selectorType === 'element' && isAttribute) {
                 return buildFailure(
                     classNode, context,
-                    `Directive '${classNode.metadata.className ?? 'Unknown'}' should use an element selector instead of attribute selector '${sel}'.`
+                    `Use element selector instead of attribute '${sel}'.`
                 );
             }
 
             if (selectorType === 'attribute' && !isAttribute) {
                 return buildFailure(
                     classNode, context,
-                    `Directive '${classNode.metadata.className ?? 'Unknown'}' should use an attribute selector instead of element selector '${sel}'.`
+                    `Use attribute selector instead of element '${sel}'.`
                 );
             }
 
@@ -84,7 +85,7 @@ export const directiveSelectorRule = createComponentRule(
 
                 return buildFailure(
                     classNode, context,
-                    `Directive selector '${sel}' should start with prefix ${prefixList} (e.g., '[${prefixes[0]}MyDirective]').`
+                    `Selector '${sel}' should start with prefix ${prefixList}.`
                 );
             }
 
@@ -93,20 +94,20 @@ export const directiveSelectorRule = createComponentRule(
                 if (!CAMEL_CASE_REGEX.test(cleanSelector)) {
                     return buildFailure(
                         classNode, context,
-                        `Directive attribute selector '${cleanSelector}' should be camelCase (e.g., '[${prefixes[0] || 'app'}MyDirective]').`
+                        `Attribute selector '${cleanSelector}' should be camelCase.`
                     );
                 }
                 if (elementPart && !KEBAB_CASE_REGEX.test(elementPart)) {
                     return buildFailure(
                         classNode, context,
-                        `Directive element restriction '${elementPart}' should be kebab-case (e.g., 'ng-template').`
+                        `Element restriction '${elementPart}' should be kebab-case.`
                     );
                 }
             } else {
                 if (!KEBAB_CASE_REGEX.test(cleanSelector)) {
                     return buildFailure(
                         classNode, context,
-                        `Directive element selector '${sel}' should be kebab-case (e.g., '${prefixes[0] || 'app'}-my-directive').`
+                        `Element selector '${sel}' should be kebab-case.`
                     );
                 }
             }
@@ -130,5 +131,6 @@ const buildFailure = (
         column,
         severity: 'high',
         ruleName: 'directive-selector',
+        fix: RECOMMENDATIONS['directive-selector'],
     };
 };

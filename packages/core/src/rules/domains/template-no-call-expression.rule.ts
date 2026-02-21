@@ -3,6 +3,7 @@ import { createTemplateExpressionRule } from '../engine/rule-handler.js';
 import type { TemplateExpressionNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * template-no-call-expression
@@ -29,11 +30,12 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
 
                 failure = {
                     filePath: context.filePath,
-                    message: 'Avoid function calls in templates. Use signals, computed properties, or pure pipes instead.',
+                    message: 'Avoid function calls in templates. Use signals or pure pipes.',
                     line,
                     column,
                     severity: 'moderate', // Configurable, default to moderate/high
                     ruleName: 'template-no-call-expression',
+                    fix: RECOMMENDATIONS['template-no-call-expression'],
                 };
                 return false;
             }
