@@ -116,7 +116,8 @@ export type BuiltinPreset =
     | 'recommended'
     | 'strict'
     | 'performance'
-    | 'accessibility';
+    | 'accessibility'
+    | 'all';
 
 /**
  * Preset reference (builtin or file path)
@@ -176,6 +177,12 @@ export interface RuleFailure {
     readonly column: number;
     readonly severity: RuleSeverity;
     readonly ruleName: string;
+    /**
+     * Optional actionable fix recommendation shown in reporter output.
+     * Plain English description of how to resolve the violation.
+     * Example: "Add standalone: true to @Component({ ... })"
+     */
+    readonly fix?: string;
 }
 
 export interface RuleResult {
@@ -200,6 +207,12 @@ export interface RuleContext {
  */
 export interface AnalysisResult {
     readonly results: ReadonlyArray<RuleResult>;
+    /**
+     * Parse errors encountered during analysis (collected, not thrown).
+     * Allows analysis to continue for other files while surfacing tool errors
+     * separately from rule violations in the reporter output.
+     */
+    readonly parseErrors: ReadonlyArray<import('@ngcompass/common').ParseError>;
     readonly stats: {
         readonly totalFiles: number;
         readonly totalErrors: number;

@@ -1,84 +1,91 @@
 /**
  * High-Performance Engine Adapter
  *
- * Bridges the new single-pass engine with the existing orchestrator.
- * Maintains backward compatibility while enabling batched rule execution.
+ * Bridges the RuleRegistry (plugin boundary) with the single-pass engine
+ * and the legacy orchestrator API. Maintains backward compatibility while
+ * enabling batched rule execution and external plugin registration.
+ *
+ * The mutable bare Map that previously lived here has been replaced by
+ * the global RuleRegistry singleton — see rules/registry/rule-registry.ts.
  */
 
 import type { RuleContext, RuleResult } from '../types.js';
 import { runSinglePassAnalysis } from './single-pass-engine.js';
 import type { RuleHandler } from './rule-handler.js';
 import { debug } from '@ngcompass/common';
+import { getGlobalRegistry } from '../registry/rule-registry.js';
+import type { RulePlugin } from '../registry/rule-registry.js';
 
-// Registry of new-style rule handlers
-const newEngineRules = new Map<string, RuleHandler<any>>();
-
-import { registerRuleImplementation } from '../registry.js';
+// ============================================
+// REGISTRATION API
+// ============================================
 
 /**
- * Registers a new-style rule handler with the adapter.
+ * Registers a new-style rule handler.
  *
- * @param handler - Rule handler implementing the new architecture
+ * Delegates to RuleRegistry.register() — the single source of truth
+ * for both rule handlers and metadata. No dual-registration needed.
  */
 export const registerNewEngineRule = (handler: RuleHandler<any>): void => {
-    newEngineRules.set(handler.name, handler);
-
-    // Also register in the global registry so it's "known"
-    registerRuleImplementation(
-        handler.name,
-        (context: RuleContext) => {
-            const { results } = runSinglePassAnalysis([handler], context);
-            return results[0] || { ruleName: handler.name, failures: [] };
-        },
-        {
-            // Extract metadata if available from handler
-            category: 'best-practice', // Default, should ideally come from handler
-            dependencyType: 'component', // Default
+    const plugin: RulePlugin = {
+        name: handler.name,
+        handler,
+        meta: {
+            category: 'best-practice',
+            dependencyType: 'component',
             ...handler.meta,
-        }
-    );
+        },
+    };
 
-    debug('engine', `Registered new engine rule: ${handler.name}`);
+    getGlobalRegistry().register(plugin, { allowOverride: true });
+
+    debug('engine', `Registered rule: ${handler.name}`);
 };
 
+// ============================================
+// QUERY API
+// ============================================
+
 /**
- * Checks if a rule is implemented in the new engine.
- *
- * @param ruleName - Rule name to check
- * @returns true if rule uses new engine
+ * Checks if a rule is implemented in the engine.
  */
 export const isNewEngineRule = (ruleName: string): boolean => {
-    return newEngineRules.has(ruleName);
+    return getGlobalRegistry().has(ruleName);
 };
 
 /**
- * Gets all new engine rule names.
- *
- * @returns Array of rule names
+ * Gets all registered rule names.
  */
 export const getNewEngineRuleNames = (): ReadonlyArray<string> => {
-    return Array.from(newEngineRules.keys());
+    return getGlobalRegistry().getRuleNames();
 };
 
+// ============================================
+// BATCHED EXECUTION API
+// ============================================
 
 /**
- * Executes multiple rules in a single pass (optimal path).
+ * Executes multiple rules in a single AST pass (optimal path).
  *
- * This is the preferred execution model as it maximizes the benefits
- * of the single-pass architecture.
+ * All handlers for the given rule names are collected from the global
+ * RuleRegistry (which includes both built-in rules and plugin rules) and
+ * passed to runSinglePassAnalysis() — the AST is walked exactly once.
  *
  * @param ruleNames - Rules to execute
- * @param context - Rule context
- * @returns Array of rule results
+ * @param context   - Rule execution context
+ * @returns Array of RuleResults, one per rule name
  */
 export const executeBatchedNewEngineRules = (
     ruleNames: ReadonlyArray<string>,
     context: RuleContext
 ): ReadonlyArray<RuleResult> => {
-    // Filter to only new engine rules
-    const handlers = ruleNames
-        .map(name => newEngineRules.get(name))
-        .filter((h): h is RuleHandler<any> => h !== undefined);
+    const registry = getGlobalRegistry();
+
+    const handlers: RuleHandler<any>[] = [];
+    for (const name of ruleNames) {
+        const handler = registry.get(name);
+        if (handler) handlers.push(handler);
+    }
 
     if (handlers.length === 0) {
         return [];
@@ -86,14 +93,12 @@ export const executeBatchedNewEngineRules = (
 
     debug('engine', `Executing ${handlers.length} rules in single pass on ${context.filePath}`);
 
-    // Run all rules in a single pass
     const { results, performance } = runSinglePassAnalysis(handlers, context);
 
-    // Log performance metrics
-    debug('engine', `Single-pass analysis completed in ${performance.traversalMs.toFixed(2)}ms`);
-    debug('engine', `Nodes visited: ${performance.nodesVisited}`);
-    debug('engine', `Cache hit rate: ${((performance.cacheStats.hits / (performance.cacheStats.hits + performance.cacheStats.misses || 1)) * 100).toFixed(1)
-        }%`);
+    debug('engine', `Single-pass complete: ${performance.traversalMs.toFixed(2)}ms, ${performance.nodesVisited} nodes`);
+    debug('engine', `Cache hit rate: ${(
+        (performance.cacheStats.hits / (performance.cacheStats.hits + performance.cacheStats.misses || 1)) * 100
+    ).toFixed(1)}%`);
 
     if (performance.budgetViolations.length > 0) {
         debug('engine', 'Performance budget violations:', performance.budgetViolations);

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * prefer-on-push-component-change-detection
  *
  * BEFORE: 307 lines (manual traversal, parsing)
@@ -9,6 +9,7 @@ import { createComponentRule } from '../engine/rule-handler.js';
 import { ChangeDetectionStrategy } from '../analyzers/component-analyzer.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 export const preferOnPushRule = createComponentRule(
     'prefer-on-push-component-change-detection',
@@ -26,11 +27,12 @@ export const preferOnPushRule = createComponentRule(
 
         return {
             filePath: context.filePath,
-            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should use ChangeDetectionStrategy.OnPush`,
+            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should use ChangeDetectionStrategy.OnPush.`,
             line,
             column,
             severity: 'critical',
             ruleName: 'prefer-on-push-component-change-detection',
+            fix: RECOMMENDATIONS['prefer-on-push-component-change-detection'],
         };
     }
 );

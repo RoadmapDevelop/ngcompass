@@ -8,6 +8,7 @@
 import { createTemplateAttributeRule } from '../engine/rule-handler.js';
 import type { TemplateAttributeNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 const LEGACY_DIRECTIVES = new Set([
     '*ngIf',
@@ -26,11 +27,12 @@ export const templatePreferControlFlowRule = createTemplateAttributeRule(
 
             return {
                 filePath: context.filePath,
-                message: `Use modern control flow (@if, @for, @switch) instead of legacy structural directive '${node.name}' for better performance and readability.`,
+                message: `Use modern control flow (@if, @for) instead of '${node.name}'.`,
                 line,
                 column,
                 severity: 'high',
                 ruleName: 'template-prefer-control-flow',
+                fix: RECOMMENDATIONS['template-prefer-control-flow'],
             };
         }
 

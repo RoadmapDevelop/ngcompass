@@ -1,6 +1,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 import {
     getDecoratorNameUnsafe,
     getLiteralStringValueUnsafe,
@@ -71,11 +72,12 @@ export const noInputRenameRule = createComponentRule(
                     const { line, column } = context.locator.location(errorStart);
                     failures.push({
                         filePath: context.filePath,
-                        message: `Input '${propertyName}' should not be renamed to '${aliasName}'. Avoid aliasing inputs to maintain a consistent and predictable API.`,
+                        message: `Input '${propertyName}' should not be aliased to '${aliasName}'.`,
                         line,
                         column,
                         severity: 'moderate',
                         ruleName: 'no-input-rename',
+                        fix: RECOMMENDATIONS['no-input-rename'],
                     });
                 }
             }
@@ -90,11 +92,12 @@ export const noInputRenameRule = createComponentRule(
                         const { line, column } = context.locator.location(classNode.metadata.decoratorStart);
                         failures.push({
                             filePath: context.filePath,
-                            message: `Host directive input '${input.internal}' should not be renamed to '${input.external}'.`,
+                            message: `Host input '${input.internal}' should not be aliased to '${input.external}'.`,
                             line,
                             column,
                             severity: 'moderate',
                             ruleName: 'no-input-rename',
+                            fix: RECOMMENDATIONS['no-input-rename'],
                         });
                     }
                 }

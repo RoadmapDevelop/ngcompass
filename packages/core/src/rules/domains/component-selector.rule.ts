@@ -18,6 +18,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 const DEFAULT_PREFIX = 'app';
 const KEBAB_CASE_REGEX = /^[a-z][a-z0-9]*(-[a-z0-9]+)*$/;
@@ -57,14 +58,14 @@ export const componentSelectorRule = createComponentRule(
             if (selectorType === 'element' && isAttribute) {
                 return buildFailure(
                     classNode, context,
-                    `Component '${classNode.metadata.className ?? 'Unknown'}' should use an element selector instead of attribute selector '${sel}'.`
+                    `Use element selector instead of attribute '${sel}'.`
                 );
             }
 
             if (selectorType === 'attribute' && !isAttribute) {
                 return buildFailure(
                     classNode, context,
-                    `Component '${classNode.metadata.className ?? 'Unknown'}' should use an attribute selector instead of element selector '${sel}'.`
+                    `Use attribute selector instead of element '${sel}'.`
                 );
             }
 
@@ -81,7 +82,7 @@ export const componentSelectorRule = createComponentRule(
 
                 return buildFailure(
                     classNode, context,
-                    `Component selector '${sel}' should start with prefix ${prefixList} (e.g., '${prefixes[0]}-my-component').`
+                    `Selector '${sel}' should start with prefix ${prefixList}.`
                 );
             }
 
@@ -89,7 +90,7 @@ export const componentSelectorRule = createComponentRule(
             if (!isAttribute && !KEBAB_CASE_REGEX.test(cleanSelector)) {
                 return buildFailure(
                     classNode, context,
-                    `Component selector '${sel}' should be kebab-case (e.g., '${prefixes[0] || 'app'}-my-component').`
+                    `Selector '${sel}' should be kebab-case.`
                 );
             }
         }
@@ -112,5 +113,6 @@ const buildFailure = (
         column,
         severity: 'moderate',
         ruleName: 'component-selector',
+        fix: RECOMMENDATIONS['component-selector'],
     };
 };

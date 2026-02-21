@@ -1,4 +1,4 @@
-/**
+﻿/**
  * prefer-standalone
  *
  * Enforces standalone: true on all @Component classes.
@@ -8,6 +8,7 @@
 import { createComponentRule } from '../engine/rule-handler.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
+import { RECOMMENDATIONS } from '../recommendations.js';
 
 export const preferStandaloneRule = createComponentRule(
     'prefer-standalone',
@@ -25,11 +26,12 @@ export const preferStandaloneRule = createComponentRule(
 
         return {
             filePath: context.filePath,
-            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should be standalone`,
+            message: `Component '${classNode.metadata.className ?? 'Unknown'}' should be standalone.`,
             line,
             column,
             severity: 'critical',
             ruleName: 'prefer-standalone',
+            fix: RECOMMENDATIONS['prefer-standalone'],
         };
     }
 );

@@ -29,8 +29,8 @@ export const executeGitDiscovery = async (
         // -c: cached files (tracked)
         // -o: other files (untracked)
         // --exclude-standard: use standard git exclude rules (.gitignore)
-        // --full-name: relative to project root
-        const { stdout } = await execAsync('git ls-files -c -o --exclude-standard --full-name', {
+        // Relative to current directory (omitting --full-name)
+        const { stdout } = await execAsync('git ls-files -c -o --exclude-standard', {
             cwd: rootDir,
             maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large lists
         });
