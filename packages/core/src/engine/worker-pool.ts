@@ -9,7 +9,7 @@ import pLimit from "p-limit";
 
 import { Task } from "../planner/index.js";
 import { RuleResult, Result, Ok, AnalysisResult } from "../rules/types.js";
-import { warn, error, debug } from "@ngcompass/common";
+import { warn, error, debug, createInfrastructureError } from "@ngcompass/common";
 
 import { createAnalysisContext } from "./analysis-context.js";
 import { calculateStats } from "./analysis-stats.js";
@@ -66,13 +66,19 @@ class Spinner {
 export const runAnalysisParallel = async (
     tasks: ReadonlyArray<Task>,
     rootDir: string,
-    startTime: number
+    startTime: number,
+    /**
+     * RFC §7.3: Caller-supplied effective worker count.
+     * Already clamped to [1, CPUs] by the orchestrator.
+     * Defaults to max(2, CPUs) for backward compatibility when called directly.
+     */
+    maxWorkers?: number
 ): Promise<Result<AnalysisResult>> => {
     const { Worker } = await import("node:worker_threads");
     const os = await import("node:os");
 
-    // Determine worker count (min 2, max CPU cores)
-    const workerCount = Math.max(2, os.cpus().length);
+    // Use caller-supplied value (already clamped); fall back to previous default
+    const workerCount = maxWorkers ?? Math.max(2, os.cpus().length);
     const workerPath = await resolveWorkerPath();
 
     if (!workerPath) {
@@ -120,7 +126,15 @@ export const runAnalysisParallel = async (
             });
             worker.on("exit", (code) => {
                 if (code !== 0) {
-                    reject(new Error(`Worker stopped with exit code ${code}`));
+                    // Record a structured WorkerCrash error (RFC §7.5)
+                    const infraErr = createInfrastructureError('WorkerCrash', {
+                        cause: `Worker exited with code ${code}`,
+                        phase: 'engine',
+                        recoverable: true,
+                        details: { exitCode: code },
+                    });
+                    error("workers", `Worker crashed: ${infraErr.cause}`);
+                    reject(new Error(infraErr.cause));
                 }
             });
         });
