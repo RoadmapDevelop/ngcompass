@@ -29,6 +29,7 @@
         "clean": "rimraf dist .turbo"
     },
     "dependencies": {
+        "@babel/code-frame": "^7.29.0",
         "@ngcompass/common": "workspace:*",
         "@ngcompass/core": "workspace:*",
         "picocolors": "^1.1.1"
@@ -41,6 +42,7 @@
     "author": "ngcompass",
     "license": "MIT",
     "devDependencies": {
+        "@types/babel__code-frame": "^7.27.0",
         "@types/node": "^25.1.0"
     }
 }
