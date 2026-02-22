@@ -69,9 +69,11 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
         if (cached) return cached;
 
         const promise = (async () => {
-            const content = await resolveTemplateContent(filePath, readFileCached, getProgram);
-            if (!content) return undefined;
-            return parseHtml(content);
+            const extracted = await resolveTemplateContent(filePath, readFileCached, getProgram);
+            if (!extracted || !extracted.content) return undefined;
+            // Pass templateStartOffset so rules can convert template-relative
+            // offsets to file-absolute offsets for correct line/column reporting.
+            return parseHtml(extracted.content, extracted.startOffset);
         })();
 
         templateCache.set(filePath, promise);
@@ -106,32 +108,51 @@ const readFileSafe = async (rootDir: string, filePath: string): Promise<string> 
     }
 };
 
+/** Result from resolving a template's content and position in the source. */
+interface ResolvedTemplate {
+    content: string;
+    /** Byte offset in the source file where `content[0]` lives. */
+    startOffset: number;
+}
+
 /**
- * Resolves template content from either an HTML file or an inline template in TS.
+ * Resolves template content and its position from either an HTML file or an
+ * inline template in a TypeScript file.
  *
- * Uses extractTemplateFromProgram (parsers/template-extractor.ts) for .ts files —
- * avoids duplicating hand-rolled AST traversal logic.
+ * For external `.html` files `startOffset` is always `0` — the HTML file IS
+ * the template, so its parser offsets are already file-absolute.
+ *
+ * For inline templates inside `.ts` files `startOffset` is the byte position
+ * of the first content character in the TypeScript source (after the opening
+ * quote or backtick). This value is forwarded into `parseHtml()` so the
+ * resulting `HtmlParserResult.templateStartOffset` can be used by template
+ * rules to report accurate line/column numbers.
  *
  * @param filePath       - Template path or TS path
  * @param readFileCached - Memoized file read
  * @param getProgram     - Memoized program parse
- * @returns Template content or empty string
+ * @returns Resolved template or null if not applicable
  */
 const resolveTemplateContent = async (
     filePath: string,
     readFileCached: (p: string) => Promise<string>,
     getProgram: (p: string) => Promise<Program>
-): Promise<string> => {
+): Promise<ResolvedTemplate | null> => {
     const ext = path.extname(filePath);
 
     if (ext === ".html") {
-        return readFileCached(filePath);
+        // External template — offsets are file-absolute, startOffset = 0
+        const content = await readFileCached(filePath);
+        return { content, startOffset: 0 };
     }
 
     if (ext === ".ts") {
         const program = await getProgram(filePath);
-        return extractTemplateFromProgram(program);
+        const extracted = extractTemplateFromProgram(program);
+        // extractTemplateFromProgram returns { content, startOffset } where
+        // startOffset is the byte position in the .ts file after the opening quote.
+        return extracted.content ? extracted : null;
     }
 
-    return "";
+    return null;
 };

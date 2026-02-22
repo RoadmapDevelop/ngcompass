@@ -6,80 +6,44 @@
 // New high-performance engine
 import { registerNewEngineRule } from './engine/adapter.js';
 
-// ── Phase 0: MVP (10 rules — COMPLETE) ────────────────────────────────────────
-
 // P0: Migration Blockers
-import { preferOnPushRule } from './domains/prefer-on-push.rule.js';
-import { preferStandaloneRule } from './domains/prefer-standalone.rule.js';
-import { preferSignalInputsRule } from './domains/prefer-signal-inputs.rule.js';
-import { templateNoCallExpressionRule } from './domains/template-no-call-expression.rule.js';
-import { templatePreferControlFlowRule } from './domains/template-prefer-control-flow.rule.js';
+import { preferOnPushRule } from './migration/prefer-on-push.rule.js';
+import { templateNoCallExpressionRule } from './migration/template-no-call-expression.rule.js';
+import { rxjsNoSubscribeInComponentRule } from './migration/rxjs-no-subscribe-in-component.rule.js';
+import { rxjsAvoidBehaviorSubjectRule } from './migration/rxjs-avoid-behaviorsubject-for-local-state.rule.js';
+import { templateTrackByRequiredRule } from './migration/template-trackby-required.rule.js';
+import { templateNoObjectLiteralBindingRule } from './migration/template-no-object-literal-binding.rule.js';
+import { templateNoArrayLiteralBindingRule } from './migration/template-no-array-literal-binding.rule.js';
+import { toSignalRequireInitialValueRule } from './migration/to-signal-require-initial-value.rule.js';
+import { rxjsAvoidSubjectRule } from './migration/rxjs-avoid-subject-as-event-bus.rule.js';
+import { signalNoSideEffectsInComputedRule } from './migration/signal-no-side-effects-in-computed.rule.js';
+import { preferInjectRule } from './migration/prefer-inject.rule.js';
+import { componentNoManualDetectChangesRule } from './migration/component-no-manual-detect-changes.rule.js';
+import { rxjsRequireTakeUntilDestroyedRule } from './migration/rxjs-require-take-until-destroyed.rule.js';
+import { templateNoAsyncPipeDuplicationRule } from './migration/template-no-async-pipe-duplication.rule.js';
+import { signalNoEffectInConstructorRule } from './migration/signal-no-effect-in-constructor.rule.js';
+import { signalPreferComputedRule } from './migration/signal-prefer-computed-over-sync-effect.rule.js';
+import { signalEffectDestroyScopedRule } from './migration/signal-effect-must-be-destroy-scoped.rule.js';
+import { signalAvoidUntrackedRule } from './migration/signal-avoid-untracked-overuse.rule.js';
+import { rxjsPreferToSignalRule } from './migration/rxjs-prefer-to-signal-for-template-state.rule.js';
 
-// P1: High-ROI Quick Wins
-import { rxjsNoNestedSubscribeRule } from './domains/rxjs-no-nested-subscribe.rule.js';
-import { templateUseTrackByFunctionRule } from './domains/template-use-track-by-function.rule.js';
-import { noInputRenameRule } from './domains/no-input-rename.rule.js';
-import { componentSelectorRule } from './domains/component-selector.rule.js';
-import { directiveSelectorRule } from './domains/directive-selector.rule.js';
-import { rxjsPreferTakeuntilRule } from './domains/rxjs-prefer-takeuntil.rule.js';
-
-// ── Phase 1: Differentiation (15 rules — NEW) ─────────────────────────────────
-
-// P2: Migration Support
-import { preferSignalQueriesRule } from './domains/prefer-signal-queries.rule.js';
-import { useInjectRule } from './domains/use-inject.rule.js';
-import { noAttributeDecoratorRule } from './domains/no-attribute-decorator.rule.js';
-import { templateNoNegatedAsyncRule } from './domains/template-no-negated-async.rule.js';
-import { rxjsNoCreateRule } from './domains/rxjs-no-create.rule.js';
-
-// P3: Code Quality & Safety
-import { implementsOnDestroyRule } from './domains/implements-on-destroy.rule.js';
-import { noOutputNativeRule } from './domains/no-output-native.rule.js';
-import { noConflictingLifecycleRule } from './domains/no-conflicting-lifecycle.rule.js';
-import { templateNoDuplicateAttributesRule } from './domains/template-no-duplicate-attributes.rule.js';
-import { noEmptyLifecycleMethodRule } from './domains/no-empty-lifecycle-method.rule.js';
-
-// P4: Naming & Conventions
-import { componentClassSuffixRule } from './domains/component-class-suffix.rule.js';
-import { directiveClassSuffixRule } from './domains/directive-class-suffix.rule.js';
-import { noOutputOnPrefixRule } from './domains/no-output-on-prefix.rule.js';
-import { noOutputRenameRule } from './domains/no-output-rename.rule.js';
-
-// ── Registration: Phase 0 ──────────────────────────────────────────────────────
-
-// P0: Migration Blockers
+// Registration
 registerNewEngineRule(preferOnPushRule);
-registerNewEngineRule(preferStandaloneRule);
-registerNewEngineRule(preferSignalInputsRule);
 registerNewEngineRule(templateNoCallExpressionRule);
-registerNewEngineRule(templatePreferControlFlowRule);
-
-// P1: High-ROI Quick Wins
-registerNewEngineRule(rxjsNoNestedSubscribeRule);
-registerNewEngineRule(templateUseTrackByFunctionRule);
-registerNewEngineRule(noInputRenameRule);
-registerNewEngineRule(componentSelectorRule);
-registerNewEngineRule(directiveSelectorRule);
-registerNewEngineRule(rxjsPreferTakeuntilRule);
-
-// ── Registration: Phase 1 ──────────────────────────────────────────────────────
-
-// P2: Migration Support
-registerNewEngineRule(preferSignalQueriesRule);
-registerNewEngineRule(useInjectRule);
-registerNewEngineRule(noAttributeDecoratorRule);
-registerNewEngineRule(templateNoNegatedAsyncRule);
-registerNewEngineRule(rxjsNoCreateRule);
-
-// P3: Code Quality & Safety
-registerNewEngineRule(implementsOnDestroyRule);
-registerNewEngineRule(noOutputNativeRule);
-registerNewEngineRule(noConflictingLifecycleRule);
-registerNewEngineRule(templateNoDuplicateAttributesRule);
-registerNewEngineRule(noEmptyLifecycleMethodRule);
-
-// P4: Naming & Conventions
-registerNewEngineRule(componentClassSuffixRule);
-registerNewEngineRule(directiveClassSuffixRule);
-registerNewEngineRule(noOutputOnPrefixRule);
-registerNewEngineRule(noOutputRenameRule);
+registerNewEngineRule(rxjsNoSubscribeInComponentRule);
+registerNewEngineRule(rxjsAvoidBehaviorSubjectRule);
+registerNewEngineRule(templateTrackByRequiredRule);
+registerNewEngineRule(templateNoObjectLiteralBindingRule);
+registerNewEngineRule(templateNoArrayLiteralBindingRule);
+registerNewEngineRule(toSignalRequireInitialValueRule);
+registerNewEngineRule(rxjsAvoidSubjectRule);
+registerNewEngineRule(signalNoSideEffectsInComputedRule);
+registerNewEngineRule(preferInjectRule);
+registerNewEngineRule(componentNoManualDetectChangesRule);
+registerNewEngineRule(rxjsRequireTakeUntilDestroyedRule);
+registerNewEngineRule(templateNoAsyncPipeDuplicationRule);
+registerNewEngineRule(signalNoEffectInConstructorRule);
+registerNewEngineRule(signalPreferComputedRule);
+registerNewEngineRule(signalEffectDestroyScopedRule);
+registerNewEngineRule(signalAvoidUntrackedRule);
+registerNewEngineRule(rxjsPreferToSignalRule);

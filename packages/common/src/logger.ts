@@ -24,7 +24,8 @@ export type Namespace =
     | 'incremental'
     | 'dry-run'
     | 'engine'
-    | 'plugin-loader';
+    | 'plugin-loader'
+    | 'env-fingerprint';
 
 interface LoggerConfig {
     enabled: boolean;

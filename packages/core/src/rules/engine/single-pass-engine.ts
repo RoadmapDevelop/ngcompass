@@ -23,7 +23,7 @@
 
 import type { RuleContext, RuleResult, RuleFailure } from '../types.js';
 import { walkProgram } from '../visitor.js';
-import { toAngularClassStream, toDecoratedPropertyStream } from './node-streams.js';
+import { toAngularClassStream, toAnyAngularClassStream, toDecoratedPropertyStream, toCallExpressionStream, toNewExpressionStream } from './node-streams.js';
 import type { RuleHandler } from './rule-handler.js';
 import { resetComponentCacheStats, getComponentCacheStats } from '../analyzers/component-analyzer.js';
 import { analyzeTemplate } from '../analyzers/template-analyzer.js';
@@ -137,7 +137,10 @@ export const runSinglePassAnalysis = (
     // Phase 1: Build O(1) dispatch map and separate template handlers (O(R))
     const visitorMap = buildVisitorMap(rules, {
         AngularClass: toAngularClassStream,
+        AnyAngularClass: toAnyAngularClassStream,
         DecoratedProperty: toDecoratedPropertyStream,
+        CallExpression: toCallExpressionStream,
+        NewExpression: toNewExpressionStream,
     });
 
     // Separate template-stream handlers (post-walk dispatch)
