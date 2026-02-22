@@ -10,7 +10,7 @@
  * - Rules checking node types (dispatcher handles this)
  */
 
-import type { ClassDeclaration, PropertyDefinition, Decorator, Expression } from '../ast/types.js';
+import type { ClassDeclaration, PropertyDefinition, Decorator, Expression, CallExpression, NewExpression } from '../ast/types.js';
 import { analyzeComponent, type ComponentMetadata } from '../analyzers/component-analyzer.js';
 import { getDecoratorNameUnsafe } from '../ast/matchers.js';
 
@@ -140,3 +140,13 @@ export const toDecoratedPropertyStream = (
         decorators,  // Zero-copy reference
     };
 };
+
+/**
+ * Pass-through filter for CallExpression stream.
+ */
+export const toCallExpressionStream = (node: CallExpression): CallExpression => node;
+
+/**
+ * Pass-through filter for NewExpression stream.
+ */
+export const toNewExpressionStream = (node: NewExpression): NewExpression => node;
