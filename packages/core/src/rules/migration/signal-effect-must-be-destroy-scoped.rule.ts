@@ -1,14 +1,19 @@
 import { createAnyAngularClassRule } from '../engine/rule-handler.js';
 import type { AnyAngularClassNode } from '../engine/node-streams.js';
-import type { MethodDefinition, BlockStatement, Node, CallExpression } from '../ast/types.js';
+import type { MethodDefinition, BlockStatement, Node, CallExpression, ObjectExpression } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
+import { hasObjectProperty } from '../ast/matchers.js';
 
 /**
  * signal-effect-must-be-destroy-scoped
- * 
+ *
  * Detects effect() calls inside regular methods (ngOnInit, etc.).
  * Angular effects require an injection context or a manual injector.
+ *
+ * Valid escape hatches (not flagged):
+ *   - effect(fn, { injector: this.injector }) — explicit injector provided
+ *   - effect(fn, { manualCleanup: true })     — developer takes manual ownership
  */
 export const signalEffectDestroyScopedRule = createAnyAngularClassRule(
     'signal-effect-must-be-destroy-scoped',
@@ -36,7 +41,7 @@ export const signalEffectDestroyScopedRule = createAnyAngularClassRule(
                 return {
                     filePath: context.filePath,
                     ruleName: 'signal-effect-must-be-destroy-scoped',
-                    message: `effect() called inside "${(method.key as any).name}". Effects must be created in an injection context (constructor or field initializer) or provided with a DestroyRef.`,
+                    message: `effect() called inside "${(method.key as any).name}". Effects must be created in an injection context (constructor or field initializer) or provided with a DestroyRef/injector option.`,
                     line,
                     column,
                     severity: 'high',
@@ -79,9 +84,15 @@ function findEffectCall(node: Node): Node | null {
         }
 
         if (isEffect) {
-            // Check if it has an options object with manualCleanup or injector
-            // This is a bit complex for a basic rule, but we can just flag it for now 
-            // as it's almost always a mistake to call effect() in ngOnInit.
+            // Allow effect() calls that provide { injector } or { manualCleanup: true }
+            // as the second argument — these are valid lifecycle management patterns.
+            const optionsArg = call.arguments[1];
+            if (optionsArg && optionsArg.type === 'ObjectExpression') {
+                const options = optionsArg as ObjectExpression;
+                if (hasObjectProperty(options, 'injector') || hasObjectProperty(options, 'manualCleanup')) {
+                    return null;
+                }
+            }
             return node;
         }
 

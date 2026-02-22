@@ -5,9 +5,13 @@ import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * template-trackby-required-for-ngfor
- * 
+ *
  * Detects *ngFor structural directives missing a trackBy function.
  * Without trackBy, Angular must recreate the entire DOM for the list on every change.
+ *
+ * Note: { requires: { htmlAst: true } } is required so the task planner sets
+ * needsAst:true on this rule's task, ensuring the HTML template is loaded and
+ * parsed even when no other htmlAst rule is in the same batch.
  */
 export const templateTrackByRequiredRule = createTemplateAttributeRule(
     'template-trackby-required-for-ngfor',
@@ -39,5 +43,8 @@ export const templateTrackByRequiredRule = createTemplateAttributeRule(
         }
 
         return null;
+    },
+    {
+        requires: { htmlAst: true }
     }
 );

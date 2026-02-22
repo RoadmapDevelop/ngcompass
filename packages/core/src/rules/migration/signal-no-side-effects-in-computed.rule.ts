@@ -13,12 +13,15 @@ import type {
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
 
+// NOTE: 'get' is intentionally excluded — it's too generic (Map.get, Array.get, Object.get)
+// and would cause false positives. HTTP GET calls are caught by other rules or can be
+// identified by context. 'delete' is excluded for the same reason.
 const SIDE_EFFECT_METHODS = new Set([
-    'get', 'post', 'put', 'delete', 'patch', // HTTP
-    'subscribe', 'unsubscribe',              // RxJS
-    'next', 'error', 'complete',             // Subjects
-    'setItem', 'removeItem', 'clear',        // Storage
-    'appendChild', 'removeChild',            // DOM
+    'post', 'put', 'patch',          // HTTP write methods (GET excluded — too generic)
+    'subscribe', 'unsubscribe',      // RxJS
+    'next', 'error', 'complete',     // Subjects
+    'setItem', 'removeItem', 'clear', // Storage
+    'appendChild', 'removeChild',    // DOM mutation
 ]);
 
 const WRITE_METHODS = new Set(['set', 'update', 'mutate']);

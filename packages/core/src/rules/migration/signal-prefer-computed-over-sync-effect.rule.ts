@@ -1,5 +1,5 @@
 import { createCallExpressionRule } from '../engine/rule-handler.js';
-import type { CallExpression, MemberExpression, ArrowFunctionExpression, FunctionExpression, BlockStatement, Node } from '../ast/types.js';
+import type { CallExpression, MemberExpression, ArrowFunctionExpression, FunctionExpression, BlockStatement, IfStatement, Node } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
 
@@ -7,9 +7,12 @@ const WRITE_METHODS = new Set(['set', 'update', 'mutate']);
 
 /**
  * signal-prefer-computed-over-sync-effect
- * 
+ *
  * Detects effect() calls that manually update another signal.
  * In many cases, these should be computed() signals instead.
+ *
+ * Improvement: findSignalWrite now traverses IfStatement branches,
+ * catching conditional signal writes that were previously missed.
  */
 export const signalPreferComputedRule = createCallExpressionRule(
     'signal-prefer-computed-over-sync-effect',
@@ -68,6 +71,13 @@ function findSignalWrite(node: Node): Node | null {
         }
     }
 
+    // Traverse IfStatement branches — previously missed conditional signal writes
+    if (node.type === 'IfStatement') {
+        const ifStmt = node as IfStatement;
+        return findSignalWrite(ifStmt.consequent) ||
+               (ifStmt.alternate ? findSignalWrite(ifStmt.alternate) : null);
+    }
+
     if (node.type === 'CallExpression') {
         const call = node as CallExpression;
         if (call.callee.type === 'MemberExpression' || call.callee.type === 'StaticMemberExpression') {
@@ -81,9 +91,6 @@ function findSignalWrite(node: Node): Node | null {
     if (node.type === 'ExpressionStatement') {
         return findSignalWrite((node as any).expression);
     }
-
-    // Also check for assignment to signal values if using old patterns, 
-    // but in modern signals, it's usually .set()
 
     return null;
 }
