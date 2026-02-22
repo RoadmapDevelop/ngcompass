@@ -16,7 +16,7 @@ describe('Logger Module', () => {
     beforeEach(() => {
         // Reset logger state
         disableDebug();
-        consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => { });
     });
 
     afterEach(() => {
@@ -110,7 +110,8 @@ describe('Logger Module', () => {
                 'watch',
                 'autofix',
                 'init',
-                'config'
+                'config',
+                'env-fingerprint'
             ];
 
             namespaces.forEach(namespace => {
@@ -210,7 +211,7 @@ describe('Logger Module', () => {
             time('test'); // Second call should reset
 
             // Small delay
-            while (performance.now() - start2 < 5) {}
+            while (performance.now() - start2 < 5) { }
 
             const duration = timeEnd('test');
 

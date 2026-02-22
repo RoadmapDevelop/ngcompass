@@ -6,6 +6,15 @@ import type { PresetConfig, BuiltinPreset } from '../types.js';
 import { recommendedPreset } from './recommended.js';
 import { strictPreset } from './strict.js';
 import { allPreset } from './all.js';
+import { architecturePreset } from './architecture.js';
+import { performancePreset } from './performance.js';
+import { securityPreset } from './security.js';
+import { reactivityPreset } from './reactivity.js';
+import { bestPracticePreset } from './best-practice.js';
+import { codeSmellPreset } from './code-smell.js';
+import { accessibilityPreset } from './accessibility.js';
+import { testingPreset } from './testing.js';
+import { ssrPreset } from './ssr.js';
 
 /**
  * Registry of built-in presets
@@ -14,6 +23,15 @@ export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map(
     ['recommended', recommendedPreset],
     ['strict', strictPreset],
     ['all', allPreset],
+    ['architecture', architecturePreset],
+    ['performance', performancePreset],
+    ['security', securityPreset],
+    ['reactivity', reactivityPreset],
+    ['best-practice', bestPracticePreset],
+    ['code-smell', codeSmellPreset],
+    ['accessibility', accessibilityPreset],
+    ['testing', testingPreset],
+    ['ssr', ssrPreset],
 ]);
 
 /**

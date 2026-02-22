@@ -59,21 +59,36 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
         // but typically they appear as attributes in the raw parser unless processed.
         // In angular-html-parser, they are in 'attrs'.
 
-        // 3. Interpolations in Text
-        if (node.kind === 'text' && node.tokens) {
-            node.tokens.forEach((token: any) => {
-                // Type 8 is interpolation? based on observation
-                // Let's check parts. 
-                if (token.type === 8 && token.parts.length === 3) {
-                    // ["{{", " expr ", "}}"]
-                    const expr = token.parts[1];
-                    // The sourceSpan of the token covers {{ expr }}.
-                    // We need to find the offset of the expression inside.
-                    // token.sourceSpan.start.offset points to '{{'.
-                    const startOffset = token.sourceSpan.start.offset + token.parts[0].length;
-                    parseAndAdd(expr, startOffset, expressions);
+        // 3. Text and Interpolations
+        const isText = node.kind === 'text' || node.type === 'text' || node.constructor?.name === 'Text';
+        if (isText && node.value) {
+            // If tokens are available (some parser versions), use them
+            if (node.tokens) {
+                node.tokens.forEach((token: any) => {
+                    if (token.type === 8 && token.parts?.length === 3) {
+                        const expr = token.parts[1];
+                        const startOffset = token.sourceSpan.start.offset + token.parts[0].length;
+                        parseAndAdd(expr, startOffset, expressions);
+                    }
+                });
+            } else {
+                // Manual interpolation extraction for standard Text nodes
+                const value = node.value as string;
+                let lastIndex = 0;
+                while (true) {
+                    const start = value.indexOf('{{', lastIndex);
+                    if (start === -1) break;
+                    const end = value.indexOf('}}', start + 2);
+                    if (end === -1) break;
+
+                    const expr = value.substring(start + 2, end);
+                    // sourceSpan.start.offset is the absolute start of this text node in the template
+                    const nodeStart = node.sourceSpan?.start?.offset ?? 0;
+                    parseAndAdd(expr, nodeStart + start + 2, expressions);
+
+                    lastIndex = end + 2;
                 }
-            });
+            }
         }
     };
 
@@ -86,17 +101,27 @@ const parseAndAdd = (code: string, offset: number, outcomes: TemplateExpressionN
     if (!code.trim()) return;
 
     try {
-        // Parse as expression by wrapping in parentheses to support object literals {a:1} which would be block otherwise
-        // However, generic expressions should parse fine. 
-        // Using `parseSync` which returns a Program.
-        const ret = parseSync('template.ts', code, { sourceType: 'module', lang: 'ts' });
+        // Wrap in parentheses so that object literals like { color: 'red' } are parsed as
+        // ObjectExpression (inside an ExpressionStatement) rather than as a BlockStatement.
+        // This is safe for all Angular template expressions — identifiers, calls, ternaries,
+        // binary pipes (a | b), etc. all remain valid when wrapped.
+        const wrappedCode = `(${code})`;
+        const ret = parseSync('template.ts', wrappedCode, { sourceType: 'module', lang: 'ts' });
 
         if (ret.program.body.length > 0) {
             const stmt = ret.program.body[0];
             // Expect ExpressionStatement provided it's an expression
             if (stmt.type === 'ExpressionStatement' && stmt.expression) {
+                // Unwrap the ParenthesizedExpression node that oxc-parser creates when
+                // the source text is wrapped in `(...)`.  Without unwrapping, rules that
+                // test for e.g. ObjectExpression / ArrayExpression / BinaryExpression
+                // would see a ParenthesizedExpression root and miss the match.
+                let expr: any = stmt.expression;
+                if (expr.type === 'ParenthesizedExpression' && expr.expression) {
+                    expr = expr.expression;
+                }
                 outcomes.push({
-                    expression: stmt.expression as any, // Type cast compatible with our minimal types
+                    expression: expr,
                     sourceSpan: {
                         start: offset,
                         end: offset + code.length

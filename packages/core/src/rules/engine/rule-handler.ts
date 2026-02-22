@@ -16,9 +16,10 @@
  */
 
 import type { RuleFailure, RuleContext } from '../types.js';
-import type { AngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode } from './node-streams.js';
+import type { AngularClassNode, AnyAngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode } from './node-streams.js';
+import type { CallExpression, NewExpression } from '../ast/types.js';
 
-export type StreamType = 'AngularClass' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute';
+export type StreamType = 'AngularClass' | 'AnyAngularClass' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute' | 'CallExpression' | 'NewExpression';
 
 /**
  * Rule handler for a specific stream type.
@@ -53,6 +54,22 @@ export const createComponentRule = (
 ): RuleHandler<AngularClassNode> => ({
     name,
     streamType: 'AngularClass',
+    handle: handler,
+});
+
+/**
+ * Helper to create rules that handle ANY Angular-decorated class:
+ * @Component, @Directive, @Pipe, @Injectable, @NgModule.
+ *
+ * Use this instead of createComponentRule when the rule applies to
+ * classes beyond just @Component and @Directive.
+ */
+export const createAnyAngularClassRule = (
+    name: string,
+    handler: (node: AnyAngularClassNode, context: RuleContext) => RuleFailure | RuleFailure[] | null
+): RuleHandler<AnyAngularClassNode> => ({
+    name,
+    streamType: 'AnyAngularClass',
     handle: handler,
 });
 
@@ -92,6 +109,38 @@ export const createTemplateAttributeRule = (
 ): RuleHandler<TemplateAttributeNode> => ({
     name,
     streamType: 'TemplateAttribute',
+    handle: handler,
+    meta,
+});
+
+/**
+ * Helper to create call expression rule handlers.
+ *
+ * Receives every CallExpression node in the file's AST exactly once.
+ * The handler is responsible for its own callee-shape filtering
+ * (e.g. checking for a StaticMemberExpression callee and a specific method name).
+ */
+export const createCallExpressionRule = (
+    name: string,
+    handler: (node: CallExpression, context: RuleContext) => RuleFailure | RuleFailure[] | null,
+    meta?: Partial<import('../types.js').RuleMetadata>
+): RuleHandler<CallExpression> => ({
+    name,
+    streamType: 'CallExpression',
+    handle: handler,
+    meta,
+});
+
+/**
+ * Helper to create new expression rule handlers.
+ */
+export const createNewExpressionRule = (
+    name: string,
+    handler: (node: NewExpression, context: RuleContext) => RuleFailure | RuleFailure[] | null,
+    meta?: Partial<import('../types.js').RuleMetadata>
+): RuleHandler<NewExpression> => ({
+    name,
+    streamType: 'NewExpression',
     handle: handler,
     meta,
 });

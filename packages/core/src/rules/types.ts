@@ -117,6 +117,13 @@ export type BuiltinPreset =
     | 'strict'
     | 'performance'
     | 'accessibility'
+    | 'architecture'
+    | 'security'
+    | 'reactivity'
+    | 'best-practice'
+    | 'code-smell'
+    | 'ssr'
+    | 'testing'
     | 'all';
 
 /**

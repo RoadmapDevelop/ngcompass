@@ -5,89 +5,44 @@
  * Keys must match the ruleName field on RuleFailure exactly.
  */
 export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
-
-    // ── Phase 0: P0 — Migration Blockers ────────────────────────────────────
-
     'prefer-on-push-component-change-detection':
         'Enable `ChangeDetectionStrategy.OnPush` to minimize re-renders and rely on explicit input changes or async signals.',
-
-    'prefer-standalone':
-        'Add `standalone: true` and move imports to component metadata for a tree-shakable, NgModule-free architecture.',
-
-    'prefer-signal-inputs':
-        'Replace `@Input()` with `input<T>()` signals for type-safe, reactive, and lazily-evaluated bindings.',
-
     'template-no-call-expression':
-        'Move function calls to memoized getters, pure pipes, or `computed()` signals to prevent re-execution on every change cycle.',
-
-    'template-prefer-control-flow':
-        'Migrate `*ngIf`, `*ngFor`, and `*ngSwitch` to built-in `@if`, `@for`, and `@switch` blocks for better type-narrowing and smaller bundles.',
-
-    // ── Phase 0: P1 — High-ROI Quick Wins ───────────────────────────────────
-
-    'rxjs-no-nested-subscribe':
-        'Use flattening operators like `switchMap` or `concatMap` instead of nested `subscribe` calls to prevent leaks.',
-
-    'template-use-track-by-function':
-        'Add `track item.id` (in `@for`) or `trackBy` function (in `*ngFor`) to optimize list reconciliation.',
-
-    'no-input-rename':
-        'Remove aliases from `@Input` and match property names to binding attributes for clarity and safer refactoring.',
-
-    'component-selector':
-        'Rename selector to use the configured prefix and kebab-case (e.g., `app-my-component`) to prevent collisions.',
-
-    'directive-selector':
-        'Rename selector to use configured camelCase prefix (e.g., `[appMyDirective]`) for consistency.',
-
-    'rxjs-prefer-takeuntil':
-        'Use `takeUntil(destroy$)` or `takeUntilDestroyed()` to automatically close subscriptions and prevent memory leaks.',
-
-    // ── Phase 1: P2 — Migration Support ─────────────────────────────────────
-
-    'prefer-signal-queries':
-        'Replace `@ViewChild()` / `@ContentChild()` with signal-based `viewChild()` / `contentChild()` for lazy, reactive queries (Angular 17+).',
-
-    'use-inject':
-        'Replace constructor parameter injection with the `inject()` function for cleaner, inheritance-friendly, and more testable dependency injection.',
-
-    'no-attribute-decorator':
-        'Replace `@Attribute()` with `@Input()` or `input()` signals — they participate in change detection and the reactive graph.',
-
-    'template-no-negated-async':
-        'Replace `!(obs$ | async)` with an explicit null check like `(obs$ | async) === null` to avoid false positives before the observable emits.',
-
-    'rxjs-no-create':
-        'Replace `Observable.create(fn)` (removed in RxJS 7) with `new Observable(fn)` — identical semantics, modern syntax.',
-
-    // ── Phase 1: P3 — Code Quality & Safety ─────────────────────────────────
-
-    'implements-on-destroy':
-        'Add `implements OnDestroy` to the class declaration so TypeScript enforces the correct method signature and tooling recognises the lifecycle hook.',
-
-    'no-output-native':
-        'Rename the output to avoid colliding with the native DOM event — prefix it with the component name (e.g., `buttonClick` instead of `click`).',
-
-    'no-conflicting-lifecycle':
-        'Choose one lifecycle hook for each concern: use `ngOnChanges` for input reactions or `ngDoCheck` for custom dirty-checking, not both.',
-
-    'template-no-duplicate-attributes':
-        'Remove the duplicate attribute — the browser silently ignores all but the first occurrence, making the second binding dead code.',
-
-    'no-empty-lifecycle-method':
-        'Remove the empty lifecycle method — Angular handles absent hooks gracefully and the empty body adds noise without effect.',
-
-    // ── Phase 1: P4 — Naming & Conventions ──────────────────────────────────
-
-    'component-class-suffix':
-        'Rename the class to end with `Component` (e.g., `UserProfileComponent`) following Angular Style Guide rule 02-03.',
-
-    'directive-class-suffix':
-        'Rename the class to end with `Directive` (e.g., `HighlightDirective`) following Angular Style Guide rule 02-03.',
-
-    'no-output-on-prefix':
-        'Remove the `on` prefix from the output name (e.g., rename `onSave` → `save`) — template consumers add their own `on` prefix in handlers.',
-
-    'no-output-rename':
-        'Remove the alias from `@Output()` so the binding name matches the property name, keeping the API predictable and refactoring-safe.',
+        'Function calls in templates are executed on every change detection cycle.',
+    'rxjs-no-subscribe-in-component':
+        'Replace manual subscriptions with `toSignal()` or the `async` pipe to ensure automatic teardown and Signal compatibility.',
+    'rxjs-avoid-behaviorsubject-for-local-state':
+        'Replace BehaviorSubject with a Signal for local state to improve performance and simplify reactivity.',
+    'template-trackby-required-for-ngfor':
+        'Add a `trackBy` function to `*ngFor` to help Angular identify which items have changed and avoid unnecessary DOM recreations.',
+    'template-no-object-literal-binding':
+        'Avoid binding object literals directly in templates as they create new instances on every change detection cycle. Use a signal or state property instead.',
+    'template-no-array-literal-binding':
+        'Avoid binding array literals directly in templates as they create new instances on every change detection cycle. Use a signal or state property instead.',
+    'toSignal-require-initialValue':
+        'Provide an `initialValue` to `toSignal()` to ensure the signal has a valid state before the observable emits and to avoid unnecessary `undefined` types.',
+    'rxjs-avoid-subject-as-event-bus':
+        'Avoid using `Subject` as a local event bus. Direct event handlers or Signals are preferred for simpler, more performant communication.',
+    'signal-no-side-effects-in-computed':
+        'Computed signals must be pure. Move side effects like HTTP calls or state mutations to an `effect()` or a method.',
+    'signal-no-writes-in-computed':
+        'Avoid writing to other signals (e.g., via .set() or .update()) inside a computed signal to prevent reactive cycles.',
+    'prefer-inject-over-constructor-di':
+        'Use the `inject()` function instead of constructor parameters for dependency injection to improve compatibility with Signals and functional patterns.',
+    'component-no-manual-detect-changes':
+        'Avoid manual change detection calls like `detectChanges()` or `markForCheck()`. Use Signals to drive UI updates automatically and reliably.',
+    'rxjs-require-takeUntilDestroyed':
+        'Use `takeUntilDestroyed()` operator to ensure subscriptions are automatically cleaned up when the component is destroyed. Note: If used outside the constructor, you must provide a `DestroyRef`.',
+    'template-no-async-pipe-duplication':
+        'Avoid multiple `async` pipe subscriptions to the same observable. Use `@if (obs$ | async; as value)` or a view-model signal to share the subscription.',
+    'rxjs-prefer-toSignal-for-template-state':
+        'Convert template-only Observables to Signals using `toSignal()` to benefit from cleaner syntax and better performance.',
+    'signal-effect-must-be-destroy-scoped':
+        'Ensure `effect()` is created within an injection context (like a constructor or field initializer) or provided with a `DestroyRef` to ensure proper cleanup.',
+    'signal-no-effect-in-constructor':
+        'Move `effect()` from the constructor to a field initializer for better readability and consistent lifecycle behavior.',
+    'signal-prefer-computed-over-sync-effect':
+        'Use `computed()` instead of an `effect()` that manually updates another signal. Computed signals are more efficient and prevent reactive cycles.',
+    'signal-avoid-untracked-overuse':
+        'Use `untracked()` sparingly. Overusing it can mask reactive dependencies and lead to subtle bugs in signal derivations.',
 };

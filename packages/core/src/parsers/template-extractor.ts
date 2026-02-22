@@ -21,18 +21,38 @@ import type { Program } from 'oxc-parser';
 // ============================================
 
 /**
+ * Result of extracting an inline template from a TypeScript program.
+ */
+export interface ExtractedTemplate {
+    /** The raw HTML content of the template (no surrounding quotes/backticks). */
+    readonly content: string;
+    /**
+     * Byte offset in the TypeScript source file where `content[0]` lives.
+     *
+     * This is used to convert template-relative offsets (produced by the HTML
+     * parser, which only sees the template content) back into file-absolute
+     * offsets (required by `Locator.location()`).
+     *
+     * For external .html files this value is always 0 — the HTML file IS the
+     * template, so its offsets are already file-absolute.
+     */
+    readonly startOffset: number;
+}
+
+/**
  * Extracts the inline template string from the first @Component class found
  * in the given Oxc program.
  *
  * @param program - Oxc-parsed Program node
- * @returns The template string, or an empty string if none found
+ * @returns ExtractedTemplate with content and its start offset in the file,
+ *          or `{ content: '', startOffset: 0 }` if no template was found.
  */
-export function extractTemplateFromProgram(program: Program): string {
-    let result = '';
+export function extractTemplateFromProgram(program: Program): ExtractedTemplate {
+    let result: ExtractedTemplate = { content: '', startOffset: 0 };
 
     walkProgram(program, (node: any) => {
         // Once we have the template, stop walking (false = skip children)
-        if (result) return false;
+        if (result.content) return false;
 
         if (node.type === 'ClassDeclaration' && Array.isArray(node.decorators)) {
             const extracted = tryExtractFromClass(node);
@@ -54,7 +74,7 @@ export function extractTemplateFromProgram(program: Program): string {
  * Attempts to extract the `template` property value from a class decorated
  * with @Component.
  */
-function tryExtractFromClass(classNode: any): string {
+function tryExtractFromClass(classNode: any): ExtractedTemplate | null {
     for (const decorator of classNode.decorators) {
         const call = decorator?.expression;
         if (!call || call.type !== 'CallExpression') continue;
@@ -67,10 +87,10 @@ function tryExtractFromClass(classNode: any): string {
 
         const templateValue = findPropertyValue(objectArg.properties, 'template');
         if (templateValue) {
-            return extractStringValue(templateValue);
+            return extractStringValueWithOffset(templateValue);
         }
     }
-    return '';
+    return null;
 }
 
 /**
@@ -89,14 +109,35 @@ function findPropertyValue(properties: any[], keyName: string): any | null {
 }
 
 /**
- * Extracts a string value from a StringLiteral or TemplateLiteral node.
+ * Extracts a string value AND its start offset from a StringLiteral or
+ * TemplateLiteral AST node.
+ *
+ * The startOffset is the position of the *first content character* in the
+ * original TypeScript source file — i.e. the position right after the
+ * opening quote or backtick.
  */
-function extractStringValue(node: any): string {
-    if (!node) return '';
-    if (node.type === 'StringLiteral') return node.value ?? '';
+function extractStringValueWithOffset(node: any): ExtractedTemplate {
+    if (!node) return { content: '', startOffset: 0 };
+
+    if (node.type === 'StringLiteral') {
+        // node.start / node.span.start → position of the opening quote in the file
+        const nodeStart: number = node.start ?? node.span?.start ?? 0;
+        return {
+            content: node.value ?? '',
+            startOffset: nodeStart + 1, // +1 to skip the opening ' or "
+        };
+    }
+
     if (node.type === 'TemplateLiteral') {
         const quasis: any[] = node.quasis ?? [];
-        return quasis.map((q: any) => q.value?.raw ?? '').join('');
+        const content = quasis.map((q: any) => q.value?.raw ?? '').join('');
+        // The first quasi's start position points to the opening backtick
+        const firstStart: number = quasis[0]?.start ?? quasis[0]?.span?.start ?? 0;
+        return {
+            content,
+            startOffset: firstStart + 1, // +1 to skip the opening `
+        };
     }
-    return '';
+
+    return { content: '', startOffset: 0 };
 }

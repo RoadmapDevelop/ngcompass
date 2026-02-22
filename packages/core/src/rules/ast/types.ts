@@ -28,6 +28,12 @@ export interface CallExpression extends Node {
     readonly arguments: ReadonlyArray<Expression>;
 }
 
+export interface NewExpression extends Node {
+    readonly type: 'NewExpression';
+    readonly callee: Expression;
+    readonly arguments: ReadonlyArray<Expression>;
+}
+
 export interface MemberExpression extends Node {
     readonly type: 'MemberExpression' | 'StaticMemberExpression';
     readonly object: Expression;
@@ -64,6 +70,53 @@ export interface BooleanLiteral extends Node {
     readonly value: boolean;
 }
 
+export interface ArrowFunctionExpression extends Node {
+    readonly type: 'ArrowFunctionExpression';
+    readonly body: Expression | BlockStatement;
+    readonly expression: boolean;
+}
+
+export interface FunctionExpression extends Node {
+    readonly type: 'FunctionExpression';
+    readonly body: BlockStatement;
+}
+
+export interface BlockStatement extends Node {
+    readonly type: 'BlockStatement';
+    readonly body: ReadonlyArray<Node>;
+}
+
+export interface ExpressionStatement extends Node {
+    readonly type: 'ExpressionStatement';
+    readonly expression: Expression;
+}
+
+export interface AssignmentExpression extends Node {
+    readonly type: 'AssignmentExpression';
+    readonly left: Expression;
+    readonly right: Expression;
+    readonly operator: string;
+}
+
+export interface UpdateExpression extends Node {
+    readonly type: 'UpdateExpression';
+    readonly operator: string;
+    readonly argument: Expression;
+    readonly prefix: boolean;
+}
+
+export interface IfStatement extends Node {
+    readonly type: 'IfStatement';
+    readonly test: Expression;
+    readonly consequent: Node;
+    readonly alternate?: Node;
+}
+
+export interface ReturnStatement extends Node {
+    readonly type: 'ReturnStatement';
+    readonly argument?: Expression;
+}
+
 export interface ClassDeclaration extends Node {
     readonly type: 'ClassDeclaration';
     readonly id?: Identifier;
@@ -91,9 +144,14 @@ export interface MethodDefinition extends Node {
 export type Expression =
     | Identifier
     | CallExpression
+    | NewExpression
     | MemberExpression
     | ObjectExpression
     | ArrayExpression
     | StringLiteral
     | BooleanLiteral
+    | ArrowFunctionExpression
+    | FunctionExpression
+    | AssignmentExpression
+    | UpdateExpression
     | Node;
