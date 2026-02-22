@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import pc from 'picocolors';
+import { codeFrameColumns } from '@babel/code-frame';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -7,22 +8,6 @@ import pc from 'picocolors';
 
 /** Lines of source context shown above and below the violation line. */
 const CONTEXT_LINES = 2;
-
-/** Fallback caret width when no identifier or non-whitespace token is found at the target column. */
-const FALLBACK_CARET_WIDTH = 8;
-
-/**
- * Width of the active-line arrow prefix: `"> "` (2 chars).
- * Combined with the dynamic gutter width and GUTTER_PIPE_WIDTH gives the total
- * left-hand offset used to align the caret row beneath the source-start column.
- */
-const GUTTER_ARROW_WIDTH = 2;
-
-/**
- * Width of the gutter pipe separator: `" │ "` (3 chars).
- * See GUTTER_ARROW_WIDTH for context.
- */
-const GUTTER_PIPE_WIDTH = 3;
 
 // ---------------------------------------------------------------------------
 // Source reader abstraction
@@ -45,14 +30,6 @@ export interface SourceReader {
 
 /**
  * Process-lifetime cache of source lines, keyed by absolute file path.
- *
- * Eviction strategy: NEVER within a single process run.
- * Rationale: a source file is read at most once per analysis run; reporters
- * only access files that were already parsed, so staleness within the same
- * invocation is not a concern.
- *
- * Test implication: always call `clearSourceCache()` in `beforeEach` when
- * tests involve real file paths, to prevent cross-test pollution.
  */
 const sourceCache = new Map<string, string[]>();
 
@@ -95,119 +72,92 @@ export const defaultSourceReader: SourceReader = {
 };
 
 // ---------------------------------------------------------------------------
-// Token-length inference
-// ---------------------------------------------------------------------------
-
-/**
- * Estimates how many characters the token at `col` (1-indexed) spans on `line`.
- *
- * Matching priority:
- * 1. Identifier characters (`[A-Za-z0-9_$]+`).
- * 2. Any non-whitespace run.
- * 3. Fallback fixed width.
- *
- * @param line - The source line string.
- * @param col  - 1-indexed column of the token start.
- * @returns Estimated token character width.
- */
-function inferTokenLength(line: string, col: number): number {
-    const startIndex = Math.max(0, col - 1);
-    const rest = line.slice(startIndex);
-
-    const identMatch = rest.match(/^[A-Za-z0-9_$]+/);
-    if (identMatch) return identMatch[0].length;
-
-    const nonSpaceMatch = rest.match(/^\S+/);
-    if (nonSpaceMatch) return nonSpaceMatch[0].length;
-
-    return FALLBACK_CARET_WIDTH;
-}
-
-// ---------------------------------------------------------------------------
-// Frame renderer — pure helpers
-// ---------------------------------------------------------------------------
-
-/** Renders a single dim context (non-active) source line. */
-function renderContextLine(lineNumber: number, source: string, gutterWidth: number): string {
-    const label = String(lineNumber).padStart(gutterWidth);
-    return `  ${pc.dim(label)} ${pc.dim('│')} ${pc.dim(source)}`;
-}
-
-/**
- * Renders the active (violation) source line and the caret row beneath it.
- *
- * Returns two strings — the source line and the caret — to allow the caller
- * to push them individually into the output array without concatenation.
- */
-function renderActiveLine(
-    lineNumber: number,
-    source: string,
-    gutterWidth: number,
-    targetColumn: number,
-    caretWidth: number,
-): [sourceLine: string, caretLine: string] {
-    const label = String(lineNumber).padStart(gutterWidth);
-    const sourceLine = `${pc.red('>')} ${pc.bold(label)} ${pc.dim('│')} ${source}`;
-
-    const prefixWidth = GUTTER_ARROW_WIDTH + gutterWidth + GUTTER_PIPE_WIDTH;
-    const caretOffset = Math.max(0, targetColumn - 1);
-    const caretLine = ' '.repeat(prefixWidth) + ' '.repeat(caretOffset) + pc.red('^'.repeat(caretWidth));
-
-    return [sourceLine, caretLine];
-}
-
-// ---------------------------------------------------------------------------
 // Frame renderer — public entry point
 // ---------------------------------------------------------------------------
 
 /**
- * Renders a Biome-style code frame for a single violation.
- *
- * Returns an array of coloured strings — no leading padding; caller owns indent.
- * Returns an empty array when `lines` is empty (unreadable or missing file).
- *
- * Layout:
- *   "  {n} │ {source}"   ← context rows (dim)
- *   "> {n} │ {source}"   ← active row (normal)
- *   "      │ {col}^^^^"  ← caret row (red ^^^^^ spanning the token)
+ * Renders a code frame for a single violation using @babel/code-frame.
  *
  * @param lines        - All source lines for the file (from `readSourceLines`).
  * @param targetLine   - 1-indexed line number of the violation.
- * @param targetColumn - 1-indexed column number of the violation.
+ * @param _targetColumn - 1-indexed column number of the violation (ignored for full-line highlight).
+ * @param filePath      - Optional path to determine language highlighting.
  * @returns Coloured frame strings ready to be written to the output.
  */
 export function renderCodeFrame(
     lines: string[],
     targetLine: number,
-    targetColumn: number,
+    _targetColumn: number,
+    filePath?: string,
 ): string[] {
     if (lines.length === 0) return [];
 
-    const firstLine = Math.max(1, targetLine - CONTEXT_LINES);
-    const lastLine = Math.min(lines.length, targetLine + CONTEXT_LINES);
-    const gutterWidth = String(lastLine).length;
+    const isHtml = filePath?.toLowerCase().endsWith('.html');
+    const rawSource = lines.join('\n');
+    let highlightedSource = rawSource;
 
-    const activeSrc = lines[targetLine - 1] ?? '';
-    const caretWidth = inferTokenLength(activeSrc, targetColumn);
-
-    const rendered: string[] = [];
-
-    for (let lineNumber = firstLine; lineNumber <= lastLine; lineNumber++) {
-        const source = lines[lineNumber - 1] ?? '';
-
-        if (lineNumber === targetLine) {
-            const [sourceLine, caretLine] = renderActiveLine(
-                lineNumber,
-                source,
-                gutterWidth,
-                targetColumn,
-                caretWidth,
-            );
-            rendered.push(sourceLine, caretLine);
-        } else {
-            rendered.push(renderContextLine(lineNumber, source, gutterWidth));
-        }
+    if (isHtml) {
+        // Basic HTML highlighting: Tags in cyan, attributes in yellow, values in green
+        // This is a naive regex-based highligher for the code frame.
+        highlightedSource = rawSource
+            .replace(/(&lt;[a-zA-Z0-9-]+)/g, pc.cyan('$1'))
+            .replace(/(&gt;)/g, pc.cyan('$1'))
+            .replace(/([a-zA-Z-]+)=/g, pc.yellow('$1='))
+            .replace(/"([^"]*)"/g, pc.green('"$1"'));
+        // Note: Babel's codeFrameColumns with highlightCode: false preserves these ANSI codes.
     }
 
-    return rendered;
+    const activeLineContent = lines[targetLine - 1] ?? '';
+    const trimmed = activeLineContent.trimEnd();
+    const firstNonSpace = activeLineContent.search(/\S/);
+    const startColumn = firstNonSpace === -1 ? 1 : firstNonSpace + 1;
+    const endColumn = Math.max(startColumn, trimmed.length + 1);
+
+    const frame = codeFrameColumns(
+        highlightedSource,
+        {
+            start: { line: targetLine, column: startColumn },
+            end: { line: targetLine, column: endColumn },
+        },
+        {
+            highlightCode: !isHtml, // Use Babel's highlighter for non-HTML (JS/TS)
+            linesAbove: CONTEXT_LINES,
+            linesBelow: CONTEXT_LINES,
+        },
+    );
+
+    // Babel produces a multiline string. We split it to apply our custom padding and indicators.
+    return frame.split('\n').map((line) => {
+        let processed = line;
+
+        // 1. Detect active line vs context line
+        const isActive = line.trimStart().startsWith('>');
+        const isCaretLine = line.includes('^');
+
+        // 2. Extract and color the gutter (line numbers / pipe)
+        processed = processed.replace(/(\s*)(\d+)(\s*\|)/, (_, s1, num, s2) => {
+            return s1 + pc.blue(num) + pc.blue(s2);
+        });
+
+        // 3. Style the indicator (Cyan ❯)
+        if (isActive) {
+            processed = processed.replace('>', pc.cyan('❯'));
+        } else {
+            // Adjust prefix for alignment
+            processed = ' ' + processed;
+        }
+
+        // 4. Style the caret (Bright Red)
+        if (isCaretLine) {
+            processed = processed.replace(/\^+/g, (match) => pc.red(match));
+        }
+
+        // 5. Style comments (Italicized Dim Grey)
+        processed = processed.replace(/(\/\/.*|\/\*.*?\*\/)/g, (match) => {
+            return pc.dim(pc.italic(pc.gray(match)));
+        });
+
+        // Add 2 spaces of left padding for a "less crowded" look.
+        return '  ' + processed;
+    });
 }

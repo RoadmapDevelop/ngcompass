@@ -9,7 +9,7 @@ function makeResult(failures: RuleResult['failures']): RuleResult {
 
 function makeFailure(overrides: Partial<RuleResult['failures'][0]> = {}): RuleResult['failures'][0] {
     return {
-        filePath: '/project/src/app.component.ts',
+        filePath: 'src/app.component.ts', // Relative path for predictable testing
         message: 'Use OnPush change detection',
         line: 5,
         column: 1,
@@ -46,8 +46,12 @@ describe('ConsoleReporter', () => {
         it('outputs file header and violation line for a failure', () => {
             reporter.report([makeResult([makeFailure()])]);
             const output = out.lines.join('\n');
-            expect(output).toContain('app.component.ts');
-            expect(output).toContain('5:1');
+            // Check for the FAIL tag and path (case-insensitive and platform-agnostic)
+            expect(output).toMatch(/FAIL/i);
+            expect(output).toMatch(/src[\\\/]app\.component\.ts/);
+            // Check for the location line with ❯ indicator
+            expect(output).toContain('❯');
+            expect(output).toMatch(/5:1/);
             expect(output).toContain('prefer-on-push');
         });
 
@@ -71,36 +75,22 @@ describe('ConsoleReporter', () => {
                     makeFailure({ filePath: '/project/src/a.component.ts' }),
                 ]),
             ]);
-            const fileLines = out.lines.filter(l => l.includes('.component.ts'));
-            expect(fileLines[0]).toContain('a.component.ts');
-            expect(fileLines[1]).toContain('z.component.ts');
+            // The header line contains 'FAIL ' or 'WARN ' followed by the path
+            const headerLines = out.lines.filter(l => l.match(/(FAIL|WARN)\s+.*\.component\.ts/));
+            expect(headerLines[0]).toContain('a.component.ts');
+            expect(headerLines[1]).toContain('z.component.ts');
         });
 
-        it('shows fix recommendation in verbose mode', () => {
-            const verboseReporter = new ConsoleReporter(out.output, { verbose: true });
-            verboseReporter.report([makeResult([makeFailure({ fix: 'Add standalone: true' })])]);
-            expect(out.lines.some(l => l.includes('Add standalone: true'))).toBe(true);
-        });
-
-        it('does not show fix recommendation without verbose flag', () => {
+        it('shows fix recommendation', () => {
             reporter.report([makeResult([makeFailure({ fix: 'Add standalone: true' })])]);
-            expect(out.lines.some(l => l.includes('Add standalone: true'))).toBe(false);
+            expect(out.lines.some(l => l.includes('❯') && l.includes('Add standalone: true'))).toBe(true);
         });
     });
 
     describe('summary()', () => {
-        it('outputs file count, task count, and duration', () => {
+        it('does not output anything (minimal summary requested)', () => {
             reporter.summary(stats);
-            const line = out.lines[0];
-            expect(line).toContain('10 files');
-            expect(line).toContain('20 tasks');
-            expect(line).toContain('5 cached');
-            expect(line).toContain('123ms');
-        });
-
-        it('omits cached info when cachedTasks is undefined', () => {
-            reporter.summary({ ...stats, cachedTasks: undefined });
-            expect(out.lines[0]).not.toContain('cached');
+            expect(out.lines.length).toBe(0);
         });
     });
 
