@@ -28,5 +28,8 @@ export const templateNoObjectLiteralBindingRule = createTemplateExpressionRule(
         }
 
         return null;
+    },
+    {
+        requires: { htmlAst: true }
     }
 );

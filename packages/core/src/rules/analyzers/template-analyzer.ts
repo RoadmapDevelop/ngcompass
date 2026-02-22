@@ -101,17 +101,27 @@ const parseAndAdd = (code: string, offset: number, outcomes: TemplateExpressionN
     if (!code.trim()) return;
 
     try {
-        // Parse as expression by wrapping in parentheses to support object literals {a:1} which would be block otherwise
-        // However, generic expressions should parse fine. 
-        // Using `parseSync` which returns a Program.
-        const ret = parseSync('template.ts', code, { sourceType: 'module', lang: 'ts' });
+        // Wrap in parentheses so that object literals like { color: 'red' } are parsed as
+        // ObjectExpression (inside an ExpressionStatement) rather than as a BlockStatement.
+        // This is safe for all Angular template expressions — identifiers, calls, ternaries,
+        // binary pipes (a | b), etc. all remain valid when wrapped.
+        const wrappedCode = `(${code})`;
+        const ret = parseSync('template.ts', wrappedCode, { sourceType: 'module', lang: 'ts' });
 
         if (ret.program.body.length > 0) {
             const stmt = ret.program.body[0];
             // Expect ExpressionStatement provided it's an expression
             if (stmt.type === 'ExpressionStatement' && stmt.expression) {
+                // Unwrap the ParenthesizedExpression node that oxc-parser creates when
+                // the source text is wrapped in `(...)`.  Without unwrapping, rules that
+                // test for e.g. ObjectExpression / ArrayExpression / BinaryExpression
+                // would see a ParenthesizedExpression root and miss the match.
+                let expr: any = stmt.expression;
+                if (expr.type === 'ParenthesizedExpression' && expr.expression) {
+                    expr = expr.expression;
+                }
                 outcomes.push({
-                    expression: stmt.expression as any, // Type cast compatible with our minimal types
+                    expression: expr,
                     sourceSpan: {
                         start: offset,
                         end: offset + code.length

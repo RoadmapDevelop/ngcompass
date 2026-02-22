@@ -4,10 +4,24 @@ import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
+ * Valid teardown operators that prevent memory leaks in RxJS subscriptions.
+ * All of these guarantee the subscription completes, either by lifecycle scoping
+ * or by completing after a fixed number of emissions.
+ */
+const VALID_TEARDOWN_OPERATORS = new Set([
+    'takeUntilDestroyed', // Angular's preferred lifecycle-scoped teardown
+    'takeUntil',          // Manual subject-based teardown
+    'take',               // Fixed emission count teardown
+    'first',              // Completes after first emission
+    'takeWhile',          // Condition-based teardown
+]);
+
+/**
  * rxjs-require-takeUntilDestroyed
- * 
- * Detects .subscribe() calls that don't have a takeUntilDestroyed() operator.
- * This is the most common cause of memory leaks in legacy Angular apps.
+ *
+ * Detects .subscribe() calls that don't have a recognized teardown operator.
+ * Accepts takeUntilDestroyed (preferred), takeUntil, take, first, and takeWhile
+ * as valid alternatives to prevent memory leaks.
  */
 export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
     'rxjs-require-takeUntilDestroyed',
@@ -20,8 +34,8 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
         const member = callee as MemberExpression;
         if (member.property.name !== 'subscribe') return null;
 
-        // We found a .subscribe() call. 
-        // Now check if the object we are calling .subscribe() on is a .pipe() call containing takeUntilDestroyed
+        // We found a .subscribe() call.
+        // Now check if the observable is piped with a recognized teardown operator.
         const observable = member.object;
         let hasTeardown = false;
 
@@ -32,7 +46,6 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
             if (obsCallee.type === 'MemberExpression' || obsCallee.type === 'StaticMemberExpression') {
                 const obsMember = obsCallee as MemberExpression;
 
-                // If it's .pipe(...)
                 if (obsMember.property.name === 'pipe') {
                     const pipeArgs = obsCall.arguments;
                     for (const arg of pipeArgs) {
@@ -40,7 +53,15 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
                             const operatorCall = arg as CallExpression;
                             const opCallee = operatorCall.callee;
 
-                            if (opCallee.type === 'Identifier' && (opCallee as any).name === 'takeUntilDestroyed') {
+                            // Check for bare operator: takeUntilDestroyed(), take(1), first(), etc.
+                            if (opCallee.type === 'Identifier' && VALID_TEARDOWN_OPERATORS.has((opCallee as any).name)) {
+                                hasTeardown = true;
+                                break;
+                            }
+
+                            // Check for namespaced operator: rxjs.takeUntilDestroyed(), etc.
+                            if ((opCallee.type === 'MemberExpression' || opCallee.type === 'StaticMemberExpression') &&
+                                VALID_TEARDOWN_OPERATORS.has((opCallee as any).property?.name)) {
                                 hasTeardown = true;
                                 break;
                             }
@@ -57,7 +78,7 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
             return {
                 filePath: context.filePath,
                 ruleName: 'rxjs-require-takeUntilDestroyed',
-                message: 'Subscriptions in components must use takeUntilDestroyed() to prevent leaks.',
+                message: 'Subscriptions in components must use a teardown operator (takeUntilDestroyed, takeUntil, take, first, takeWhile) to prevent memory leaks.',
                 line,
                 column,
                 severity: 'high',

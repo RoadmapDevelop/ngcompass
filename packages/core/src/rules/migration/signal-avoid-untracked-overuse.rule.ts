@@ -5,10 +5,17 @@ import { RECOMMENDATIONS } from '../recommendations.js';
 
 /**
  * signal-avoid-untracked-overuse
- * 
- * Flags usage of untracked().
- * While sometimes necessary, overusing untracked() makes code harder to reason about 
- * and can hide reactive bugs.
+ *
+ * Flags every usage of untracked() as an advisory notice.
+ *
+ * untracked() is a valid Angular primitive, but each usage is a deliberate
+ * opt-out from reactive dependency tracking. This rule surfaces each call
+ * so that developers can review whether the opt-out is intentional and
+ * necessary — preventing accidental dependency silencing that hides bugs.
+ *
+ * Severity is 'low' because untracked() IS sometimes necessary (e.g., reading
+ * a signal inside an effect without subscribing to its changes). The goal is
+ * awareness, not prohibition.
  */
 export const signalAvoidUntrackedRule = createCallExpressionRule(
     'signal-avoid-untracked-overuse',
@@ -32,7 +39,7 @@ export const signalAvoidUntrackedRule = createCallExpressionRule(
             return {
                 filePath: context.filePath,
                 ruleName: 'signal-avoid-untracked-overuse',
-                message: 'Avoid overusing untracked(). It breaks the reactive dependency chain and can mask logic errors.',
+                message: 'Review this untracked() call. Each usage intentionally opts out of reactive tracking — ensure this is deliberate and necessary to avoid masking reactive dependency bugs.',
                 line,
                 column,
                 severity: 'low',

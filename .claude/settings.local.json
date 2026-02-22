@@ -12,7 +12,10 @@
       "Bash(dir:*)",
       "Bash(done)",
       "Bash(node:*)",
-      "Bash(xargs:*)"
+      "Bash(xargs:*)",
+      "Bash(npm run build:*)",
+      "Bash(where:*)",
+      "Bash(compass analyze:*)"
     ]
   }
 }
