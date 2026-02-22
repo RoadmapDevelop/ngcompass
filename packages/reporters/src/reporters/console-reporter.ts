@@ -24,9 +24,6 @@ const TYPE_WIDTH_ERROR = 5;
 /** Column width reserved for the "warning" label in compact mode (`'warning'.length`). */
 const TYPE_WIDTH_WARNING = 7;
 
-/** Fallback terminal width when stdout is not a TTY (e.g. piped output). */
-const FALLBACK_TERMINAL_WIDTH = 80;
-
 /**
  * Number of lines to skip at the start of `Error.stack` to omit the redundant
  * header line, which duplicates `error.message`.
@@ -46,19 +43,26 @@ const TRAILING_PERIOD_RE = /\.$/;
 // Pure terminal helpers
 // ---------------------------------------------------------------------------
 
-/** Returns the current terminal width, safe for use in piped environments. */
-function terminalWidth(): number {
-    return process.stdout.columns ?? FALLBACK_TERMINAL_WIDTH;
-}
 
-/** Full-width separator drawn between consecutive failure cards. */
-function issueSeparator(): string {
-    return pc.gray('─'.repeat(terminalWidth()));
-}
-
-/** Full-width dim separator drawn before the final summary line. */
-function summaryDivider(): string {
-    return pc.dim('─'.repeat(terminalWidth()));
+/**
+ * Builds an indexed separator line:
+ *
+ *   ───────────────────────────────[3/33]─
+ *
+ * The index label is right-aligned; dashes fill the remaining width.
+ * This acts as a header bar for each failure card, replacing the plain
+ * `────────────────────────────────────` separator from the previous design.
+ *
+ * @param index - 1-based card index.
+ * @param total - Total number of failures across all files.
+ */
+function buildIndexedSeparator(index: number, total: number): string {
+    const label = `[${index}/${total}]`;
+    const FIXED_WIDTH = 160;
+    // Dotted line with label at the end, total width 160
+    const dotCount = Math.max(1, FIXED_WIDTH - label.length);
+    const content = '·'.repeat(dotCount) + label;
+    return pc.dim(pc.gray(content));
 }
 
 // ---------------------------------------------------------------------------
@@ -131,9 +135,10 @@ function computeLocationWidth(failures: RuleFailure[]): number {
 
 function buildSummaryLine(errorCount: number, warningCount: number): string {
     const total = errorCount + warningCount;
-    const colorFn = errorCount > 0 ? pc.red : pc.yellow;
+    // Error problem count is red, warning-only is yellow
+    const xColor = errorCount > 0 ? pc.red : pc.yellow;
     return (
-        `${colorFn('×')} ${total} problem${total !== 1 ? 's' : ''} ` +
+        `${xColor('×')} ${total} problem${total !== 1 ? 's' : ''} ` +
         `(${errorCount} error${errorCount !== 1 ? 's' : ''}, ` +
         `${warningCount} warning${warningCount !== 1 ? 's' : ''})`
     );
@@ -164,27 +169,50 @@ function buildCompactFailureLine(
 }
 
 // ---------------------------------------------------------------------------
-// Rich-mode pure formatter
+// Rich-mode pure formatters
 // ---------------------------------------------------------------------------
 
 /**
- * Builds the Biome-style issue header lines:
+ * Builds the card header line — severity badge on the left, file path + location on the right:
  *
- *   1  ██ ERROR ██  prefer-on-push
- *   --> src/app/app.component.ts:5:18
+ *   ██ ERROR ██  src\app\violations\rule01.ts:33:5
  *
- * Why a coloured background badge rather than text colour alone:
- * ensures readability in terminals where only background colour is supported.
+ * No issue index is shown; the index lives in the preceding indexed separator.
+ * This keeps the header concise and mirrors the style of the reference image.
+ *
+ * @param failure  - The rule failure being rendered.
+ * @param filePath - Relative file path (already computed by the caller).
  */
-function buildIssueHeader(failure: RuleFailure, index: number, filePath: string): string[] {
+function buildCardHeader(failure: RuleFailure, filePath: string): string {
     const isError = isErrorSeverity(failure.severity);
     const badge = isError
-        ? pc.bgRed(pc.white(pc.bold(' ERROR ')))
-        : pc.bgYellow(pc.black(pc.bold(' WARN  ')));
+        ? pc.bgRed(pc.white(pc.bold(' FAIL ')))
+        : pc.bgYellow(pc.white(pc.bold(' WARN ')));
 
-    const header = `${pc.bold(pc.white(String(index)))}  ${badge}  ${pc.dim(failure.ruleName)}`;
-    const location = pc.gray(`--> ${filePath}:${failure.line}:${failure.column}`);
-    return [header, location];
+    // Use full relative path as shown in the screenshot
+    return `${badge} ${filePath}`;
+}
+
+/**
+ * Builds the message line — the violation message itself:
+ *
+ *   TypeError: Cannot read properties of undefined (reading 'assert')
+ */
+function buildCardMessageLine(failure: RuleFailure): string {
+    const isError = isErrorSeverity(failure.severity);
+    const message = failure.message.replace(TRAILING_PERIOD_RE, '');
+    const coloredMsg = isError ? pc.red(message) : pc.yellow(message);
+    return `${coloredMsg}  ${pc.dim(pc.dim(failure.ruleName))}`;
+}
+
+/**
+ * Builds the location line — the relative path with line and column:
+ *
+ *   > packages/core/tests/scanner/patterns.test.ts:403:16
+ */
+function buildCardLocationLine(failure: RuleFailure, filePath: string): string {
+    const loc = pc.cyan(`${filePath}:${failure.line}:${failure.column}`);
+    return `${pc.cyan('❯')} ${loc}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -194,14 +222,15 @@ function buildIssueHeader(failure: RuleFailure, index: number, filePath: string)
 /**
  * All data required to render a single failure card.
  *
- * Using a context DTO keeps `renderRichCard`'s signature at 1 argument and
- * makes future additions (e.g. a total-count pager) backward-compatible
- * without needing to change every call-site.
+ * `total` is carried alongside `index` so `buildIndexedSeparator` can produce
+ * the `[X/TOTAL]` label without any external mutable state.
  */
 interface FailureCard {
     readonly failure: RuleFailure;
-    /** 1-based display index shown to the user. */
+    /** 1-based display index shown in the separator. */
     readonly index: number;
+    /** Total failure count across all files — used in the `[X/TOTAL]` label. */
+    readonly total: number;
     /** Relative file path, already computed by the caller. */
     readonly relFilePath: string;
     /**
@@ -265,17 +294,12 @@ export class ConsoleReporter implements Reporter {
         const { errorCount, warningCount } = countSeverities(allFailures);
 
         this.out.write('');
-        this.renderFileBlocks(byFile, sortedFilePaths);
+        this.renderFileBlocks(byFile, sortedFilePaths, allFailures.length);
         this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount)));
     }
 
-    summary(stats: ResultSummary): void {
-        const cachedInfo = stats.cachedTasks ? ` (${stats.cachedTasks} cached)` : '';
-        this.out.write(
-            pc.gray(`Analyzed ${stats.totalFiles} file${stats.totalFiles !== 1 ? 's' : ''} · `) +
-            pc.gray(`${stats.totalTasks} task${stats.totalTasks !== 1 ? 's' : ''}${cachedInfo} · `) +
-            pc.gray(`${stats.duration.toFixed(0)}ms`),
-        );
+    summary(_stats: ResultSummary): void {
+        // No-op as requested: "remove that says analyzed blah blah etc"
     }
 
     error(error: Error): void {
@@ -329,18 +353,22 @@ export class ConsoleReporter implements Reporter {
      * Dispatches rendering to either compact or rich mode and appends the
      * summary divider (rich mode only). Separating dispatch from rendering
      * satisfies SRP and makes each mode independently testable.
+     *
+     * @param total - Total failure count; threaded through to rich-mode cards
+     *                so each card's indexed separator can display `[X/TOTAL]`.
      */
     private renderFileBlocks(
         byFile: Map<string, RuleFailure[]>,
         sortedFilePaths: string[],
+        total: number,
     ): void {
         if (this.compact) {
             this.renderCompactBlocks(byFile, sortedFilePaths);
             return;
         }
 
-        this.renderRichBlocks(byFile, sortedFilePaths);
-        this.out.write(summaryDivider());
+        this.renderRichBlocks(byFile, sortedFilePaths, total);
+        // End line removed as requested
     }
 
     // -------------------------------------------------------------------------
@@ -378,18 +406,19 @@ export class ConsoleReporter implements Reporter {
     }
 
     // -------------------------------------------------------------------------
-    // Rich rendering — Biome-style (commands only — void return)
+    // Rich rendering (commands only — void return)
     // -------------------------------------------------------------------------
 
     private renderRichBlocks(
         byFile: Map<string, RuleFailure[]>,
         sortedFilePaths: string[],
+        total: number,
     ): void {
         let globalIndex = 0;
 
         for (const filePath of sortedFilePaths) {
             const failures = byFile.get(filePath)!;
-            globalIndex = this.renderRichFileBlock(filePath, failures, globalIndex);
+            globalIndex = this.renderRichFileBlock(filePath, failures, globalIndex, total);
         }
     }
 
@@ -403,6 +432,7 @@ export class ConsoleReporter implements Reporter {
         filePath: string,
         failures: RuleFailure[],
         startIndex: number,
+        total: number,
     ): number {
         const sorted = sortedByPosition(failures);
 
@@ -413,6 +443,7 @@ export class ConsoleReporter implements Reporter {
             this.renderRichCard({
                 failure,
                 index: startIndex + offset + 1,
+                total,
                 relFilePath: filePath,
                 sourceLines,
             });
@@ -422,50 +453,57 @@ export class ConsoleReporter implements Reporter {
     }
 
     /**
-     * Renders one Biome-style failure card:
+     * Renders one failure card in the new compact style:
      *
-     *   1  ██ ERROR ██  prefer-on-push
-     *   --> src/app/app.component.ts:5:18
+     *   ────────────────────────────────────[3/33]─
+     *    ERROR  src\app\violations\rule01.ts:33:5
+     *   × Avoid manual change detection  component-no-manual-detect-changes
      *
-     *   × Use OnPush change detection
-     *
-     *     3 │ ...
-     *   > 5 │ ...
-     *          ^^^^^^^^^
-     *     6 │ ...
+     *     31 │ this.counter++;
+     *   > 33 │     this.cdr.detectChanges();
+     *                ^^^^^^^^^^^^^^^^^^^^^^
+     *     35 │ }
      *
      *   i Add changeDetection: ChangeDetectionStrategy.OnPush
+     *
+     * Layout decisions vs the old design:
+     *   - Indexed separator `[X/TOTAL]` replaces the plain `────` divider and
+     *     the `1  ██ ERROR ██  rule-name` header line — fewer total lines.
+     *   - Badge + filepath:line:col on one line (no separate `--> path` line).
+     *   - Message + rule name on one line (dimmed rule name on the right).
+     *   - Fix text appears immediately after the code frame (no extra blank line
+     *     between frame and fix when fix is absent — card ends cleanly).
      */
     private renderRichCard(card: FailureCard): void {
-        // Separator appears before every card except the very first.
-        if (card.index > 1) this.out.write(issueSeparator());
+        this.out.write('');
+        // ── [X/TOTAL]─
+        this.out.write(buildIndexedSeparator(card.index, card.total));
+        this.out.write('');
 
-        this.renderCardHeader(card);
+        // FAIL  path/to/file.ts
+        this.out.write(buildCardHeader(card.failure, card.relFilePath));
+
+        // Error message  rule-name
+        this.out.write(buildCardMessageLine(card.failure));
+
+        // > path/to/file.ts:line:col
+        this.out.write(buildCardLocationLine(card.failure, card.relFilePath));
         this.out.write('');
-        this.renderCardMessage(card.failure);
-        this.out.write('');
+
+        // Syntax-highlighted code frame with left padding
         this.renderCardCodeFrame(card);
         this.out.write('');
+
+
         this.renderCardRecommendation(card.failure);
-    }
 
-    private renderCardHeader({ failure, index, relFilePath }: FailureCard): void {
-        for (const line of buildIssueHeader(failure, index, relFilePath)) {
-            this.out.write(line);
-        }
-    }
-
-    private renderCardMessage(failure: RuleFailure): void {
-        const isError = isErrorSeverity(failure.severity);
-        const bullet = isError ? pc.red('×') : pc.yellow('!');
-        this.out.write(`${bullet} ${pc.white(failure.message.replace(TRAILING_PERIOD_RE, ''))}`);
     }
 
     private renderCardCodeFrame({ sourceLines, failure }: FailureCard): void {
         // Skip silently when the source file could not be read (e.g. temp or deleted file).
         if (sourceLines.length === 0) return;
 
-        const frameLines = renderCodeFrame(sourceLines, failure.line, failure.column);
+        const frameLines = renderCodeFrame(sourceLines, failure.line, failure.column, failure.filePath);
         for (const line of frameLines) {
             this.out.write(line);
         }
@@ -473,7 +511,7 @@ export class ConsoleReporter implements Reporter {
 
     private renderCardRecommendation(failure: RuleFailure): void {
         if (!failure.fix) return;
-        this.out.write(`${pc.cyan('i')} ${pc.cyan(failure.fix)}`);
+        this.out.write(`${pc.cyan('❯')} ${pc.cyan(failure.fix)}`);
         this.out.write('');
     }
 }
