@@ -1,79 +1,103 @@
 import { createCallExpressionRule } from '../engine/rule-handler.js';
 import type { CallExpression } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
-import { RECOMMENDATIONS } from '../recommendations.js';
+import { RECOMMENDATIONS, CODE_EXAMPLES } from '../recommendations.js';
+import {
+    type AstNode,
+    unwrapNode,
+    isMemberExpressionLike,
+    getStaticPropertyName,
+    getNodeStart,
+} from '../rule-utils.js';
 
 const DISCOURAGED_CDR_METHODS = new Set(['detectChanges', 'markForCheck']);
 
-/**
- * Common variable names used to hold a ChangeDetectorRef instance.
- * Used as a heuristic to avoid false positives on unrelated method calls
- * like this.someService.detectChanges() on a non-CDR object.
- */
 const CDR_VAR_NAMES = new Set([
-    'cdr', 'cd', 'changeDetectorRef', 'changeDetector',
-    '_cdr', '_cd', 'detector', 'cdRef', 'ref',
+    'cdr', 'cdref', 'changedetectorref', '_cdr', '_cdref',
+    'changedetector', '_changedetector', 'changedetectionref',
+    'cd', '_cd', 'ref',
 ]);
 
+function getReceiverIdentifier(memberObject: AstNode | null | undefined): string {
+    const obj = unwrapNode(memberObject);
+    if (!obj) return '';
+    if (obj.type === 'Identifier') return (obj.name as string) ?? '';
+    if (isMemberExpressionLike(obj)) return getStaticPropertyName(obj) || '';
+    return '';
+}
+
 /**
- * component-no-manual-detect-changes
+ * Returns true when the source text contains any ChangeDetectorRef-related symbols.
+ * Used as a gate before allowing bare-identifier CDR method detection.
+ */
+function hasChangeDetectorRefSignals(sourceText: string | undefined): boolean {
+    if (typeof sourceText !== 'string') return false;
+    return (
+        /\bChangeDetectorRef\b/.test(sourceText) ||
+        /\bdetectChanges\b/.test(sourceText) ||
+        /\bmarkForCheck\b/.test(sourceText)
+    );
+}
+
+/**
+ * Per-file cache for the CDR signals presence check.
  *
- * Detects manual calls to ChangeDetectorRef methods.
- * In modern Angular, state changes should be driven by Signals,
- * which automatically handle change detection more efficiently.
- *
- * Heuristic: For MemberExpression calls, only flags when the receiver object
- * name matches common CDR variable naming conventions to avoid false positives
- * on unrelated objects that happen to have the same method names.
+ * The CallExpression rule fires for every call node in a file. Without caching,
+ * hasChangeDetectorRefSignals() would run 3 regex scans on the full source text
+ * for every single call expression — potentially dozens of times per component.
+ * Keyed by filePath: stable within a single analysis session.
+ */
+const fileCdrPresenceCache = new Map<string, boolean>();
+
+function fileContainsCdrSignals(filePath: string, sourceText: string | undefined): boolean {
+    const cached = fileCdrPresenceCache.get(filePath);
+    if (cached !== undefined) return cached;
+
+    const result = hasChangeDetectorRefSignals(sourceText);
+    fileCdrPresenceCache.set(filePath, result);
+    return result;
+}
+
+/**
+ * Flags manual change detection triggers in Angular component files.
  */
 export const componentNoManualDetectChangesRule = createCallExpressionRule(
     'component-no-manual-detect-changes',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
         if (!context.filePath.endsWith('.component.ts')) return null;
 
-        const callee = node.callee;
+        const sourceText: string | undefined = (context as any).sourceText;
+        const allowBareIdentifierChecks = fileContainsCdrSignals(context.filePath, sourceText);
+
+        const callee = unwrapNode((node as any).callee);
         let methodName = '';
         let shouldFlag = false;
 
-        // 1. Handle this.cdr.detectChanges(), cdr.detectChanges(), or cdr?.detectChanges()
-        if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression' || (callee.type as string) === 'OptionalMemberExpression') {
-            const member = callee as any;
-            methodName = member.property?.name ?? '';
-
+        if (isMemberExpressionLike(callee)) {
+            methodName = getStaticPropertyName(callee);
             if (DISCOURAGED_CDR_METHODS.has(methodName)) {
-                // Apply heuristic: check if the receiver object looks like a CDR instance.
-                // This prevents false positives like this.someService.detectChanges().
-                const receiverObj = member.object;
-                const receiverName: string =
-                    receiverObj?.type === 'Identifier' ? receiverObj.name :            // cdr.detectChanges()
-                    receiverObj?.type === 'MemberExpression' || receiverObj?.type === 'StaticMemberExpression'
-                        ? receiverObj.property?.name ?? ''                             // this.cdr.detectChanges()
-                        : '';
-
-                shouldFlag = CDR_VAR_NAMES.has(receiverName.toLowerCase());
+                const receiverName = getReceiverIdentifier(callee?.object).toLowerCase();
+                shouldFlag = CDR_VAR_NAMES.has(receiverName);
             }
-        }
-        // 2. Handle destructured detectChanges() — always flag these
-        else if (callee.type === 'Identifier') {
-            methodName = (callee as any).name;
-            shouldFlag = DISCOURAGED_CDR_METHODS.has(methodName);
+        } else if (callee?.type === 'Identifier') {
+            methodName = (callee.name as string) ?? '';
+            shouldFlag = allowBareIdentifierChecks && DISCOURAGED_CDR_METHODS.has(methodName);
         }
 
-        if (shouldFlag) {
-            const start = node.start ?? node.span?.start ?? 0;
-            const { line, column } = context.locator.location(start);
+        if (!shouldFlag) return null;
 
-            return {
-                filePath: context.filePath,
-                ruleName: 'component-no-manual-detect-changes',
-                message: `Avoid manual change detection (${methodName}). Use Signals for automatic reactivity.`,
-                line,
-                column,
-                severity: 'high',
-                fix: RECOMMENDATIONS['component-no-manual-detect-changes'],
-            };
-        }
+        const start = getNodeStart(node as any);
+        const { line, column } = context.locator.location(start);
 
-        return null;
+        return {
+            filePath: context.filePath,
+            ruleName: 'component-no-manual-detect-changes',
+            message: `Avoid manual change detection (${methodName}). Prefer Signals/async pipe for reactivity.`,
+            line,
+            column,
+            severity: 'high',
+            fix: RECOMMENDATIONS['component-no-manual-detect-changes'],
+            codeExample: CODE_EXAMPLES['component-no-manual-detect-changes'],
+        };
     }
 );

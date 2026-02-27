@@ -46,3 +46,189 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'signal-avoid-untracked-overuse':
         'Use `untracked()` sparingly. Overusing it can mask reactive dependencies and lead to subtle bugs in signal derivations.',
 };
+
+/**
+ * Optional before/after code examples for rules that have no auto-fix.
+ *
+ * Keys must match the ruleName field on RuleFailure exactly.
+ * Values are plain multi-line TypeScript strings — no ANSI codes.
+ * The reporter renders them in a styled block below the fix recommendation.
+ */
+export const CODE_EXAMPLES: Readonly<Record<string, string>> = {
+    'prefer-on-push-component-change-detection': `// Before:
+@Component({ selector: 'app-foo', template: '...' })
+export class FooComponent { }
+
+// After:
+@Component({
+  selector: 'app-foo',
+  template: '...',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class FooComponent { }`,
+
+    'rxjs-no-subscribe-in-component': `// Before:
+ngOnInit() {
+  this.data$.subscribe(val => this.value = val);
+}
+
+// After (option A - toSignal):
+value = toSignal(this.data$, { initialValue: defaultVal });
+
+// After (option B - async pipe):
+// In template: {{ data$ | async }}`,
+
+    'rxjs-avoid-behaviorsubject-for-local-state': `// Before:
+private count$ = new BehaviorSubject<number>(0);
+
+// After:
+count = signal(0);`,
+
+    'rxjs-avoid-subject-as-event-bus': `// Before:
+private click$ = new Subject<void>();
+
+// After:
+onClick() { /* handle directly */ }`,
+
+    'prefer-inject-over-constructor-di': `// Before:
+constructor(private http: HttpClient, private router: Router) { }
+
+// After:
+private http = inject(HttpClient);
+private router = inject(Router);`,
+
+    'component-no-manual-detect-changes': `// Before:
+this.cdr.detectChanges();
+this.cdr.markForCheck();
+
+// After:
+// Use signals for reactive state:
+count = signal(0);
+// Template automatically updates when signal changes`,
+
+    'rxjs-require-takeUntilDestroyed': `// Before:
+this.data$.subscribe(val => this.process(val));
+
+// After:
+this.data$.pipe(
+  takeUntilDestroyed(this.destroyRef)
+).subscribe(val => this.process(val));`,
+
+    'template-no-async-pipe-duplication': `// Before:
+<div>{{ user$ | async }}</div>
+<span>{{ user$ | async }}</span>
+
+// After:
+@if (user$ | async; as user) {
+  <div>{{ user }}</div>
+  <span>{{ user }}</span>
+}`,
+
+    'signal-no-side-effects-in-computed': `// Before:
+total = computed(() => {
+  this.logger.log('computing');  // side effect!
+  return this.price() * this.qty();
+});
+
+// After:
+total = computed(() => this.price() * this.qty());`,
+
+    'signal-no-writes-in-computed': `// Before:
+derived = computed(() => {
+  const val = this.source();
+  this.other.set(val * 2);  // write inside computed!
+  return val;
+});
+
+// After:
+derived = computed(() => this.source());
+// Use effect() for the write:
+syncEffect = effect(() => this.other.set(this.source() * 2));`,
+
+    'signal-effect-must-be-destroy-scoped': `// Before:
+ngAfterViewInit() {
+  effect(() => console.log(this.count()));  // no injection context!
+}
+
+// After (option A - field initializer):
+logEffect = effect(() => console.log(this.count()));
+
+// After (option B - explicit injector):
+ngAfterViewInit() {
+  effect(() => console.log(this.count()), { injector: this.injector });
+}`,
+
+    'signal-no-effect-in-constructor': `// Before:
+constructor() {
+  effect(() => console.log(this.count()));
+}
+
+// After:
+logEffect = effect(() => console.log(this.count()));`,
+
+    'signal-prefer-computed-over-sync-effect': `// Before:
+logEffect = effect(() => {
+  const total = this.price() * this.qty();
+  this.total.set(total);
+});
+
+// After:
+total = computed(() => this.price() * this.qty());`,
+
+    'toSignal-require-initialValue': `// Before:
+data = toSignal(this.data$);  // Signal<T | undefined>
+
+// After:
+data = toSignal(this.data$, { initialValue: [] });  // Signal<T>`,
+
+    'template-no-call-expression': `// Before:
+<div>{{ getLabel(item) }}</div>
+
+// After (option A - pipe):
+<div>{{ item | labelPipe }}</div>
+
+// After (option B - signal):
+label = computed(() => this.getLabel(this.item()));`,
+
+    'template-no-object-literal-binding': `// Before:
+<app-child [config]="{ color: 'red', size: 10 }"></app-child>
+
+// After:
+childConfig = signal({ color: 'red', size: 10 });
+// template: <app-child [config]="childConfig()"></app-child>`,
+
+    'template-no-array-literal-binding': `// Before:
+<app-child [items]="[1, 2, 3]"></app-child>
+
+// After:
+items = signal([1, 2, 3]);
+// template: <app-child [items]="items()"></app-child>`,
+
+    'template-trackby-required-for-ngfor': `// Before:
+<div *ngFor="let item of items">{{ item.name }}</div>
+
+// After:
+<div *ngFor="let item of items; trackBy: trackById">{{ item.name }}</div>
+
+// Or with @for (Angular 17+):
+@for (item of items; track item.id) {
+  <div>{{ item.name }}</div>
+}`,
+
+    'rxjs-prefer-toSignal-for-template-state': `// Before:
+data$ = this.http.get('/api/data').pipe(shareReplay(1));
+// template: {{ data$ | async }}
+
+// After:
+data = toSignal(this.http.get('/api/data'), { initialValue: null });
+// template: {{ data() }}`,
+
+    'signal-avoid-untracked-overuse': `// Acceptable:
+effect(() => {
+  const value = this.count();
+  untracked(() => this.analytics.track(value));
+});
+
+// Questionable (review if untracked is needed):
+const val = untracked(() => this.count());`,
+};

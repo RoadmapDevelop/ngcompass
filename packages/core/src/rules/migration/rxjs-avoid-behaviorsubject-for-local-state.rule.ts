@@ -1,49 +1,80 @@
-import { createNewExpressionRule } from '../engine/rule-handler.js';
-import type { NewExpression, Identifier, MemberExpression } from '../ast/types.js';
+import { createAnyAngularClassRule } from '../engine/rule-handler.js';
+import type { AnyAngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
-import { RECOMMENDATIONS } from '../recommendations.js';
+import { RECOMMENDATIONS, CODE_EXAMPLES } from '../recommendations.js';
+import {
+    type AstNode,
+    unwrapNode,
+    getStaticPropertyName,
+    getNodeStart,
+    collectRxjsAliases,
+    getClassBody,
+} from '../rule-utils.js';
+
+function isBehaviorSubjectCallee(calleeRaw: AstNode | null | undefined, names: Set<string>): boolean {
+    const callee = unwrapNode(calleeRaw);
+    if (!callee) return false;
+    if (callee.type === 'Identifier') return names.has((callee.name as string) ?? '');
+    if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression' || callee.type === 'OptionalMemberExpression') {
+        return getStaticPropertyName(callee) === 'BehaviorSubject';
+    }
+    return false;
+}
+
+function shouldAnalyzeFile(filePath: string): boolean {
+    return filePath.endsWith('.component.ts') || filePath.endsWith('.service.ts');
+}
 
 /**
- * rxjs-avoid-behaviorsubject-for-local-state
- * 
- * Detects 'new BehaviorSubject()' calls inside components and services.
- * Local state should prefer Signals for better performance and simpler reactivity.
+ * Discourages constructing RxJS BehaviorSubject in Angular components and services when used as local state.
+ * FIX: Uses top-down class scanning instead of .parent traversal.
  */
-export const rxjsAvoidBehaviorSubjectRule = createNewExpressionRule(
+export const rxjsAvoidBehaviorSubjectRule = createAnyAngularClassRule(
     'rxjs-avoid-behaviorsubject-for-local-state',
-    (node: NewExpression, context: RuleContext): RuleFailure | null => {
-        // High-performance filter: only check .component.ts and .service.ts files
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.service.ts')) {
-            return null;
-        }
+    (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
+        if (!shouldAnalyzeFile(context.filePath)) return null;
 
-        const callee = node.callee;
-        let isBehaviorSubject = false;
+        const classNode = streamNode.node as any as AstNode;
+        const classBody = getClassBody(classNode);
+        if (classBody.length === 0) return null;
 
-        if (callee.type === 'Identifier') {
-            isBehaviorSubject = (callee as Identifier).name === 'BehaviorSubject';
-        } else if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-            const member = callee as MemberExpression;
-            if (member.property.name === 'BehaviorSubject') {
-                isBehaviorSubject = true;
-            }
-        }
+        const sourceText: string | undefined = (context as any).sourceText;
+        const behaviorSubjectNames = collectRxjsAliases(sourceText, 'BehaviorSubject');
 
-        if (isBehaviorSubject) {
-            const start = node.start ?? node.span?.start ?? 0;
+        const failures: RuleFailure[] = [];
+
+        for (const member of classBody) {
+            if (!member || member.type !== 'PropertyDefinition') continue;
+
+            // Skip public fields (intentional API)
+            if ((member.accessibility as string) === 'public') continue;
+
+            const init = unwrapNode((member.value ?? member.initializer) as AstNode | undefined);
+            if (!init || init.type !== 'NewExpression') continue;
+
+            if (!isBehaviorSubjectCallee(init.callee, behaviorSubjectNames)) continue;
+
+            const key = member.key;
+            const memberName = key?.type === 'Identifier' ? (key.name as string) :
+                key?.type === 'Literal' && typeof key.value === 'string' ? key.value : '';
+
+            const detail = memberName ? ` Offending member: ${memberName}.` : '';
+
+            const start = getNodeStart(init);
             const { line, column } = context.locator.location(start);
 
-            return {
+            failures.push({
                 filePath: context.filePath,
                 ruleName: 'rxjs-avoid-behaviorsubject-for-local-state',
-                message: 'Avoid using BehaviorSubject for local state. Prefer Signals for better performance and simplicity.',
+                message: `Avoid using BehaviorSubject for local state. Prefer Signals for better performance and simplicity.${detail}`,
                 line,
                 column,
                 severity: 'moderate',
                 fix: RECOMMENDATIONS['rxjs-avoid-behaviorsubject-for-local-state'],
-            };
+                codeExample: CODE_EXAMPLES['rxjs-avoid-behaviorsubject-for-local-state'],
+            });
         }
 
-        return null;
+        return failures.length ? failures : null;
     }
 );

@@ -2,34 +2,65 @@ import { createTemplateExpressionRule } from '../engine/rule-handler.js';
 import type { TemplateExpressionNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
+import { type AstNode, unwrapNode, childNodes } from '../rule-utils.js';
+
+function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateExpressionNode): number {
+    const templateStartOffset = (context as any).template?.templateStartOffset;
+    if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
+        return node.sourceSpan.start + templateStartOffset;
+    }
+    return node.sourceSpan.start;
+}
 
 /**
- * template-no-object-literal-binding
- * 
- * Object literals in template bindings create new instances on every change detection cycle.
- * This triggers downstream change detection and can cause major performance issues.
+ * Finds all ObjectExpressions anywhere in the expression tree (nested detection).
+ */
+function findAllObjectLiterals(root: AstNode | null | undefined): AstNode[] {
+    const hits: AstNode[] = [];
+    const stack: AstNode[] = root ? [root] : [];
+
+    while (stack.length) {
+        const node = stack.pop()!;
+        const n = unwrapNode(node);
+        if (!n) continue;
+
+        if (n.type === 'ObjectExpression') {
+            hits.push(n);
+        }
+
+        for (const child of childNodes(n)) {
+            stack.push(child);
+        }
+    }
+    return hits;
+}
+
+/**
+ * Disallows object literals in Angular template bindings (including nested).
  */
 export const templateNoObjectLiteralBindingRule = createTemplateExpressionRule(
     'template-no-object-literal-binding',
-    (node: TemplateExpressionNode, context: RuleContext): RuleFailure | null => {
-        if (node.expression.type === 'ObjectExpression') {
-            const templateOffset = context.template?.templateStartOffset ?? 0;
-            const { line, column } = context.locator.location(node.sourceSpan.start + templateOffset);
+    (node: TemplateExpressionNode, context: RuleContext): RuleFailure[] | null => {
+        const hits = findAllObjectLiterals((node as any).expression);
+        if (hits.length === 0) return null;
+
+        return hits.map(() => {
+            const offset = getTemplateAbsoluteOffset(context, node);
+            const { line, column } = context.locator.location(offset);
 
             return {
                 filePath: context.filePath,
                 ruleName: 'template-no-object-literal-binding',
-                message: 'Avoid object literals in template bindings.',
+                message:
+                    'Avoid object literals in template bindings. Move the object to a component field, a signal/computed value, or a pure pipe.',
                 line,
                 column,
                 severity: 'moderate',
                 fix: RECOMMENDATIONS['template-no-object-literal-binding'],
             };
-        }
-
-        return null;
+        });
     },
     {
-        requires: { htmlAst: true }
+        requires: { htmlAst: true },
     }
 );
