@@ -1,45 +1,61 @@
-﻿import { createComponentRule } from '../engine/rule-handler.js';
+import { createComponentRule } from '../engine/rule-handler.js';
 import { ChangeDetectionStrategy } from '../analyzers/component-analyzer.js';
 import type { AngularClassNode } from '../engine/node-streams.js';
 import type { RuleContext, RuleFailure } from '../types.js';
-import { RECOMMENDATIONS } from '../recommendations.js';
+import { RECOMMENDATIONS, CODE_EXAMPLES } from '../recommendations.js';
+
+type AnyNode = any;
+
+function getSafeReportOffset(classNode: AngularClassNode): number {
+    const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
+    return (
+        metadata?.decoratorStart ??
+        metadata?.start ??
+        (classNode as AnyNode)?.node?.start ??
+        (classNode as AnyNode)?.start ??
+        0
+    );
+}
+
+function getComponentName(classNode: AngularClassNode): string {
+    const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
+    return metadata?.className ?? 'AnonymousComponent';
+}
+
+function isReportableChangeDetection(changeDetection: AnyNode): boolean {
+    if (!changeDetection || typeof changeDetection !== 'object') return false;
+    const kind = changeDetection.kind;
+    if (kind === 'non-literal') return false;
+    if (kind === 'literal') return changeDetection.value !== ChangeDetectionStrategy.OnPush;
+    if (kind === 'missing') return true;
+    return false;
+}
 
 /**
- * EVALUATION:
- * Your Tri-State Analyzer ensures this rule runs at O(1) complexity.
- * Since 'extractChangeDetection' handles both MemberExpressions and Identifiers,
- * this rule is robust against different import styles.
+ * Enforces ChangeDetectionStrategy.OnPush for Angular components.
  */
 export const preferOnPushRule = createComponentRule(
     'prefer-on-push-component-change-detection',
     (classNode: AngularClassNode, context: RuleContext): RuleFailure | null => {
-        const { metadata } = classNode;
-
-        // Skip Directives - they don't have ChangeDetectionStrategy
+        const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
         if (metadata.type !== 'Component') return null;
 
-        const cd = metadata.changeDetection;
+        const changeDetection = metadata.changeDetection;
+        if (!isReportableChangeDetection(changeDetection)) return null;
 
-        // 1. Semantic Guard (Using your Tri-State logic)
-        // - kind: 'literal' && value: OnPush => Already optimized, skip.
-        // - kind: 'non-literal' => Dynamic value, skip to avoid false positives.
-        if (cd.kind === 'non-literal' || (cd.kind === 'literal' && cd.value === ChangeDetectionStrategy.OnPush)) {
-            return null;
-        }
-
-        // 2. Report for 'missing' (Default) or 'literal' (explicit Default)
-        // We use metadata.decoratorStart because MetadataValue doesn't carry 
-        // the specific property node in your current implementation.
-        const { line, column } = context.locator.location(metadata.decoratorStart);
+        const offset = getSafeReportOffset(classNode);
+        const { line, column } = context.locator.location(offset);
+        const name = getComponentName(classNode);
 
         return {
             filePath: context.filePath,
             ruleName: 'prefer-on-push-component-change-detection',
-            message: `Component '${metadata.className ?? 'AnonymousComponent'}' should use ChangeDetectionStrategy.OnPush.`,
+            message: `Component '${name}' should use ChangeDetectionStrategy.OnPush.`,
             line,
             column,
             severity: 'critical',
             fix: RECOMMENDATIONS['prefer-on-push-component-change-detection'],
+            codeExample: CODE_EXAMPLES['prefer-on-push-component-change-detection'],
         };
     }
 );

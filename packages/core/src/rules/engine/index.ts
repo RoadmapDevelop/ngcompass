@@ -15,3 +15,4 @@ export {
 } from './rule-handler.js';
 export { type AngularClassNode, type DecoratedPropertyNode } from './node-streams.js';
 export { buildVisitorMap, STREAM_TO_NODE_TYPE, type VisitorMap, type VisitorEntry } from './visitor-registry.js';
+export { RuleContextFactory } from './rule-context-factory.js';

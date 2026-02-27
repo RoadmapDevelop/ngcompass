@@ -3,61 +3,49 @@ import type { CallExpression, ObjectExpression } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
 import { hasObjectProperty } from '../ast/matchers.js';
+import {
+    type AstNode,
+    unwrapNode,
+    isCalleeNamed,
+    getObjectProperty,
+    isLiteralTrue,
+    isLiteralNullOrUndefined,
+    getNodeStart,
+} from '../rule-utils.js';
+
+function hasValidRequireSync(options: AstNode): boolean {
+    const prop = getObjectProperty(options, 'requireSync');
+    if (!prop) return false;
+    return isLiteralTrue(prop.value as AstNode);
+}
+
+function hasNonNullInitialValue(options: AstNode): boolean {
+    if (!hasObjectProperty(options as any as ObjectExpression, 'initialValue')) return false;
+    const prop = getObjectProperty(options, 'initialValue');
+    if (!prop) return true;
+    return !isLiteralNullOrUndefined(prop.value as AstNode);
+}
 
 /**
- * toSignal-require-initialValue
- * 
- * Encourages provide explicit initialValue to toSignal().
- * This improves type safety and prevents unexpected 'undefined' states in templates.
+ * Requires an explicit initial state configuration for `toSignal(...)`.
  */
 export const toSignalRequireInitialValueRule = createCallExpressionRule(
     'toSignal-require-initialValue',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const callee = node.callee;
+        const call = node as any as AstNode;
 
-        // Identify 'toSignal' call
-        let isToSignal = false;
-        if (callee.type === 'Identifier') {
-            isToSignal = (callee as any).name === 'toSignal';
-        } else if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-            const member = callee as any;
-            if (member.property && member.property.name === 'toSignal') {
-                isToSignal = true;
-            }
-        }
+        if (!isCalleeNamed(call.callee, 'toSignal')) return null;
 
-        if (!isToSignal) return null;
+        const args: AstNode[] = Array.isArray(call.arguments) ? call.arguments : [];
 
-        // toSignal(obs, options)
-        const args = node.arguments;
-
-        // If second argument (options) is missing, or is an object missing 'initialValue'
-        let missingInitialValue = false;
         if (args.length < 2) {
-            missingInitialValue = true;
-        } else {
-            const options = args[1];
-            if (options.type === 'ObjectExpression') {
-                if (!hasObjectProperty(options as ObjectExpression, 'initialValue') &&
-                    !hasObjectProperty(options as ObjectExpression, 'requireSync')) {
-                    // requireSync: true also fulfills the need for initial value (it throws if not sync)
-                    // but usually we want initialValue.
-                    missingInitialValue = true;
-                }
-            } else {
-                // Dynamic options, skip to avoid false positives
-                return null;
-            }
-        }
-
-        if (missingInitialValue) {
-            const start = node.start ?? node.span?.start ?? 0;
+            const start = getNodeStart(call);
             const { line, column } = context.locator.location(start);
 
             return {
                 filePath: context.filePath,
                 ruleName: 'toSignal-require-initialValue',
-                message: 'Provide an initialValue to toSignal() for better type safety and predictable state.',
+                message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
                 line,
                 column,
                 severity: 'moderate',
@@ -65,6 +53,23 @@ export const toSignalRequireInitialValueRule = createCallExpressionRule(
             };
         }
 
-        return null;
+        const optionsArg = unwrapNode(args[1]);
+        if (!optionsArg || optionsArg.type !== 'ObjectExpression') return null;
+
+        const ok = hasNonNullInitialValue(optionsArg) || hasValidRequireSync(optionsArg);
+        if (ok) return null;
+
+        const start = getNodeStart(call);
+        const { line, column } = context.locator.location(start);
+
+        return {
+            filePath: context.filePath,
+            ruleName: 'toSignal-require-initialValue',
+            message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
+            line,
+            column,
+            severity: 'moderate',
+            fix: RECOMMENDATIONS['toSignal-require-initialValue'],
+        };
     }
 );

@@ -1,80 +1,81 @@
 import { createCallExpressionRule } from '../engine/rule-handler.js';
-import type { CallExpression, MemberExpression } from '../ast/types.js';
+import type { CallExpression } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
-import { RECOMMENDATIONS } from '../recommendations.js';
+import { RECOMMENDATIONS, CODE_EXAMPLES } from '../recommendations.js';
+import {
+    isSubscribeCall,
+    getNodeStart,
+    unwrapNode,
+    isMemberExpressionLike,
+    hasTeardownInReceiverChain,
+    type AstNode,
+} from '../rule-utils.js';
 
 /**
- * Teardown operators that indicate responsible subscription management.
- * When these are present, rxjs-require-takeUntilDestroyed handles the violation.
- * This rule stays silent to avoid double-reporting the same line.
+ * Returns true for subscriptions that auto-complete and therefore cannot leak memory
+ * (e.g. HTTP calls piped with take(1) or first()).
+ *
+ * This is intentionally narrower than hasTeardownInReceiverChain: fire-and-forget
+ * observables complete on their own and are a legitimate subscribe pattern.
  */
-const VALID_TEARDOWN_OPERATORS = new Set([
-    'takeUntilDestroyed',
-    'takeUntil',
-    'take',
-    'first',
-    'takeWhile',
-]);
+function isFireAndForgetSubscription(subscribeNode: AstNode): boolean {
+    const callee = unwrapNode((subscribeNode as any).callee);
+    if (!isMemberExpressionLike(callee)) return false;
+
+    const receiver = unwrapNode((callee as any).object);
+    if (!receiver || receiver.type !== 'CallExpression') return false;
+
+    // Must be piped immediately before subscribe
+    const pipeCallee = unwrapNode(receiver.callee);
+    if (!isMemberExpressionLike(pipeCallee) || (pipeCallee as AstNode).property?.['name'] !== 'pipe') return false;
+
+    const args = receiver.arguments;
+    if (!Array.isArray(args)) return false;
+
+    // Only take(1) and first() guarantee the observable completes (fire-and-forget)
+    return args.some(arg => {
+        const op = unwrapNode(arg);
+        if (!op || op.type !== 'CallExpression') return false;
+        const calleeName = (unwrapNode(op.callee) as AstNode)?.name as string;
+        return calleeName === 'take' || calleeName === 'first';
+    });
+}
 
 /**
- * rxjs-no-subscribe-in-component
+ * Disallows manual RxJS subscriptions in Angular component files.
  *
- * Detects .subscribe() calls inside component files.
- * Manual subscriptions are prone to memory leaks and harder to migrate to Signals.
- *
- * Note: If a teardown operator is already present in the pipe chain, this rule
- * stays silent — rxjs-require-takeUntilDestroyed already handles that case.
- * The recommended path is to eliminate manual subscriptions entirely via
- * toSignal() or the async pipe.
+ * Allows:
+ *   - Fire-and-forget streams (take(1) / first()) — they auto-complete, no leak risk.
+ *   - Subscriptions with a full teardown operator — already handled by the
+ *     rxjs-require-takeUntilDestroyed rule; suppressing here avoids double-flagging
+ *     developers who have already addressed lifetime management.
  */
 export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
     'rxjs-no-subscribe-in-component',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        // High-performance filter: only check .component.ts files
         if (!context.filePath.endsWith('.component.ts')) return null;
+        if (!isSubscribeCall(node as any)) return null;
+        if (isFireAndForgetSubscription(node as any)) return null;
 
-        const callee = node.callee;
-        // .subscribe() is always a static member access — skip computed calls like obj['subscribe']()
-        if (callee.type !== 'StaticMemberExpression' && callee.type !== 'MemberExpression') return null;
+        // Suppress when a full teardown operator is already present — rxjs-require-takeUntilDestroyed
+        // covers that case and double-flagging creates noise without additional signal.
+        const callee = unwrapNode((node as any).callee);
+        const receiver = isMemberExpressionLike(callee) ? (callee as AstNode).object : null;
+        if (receiver && hasTeardownInReceiverChain(receiver as AstNode)) return null;
 
-        const member = callee as MemberExpression;
-        if (member.property.name !== 'subscribe') return null;
-
-        // Check if the observable already has a teardown operator in the pipe chain.
-        // If so, stay silent — rxjs-require-takeUntilDestroyed handles that report.
-        // We only report when there is NO teardown at all (the worst case scenario).
-        const observable = member.object;
-        if (observable.type === 'CallExpression') {
-            const obsCall = observable as CallExpression;
-            const obsCallee = obsCall.callee;
-            if ((obsCallee.type === 'MemberExpression' || obsCallee.type === 'StaticMemberExpression') &&
-                (obsCallee as MemberExpression).property.name === 'pipe') {
-                for (const arg of obsCall.arguments) {
-                    if (arg.type === 'CallExpression') {
-                        const opCallee = (arg as CallExpression).callee;
-                        if (opCallee.type === 'Identifier' && VALID_TEARDOWN_OPERATORS.has((opCallee as any).name)) {
-                            return null; // Has teardown — let rxjs-require-takeUntilDestroyed report
-                        }
-                        if ((opCallee.type === 'MemberExpression' || opCallee.type === 'StaticMemberExpression') &&
-                            VALID_TEARDOWN_OPERATORS.has((opCallee as any).property?.name)) {
-                            return null; // Has teardown — let rxjs-require-takeUntilDestroyed report
-                        }
-                    }
-                }
-            }
-        }
-
-        const start = node.start ?? node.span?.start ?? 0;
+        const start = getNodeStart(node as any);
         const { line, column } = context.locator.location(start);
 
         return {
             filePath: context.filePath,
             ruleName: 'rxjs-no-subscribe-in-component',
-            message: 'Avoid manual subscriptions in components. Prefer toSignal() or the async pipe for automatic teardown and better performance.',
+            message:
+                'Avoid manual subscriptions in components. Prefer toSignal() or the async pipe for automatic teardown and better performance.',
             line,
             column,
             severity: 'high',
             fix: RECOMMENDATIONS['rxjs-no-subscribe-in-component'],
+            codeExample: CODE_EXAMPLES['rxjs-no-subscribe-in-component'],
         };
     }
 );
