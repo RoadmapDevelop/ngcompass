@@ -78,3 +78,11 @@ export {
     mergeRulesConfigs,
     applyOverrides,
 } from './resolution/merger.js';
+
+// Engine
+export {
+    RuleContextFactory,
+} from './engine/index.js';
+
+
+export { walkProgram } from './visitor.js';

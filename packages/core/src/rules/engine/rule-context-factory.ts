@@ -29,8 +29,15 @@
 
 import { Locator } from '../../utils/locator.js';
 import type { RuleContext } from '../types.js';
-import type { ExecutionContext } from '../../engine/runner.js';
-import type { HtmlParserResult } from '../../parsers/html.js';
+
+export interface ExecutionContext {
+    readonly rootDir: string;
+    readonly readFile: (filePath: string) => Promise<string>;
+    readonly getProgram: (filePath: string) => Promise<import('oxc-parser').Program>;
+    readonly getTypeChecker?: (filePath: string) => Promise<import('typescript').TypeChecker | undefined>;
+    readonly getTemplate: (filePath: string) => Promise<any | undefined>;
+    readonly getStyle: (filePath: string) => Promise<any | undefined>;
+}
 
 // ============================================
 // FACTORY CLASS
@@ -44,7 +51,7 @@ import type { HtmlParserResult } from '../../parsers/html.js';
  * of context construction boilerplate and makes unit testing straightforward.
  */
 export class RuleContextFactory {
-    constructor(private readonly context: ExecutionContext) {}
+    constructor(private readonly context: ExecutionContext) { }
 
     /**
      * Builds a RuleContext for the given file.
@@ -66,7 +73,12 @@ export class RuleContextFactory {
 
         const locator = new Locator(fileContent);
 
-        let template: HtmlParserResult | undefined;
+        let typeChecker: import('typescript').TypeChecker | undefined;
+        if (this.context.getTypeChecker) {
+            typeChecker = await this.context.getTypeChecker(filePath);
+        }
+
+        let template: any | undefined;
         if (needsTemplate) {
             template = await this.context.getTemplate(filePath);
         }
@@ -76,6 +88,7 @@ export class RuleContextFactory {
             fileContent,
             locator,
             program,
+            typeChecker,
             template,
             options,
         };
