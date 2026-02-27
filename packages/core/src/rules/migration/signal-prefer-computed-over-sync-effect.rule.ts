@@ -1,96 +1,171 @@
 import { createCallExpressionRule } from '../engine/rule-handler.js';
-import type { CallExpression, MemberExpression, ArrowFunctionExpression, FunctionExpression, BlockStatement, IfStatement, Node } from '../ast/types.js';
+import type { CallExpression } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
+import {
+    type AstNode,
+    unwrapNode,
+    isMemberExpressionLike,
+    getStaticPropertyName,
+    getNodeStart,
+    isCalleeNamed,
+    getCalleeName,
+    childNodes,
+    getCallbackArg,
+    getFunctionBody,
+    getTsSymbolAtNode,
+} from '../rule-utils.js';
 
 const WRITE_METHODS = new Set(['set', 'update', 'mutate']);
 
+const ASYNC_BOUNDARY_CALLEES = new Set([
+    'setTimeout', 'setInterval', 'queueMicrotask', 'requestAnimationFrame',
+    'then', 'catch', 'finally', 'subscribe',
+]);
+
+// linkedSignal callees - if present, don't suggest computed()
+const LINKED_SIGNAL_CALLEES = new Set(['linkedSignal']);
+
+function isSignalWriteCall(callExprRaw: AstNode | null | undefined): boolean {
+    const call = unwrapNode(callExprRaw);
+    if (!call || call.type !== 'CallExpression') return false;
+    const callee = unwrapNode(call.callee);
+    if (!isMemberExpressionLike(callee)) return false;
+    return WRITE_METHODS.has(getStaticPropertyName(callee));
+}
+
+function isLikelySignalRead(nodeRaw: AstNode | null | undefined, context?: RuleContext): boolean {
+    const node = unwrapNode(nodeRaw);
+    if (!node || node.type !== 'CallExpression') return false;
+
+    // Signal reads are always zero-arg calls
+    const args = node.arguments;
+    if (Array.isArray(args) && args.length > 0) return false;
+
+    const callee = unwrapNode(node.callee);
+    if (!callee) return false;
+
+    // TypeChecker Integration
+    if (context?.typeChecker) {
+        // We will try to get the symbol or type of the callee to see if it's a Signal
+        try {
+            const symbol = getTsSymbolAtNode(callee, context);
+            if (symbol) {
+                // Heuristic: check if the type name includes 'Signal'
+                const type = context.typeChecker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!);
+                if (type) {
+                    const typeStr = context.typeChecker.typeToString(type);
+                    if (typeStr.includes('Signal')) {
+                        return true;
+                    }
+                }
+            }
+        } catch { }
+    }
+
+    // Fallback static heuristics
+
+    // Direct zero-arg call: `count()` - likely a signal read
+    if (callee.type === 'Identifier') return true;
+
+    // Member zero-arg call: `this.count()` or `obj.prop()` - likely a signal read
+    if (isMemberExpressionLike(callee)) return true;
+
+    return false;
+}
+
+type EffectAnalysis = {
+    hasLikelySignalRead: boolean;
+    hasSignalWrite: boolean;
+    hasAsyncBoundary: boolean;
+    hasLinkedSignal: boolean;
+    firstWriteNode: AstNode | null;
+};
+
+function analyzeEffectCallbackBody(root: AstNode, context?: RuleContext): EffectAnalysis {
+    const analysis: EffectAnalysis = {
+        hasLikelySignalRead: false,
+        hasSignalWrite: false,
+        hasAsyncBoundary: false,
+        hasLinkedSignal: false,
+        firstWriteNode: null,
+    };
+
+    const stack: AstNode[] = [root];
+
+    while (stack.length) {
+        const node = stack.pop()!;
+        const n = unwrapNode(node);
+        if (!n) continue;
+
+        if (n.type === 'AwaitExpression' || n.type === 'YieldExpression') {
+            analysis.hasAsyncBoundary = true;
+        }
+
+        if (n.type === 'CallExpression') {
+            const calleeName = getCalleeName(n);
+
+            if (calleeName && ASYNC_BOUNDARY_CALLEES.has(calleeName)) {
+                analysis.hasAsyncBoundary = true;
+            }
+
+            if (calleeName && LINKED_SIGNAL_CALLEES.has(calleeName)) {
+                analysis.hasLinkedSignal = true;
+            }
+
+            if (isSignalWriteCall(n)) {
+                analysis.hasSignalWrite = true;
+                if (!analysis.firstWriteNode) analysis.firstWriteNode = n;
+            } else if (isLikelySignalRead(n, context)) {
+                analysis.hasLikelySignalRead = true;
+            }
+        }
+
+        for (const child of childNodes(n)) {
+            stack.push(child);
+        }
+    }
+
+    return analysis;
+}
+
 /**
- * signal-prefer-computed-over-sync-effect
- *
- * Detects effect() calls that manually update another signal.
- * In many cases, these should be computed() signals instead.
- *
- * Improvement: findSignalWrite now traverses IfStatement branches,
- * catching conditional signal writes that were previously missed.
+ * Suggests replacing certain synchronous derived-state `effect(...)` patterns with `computed(...)`.
+ * Improved: Better signal read detection (zero-arg calls only) and linkedSignal awareness.
  */
 export const signalPreferComputedRule = createCallExpressionRule(
     'signal-prefer-computed-over-sync-effect',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const callee = node.callee;
+        const call = node as any as AstNode;
 
-        // Match effect()
-        let isEffect = false;
-        if (callee.type === 'Identifier') {
-            isEffect = (callee as any).name === 'effect';
-        } else if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-            const member = callee as any;
-            if (member.property && member.property.name === 'effect') {
-                isEffect = true;
-            }
-        }
+        if (!isCalleeNamed(call.callee, 'effect')) return null;
 
-        if (!isEffect) return null;
-
-        const callback = node.arguments[0];
+        const callback = getCallbackArg(call);
         if (!callback) return null;
 
-        let violation: Node | null = null;
+        const body = getFunctionBody(callback);
+        if (!body) return null;
 
-        if (callback.type === 'ArrowFunctionExpression' || callback.type === 'FunctionExpression') {
-            const functionNode = callback as ArrowFunctionExpression | FunctionExpression;
-            violation = findSignalWrite(functionNode.body);
-        }
+        const analysis = analyzeEffectCallbackBody(body, context);
 
-        if (violation) {
-            const start = violation.start ?? violation.span?.start ?? node.start ?? 0;
-            const { line, column } = context.locator.location(start);
+        if (!analysis.hasSignalWrite) return null;
+        if (!analysis.hasLikelySignalRead) return null;
+        if (analysis.hasAsyncBoundary) return null;
+        // Don't suggest computed() when linkedSignal is more appropriate
+        if (analysis.hasLinkedSignal) return null;
 
-            return {
-                filePath: context.filePath,
-                ruleName: 'signal-prefer-computed-over-sync-effect',
-                message: 'Prefer computed() over effect() for derived state. Manual signal writes in effects cause extra change detection cycles.',
-                line,
-                column,
-                severity: 'moderate',
-                fix: RECOMMENDATIONS['signal-prefer-computed-over-sync-effect'],
-            };
-        }
+        const start = analysis.firstWriteNode ? getNodeStart(analysis.firstWriteNode) : getNodeStart(call);
+        const { line, column } = context.locator.location(start);
 
-        return null;
+        return {
+            filePath: context.filePath,
+            ruleName: 'signal-prefer-computed-over-sync-effect',
+            message:
+                'Prefer computed() over effect() for synchronous derived state. This effect appears to synchronously read reactive values and write derived state; computed() avoids extra cycles and is easier to reason about.',
+            line,
+            column,
+            severity: 'moderate',
+            fix: RECOMMENDATIONS['signal-prefer-computed-over-sync-effect'],
+        };
     }
 );
-
-function findSignalWrite(node: Node): Node | null {
-    if (!node) return null;
-
-    if (node.type === 'BlockStatement') {
-        for (const stmt of (node as BlockStatement).body) {
-            const hit = findSignalWrite(stmt);
-            if (hit) return hit;
-        }
-    }
-
-    // Traverse IfStatement branches — previously missed conditional signal writes
-    if (node.type === 'IfStatement') {
-        const ifStmt = node as IfStatement;
-        return findSignalWrite(ifStmt.consequent) ||
-               (ifStmt.alternate ? findSignalWrite(ifStmt.alternate) : null);
-    }
-
-    if (node.type === 'CallExpression') {
-        const call = node as CallExpression;
-        if (call.callee.type === 'MemberExpression' || call.callee.type === 'StaticMemberExpression') {
-            const member = call.callee as MemberExpression;
-            if (member.property && WRITE_METHODS.has(member.property.name)) {
-                return node;
-            }
-        }
-    }
-
-    if (node.type === 'ExpressionStatement') {
-        return findSignalWrite((node as any).expression);
-    }
-
-    return null;
-}

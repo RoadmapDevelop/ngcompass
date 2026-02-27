@@ -1,142 +1,124 @@
 import { createCallExpressionRule } from '../engine/rule-handler.js';
-import type {
-    CallExpression,
-    MemberExpression,
-    ArrowFunctionExpression,
-    FunctionExpression,
-    BlockStatement,
-    IfStatement,
-    UpdateExpression,
-    ReturnStatement,
-    Node
-} from '../ast/types.js';
+import type { CallExpression } from '../ast/types.js';
 import type { RuleContext, RuleFailure } from '../types.js';
 import { RECOMMENDATIONS } from '../recommendations.js';
+import {
+    type AstNode,
+    unwrapNode,
+    isMemberExpressionLike,
+    getStaticPropertyName,
+    getNodeStart,
+    isCalleeNamed,
+    childNodes,
+    getCallbackArg,
+    getFunctionBody,
+} from '../rule-utils.js';
 
-// NOTE: 'get' is intentionally excluded — it's too generic (Map.get, Array.get, Object.get)
-// and would cause false positives. HTTP GET calls are caught by other rules or can be
-// identified by context. 'delete' is excluded for the same reason.
 const SIDE_EFFECT_METHODS = new Set([
-    'post', 'put', 'patch',          // HTTP write methods (GET excluded — too generic)
-    'subscribe', 'unsubscribe',      // RxJS
-    'next', 'error', 'complete',     // Subjects
-    'setItem', 'removeItem', 'clear', // Storage
-    'appendChild', 'removeChild',    // DOM mutation
+    'post', 'put', 'patch', 'subscribe', 'unsubscribe',
+    'next', 'error', 'complete', 'setItem', 'removeItem',
+    'clear', 'appendChild', 'removeChild', 'dispatch',
+    'log', 'warn', 'info', 'debug', 'trace',
 ]);
 
 const WRITE_METHODS = new Set(['set', 'update', 'mutate']);
 
+function isWriteCall(callExpr: AstNode | null | undefined): boolean {
+    const call = unwrapNode(callExpr);
+    if (!call || call.type !== 'CallExpression') return false;
+    const callee = unwrapNode(call.callee);
+    if (!isMemberExpressionLike(callee)) return false;
+    return WRITE_METHODS.has(getStaticPropertyName(callee));
+}
+
+function isSideEffectCall(callExpr: AstNode | null | undefined): boolean {
+    const call = unwrapNode(callExpr);
+    if (!call || call.type !== 'CallExpression') return false;
+    const callee = unwrapNode(call.callee);
+    if (!isMemberExpressionLike(callee)) return false;
+    return SIDE_EFFECT_METHODS.has(getStaticPropertyName(callee));
+}
+
+function isWriteNode(node: AstNode | null | undefined): boolean {
+    const n = unwrapNode(node);
+    if (!n) return false;
+    if (n.type === 'AssignmentExpression') return true;
+    if (n.type === 'UpdateExpression') return true;
+    if (n.type === 'UnaryExpression' && n.operator === 'delete') return true;
+    if (n.type === 'CallExpression') return isWriteCall(n);
+    return false;
+}
+
+function isEffectNode(node: AstNode | null | undefined): boolean {
+    const n = unwrapNode(node);
+    if (!n) return false;
+    if (n.type === 'CallExpression') return isSideEffectCall(n);
+    return false;
+}
+
+type Violation = { node: AstNode; type: 'write' | 'effect' };
+
+function findViolations(root: AstNode): Violation[] {
+    const violations: Violation[] = [];
+    const stack: AstNode[] = [root];
+
+    while (stack.length) {
+        const node = stack.pop()!;
+        const n = unwrapNode(node);
+        if (!n) continue;
+
+        if (isWriteNode(n)) {
+            violations.push({ node: n, type: 'write' });
+        } else if (isEffectNode(n)) {
+            violations.push({ node: n, type: 'effect' });
+        }
+
+        for (const child of childNodes(n)) {
+            stack.push(child);
+        }
+    }
+
+    return violations;
+}
+
 /**
- * signal-no-side-effects-in-computed
- * 
- * Enforces purity inside computed() signals.
- * Rules covered: 
- * - Rule 12: General side effects (HTTP, RxJS, DOM)
- * - Rule 13: Signal writes (.set, .update) that cause reactive cycles.
+ * Enforces purity inside `computed(...)` signal callbacks.
+ * Detects writes, mutations, and side-effect calls.
  */
 export const signalNoSideEffectsInComputedRule = createCallExpressionRule(
     'signal-no-side-effects-in-computed',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const callee = node.callee;
+        const call = node as any as AstNode;
 
-        // Match computed()
-        let isComputed = false;
-        if (callee.type === 'Identifier') {
-            isComputed = (callee as any).name === 'computed';
-        } else if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-            const member = callee as any;
-            if (member.property && member.property.name === 'computed') {
-                isComputed = true;
-            }
-        }
+        if (!isCalleeNamed(call.callee, 'computed')) return null;
 
-        if (!isComputed) return null;
-
-        const callback = node.arguments[0];
+        const callback = getCallbackArg(call);
         if (!callback) return null;
 
-        let violation: { node: Node, type: 'write' | 'effect' } | null = null;
+        const body = getFunctionBody(callback);
+        if (!body) return null;
 
-        if (callback.type === 'ArrowFunctionExpression' || callback.type === 'FunctionExpression') {
-            const functionNode = callback as ArrowFunctionExpression | FunctionExpression;
-            violation = findViolation(functionNode.body);
-        }
+        const violations = findViolations(body);
+        if (!violations.length) return null;
 
-        if (violation) {
-            const { node: vNode, type } = violation;
-            const start = vNode.start ?? vNode.span?.start ?? node.start ?? 0;
-            const { line, column } = context.locator.location(start);
+        const first = violations[0];
+        const start = getNodeStart(first.node) || getNodeStart(call);
+        const { line, column } = context.locator.location(start);
 
-            const isWrite = type === 'write';
-            const ruleName = isWrite ? 'signal-no-writes-in-computed' : 'signal-no-side-effects-in-computed';
-            const message = isWrite
-                ? 'Avoid writing to signals inside computed signals. This causes reactive cycles.'
-                : 'Avoid side effects inside computed signals. Computed must be pure.';
+        const ruleName = first.type === 'write' ? 'signal-no-writes-in-computed' : 'signal-no-side-effects-in-computed';
+        const message =
+            first.type === 'write'
+                ? 'Avoid writes or mutations inside computed(). Computed signals must be pure to prevent reactive cycles.'
+                : 'Avoid side effects inside computed(). Computed signals must be pure.';
 
-            return {
-                filePath: context.filePath,
-                ruleName,
-                message,
-                line,
-                column,
-                severity: 'error',
-                fix: RECOMMENDATIONS[ruleName],
-            };
-        }
-
-        return null;
+        return {
+            filePath: context.filePath,
+            ruleName,
+            message,
+            line,
+            column,
+            severity: 'error',
+            fix: RECOMMENDATIONS[ruleName],
+        };
     }
 );
-
-function findViolation(node: Node): { node: Node, type: 'write' | 'effect' } | null {
-    if (!node) return null;
-
-    // 1. Recursive Blocks
-    if (node.type === 'BlockStatement') {
-        for (const stmt of (node as BlockStatement).body) {
-            const hit = findViolation(stmt);
-            if (hit) return hit;
-        }
-    }
-
-    if (node.type === 'IfStatement') {
-        const ifStmt = node as IfStatement;
-        return findViolation(ifStmt.consequent) || (ifStmt.alternate ? findViolation(ifStmt.alternate) : null);
-    }
-
-    // 2. Call Expressions (Methods)
-    if (node.type === 'CallExpression') {
-        const call = node as CallExpression;
-        if (call.callee.type === 'MemberExpression' || call.callee.type === 'StaticMemberExpression') {
-            const member = call.callee as MemberExpression;
-            if (member.property) {
-                if (WRITE_METHODS.has(member.property.name)) {
-                    return { node, type: 'write' };
-                }
-                if (SIDE_EFFECT_METHODS.has(member.property.name)) {
-                    return { node, type: 'effect' };
-                }
-            }
-        }
-    }
-
-    // 3. Assignments & Updates (Writes)
-    if (node.type === 'AssignmentExpression') {
-        return { node, type: 'write' };
-    }
-
-    if (node.type === 'UpdateExpression') {
-        return { node: node as UpdateExpression, type: 'write' };
-    }
-
-    // 4. Unwrap & Passthrough
-    if (node.type === 'ExpressionStatement') {
-        return findViolation((node as any).expression);
-    }
-
-    if (node.type === 'ReturnStatement') {
-        return findViolation((node as ReturnStatement).argument as Node);
-    }
-
-    return null;
-}

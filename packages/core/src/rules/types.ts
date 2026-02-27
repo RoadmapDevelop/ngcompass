@@ -6,7 +6,7 @@
  */
 
 import { Severity, Result, Ok, Err } from "@ngcompass/common";
-import type { Locator } from "../utils/locator.js";
+import { Locator } from "../utils/locator";
 
 // ==============================================================================
 // RULE CONFIGURATION
@@ -190,6 +190,12 @@ export interface RuleFailure {
      * Example: "Add standalone: true to @Component({ ... })"
      */
     readonly fix?: string;
+    /**
+     * Optional multi-line code snippet illustrating the correct pattern.
+     * Displayed below the fix recommendation when no auto-fix is available.
+     * Use plain TypeScript — no ANSI codes.
+     */
+    readonly codeExample?: string;
 }
 
 export interface RuleResult {
@@ -204,8 +210,9 @@ export interface RuleContext {
     readonly fileContent: string; // Raw content for line/col mapping
     readonly locator: Locator; // Line/column mapping helper
     readonly program?: import('oxc-parser').Program;
-    readonly template?: import('../parsers/html').HtmlParserResult;
-    readonly style?: import('../parsers/css').CssParserResult;
+    readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
+    readonly template?: any;
+    readonly style?: any;
     readonly options?: Readonly<Record<string, unknown>>;
 }
 

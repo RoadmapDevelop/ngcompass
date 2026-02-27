@@ -1,5 +1,7 @@
 
-import type { HtmlParserResult } from '../../parsers/html.js';
+export interface HtmlParserResult {
+    rootNodes: any[];
+}
 import type { TemplateExpressionNode, TemplateAttributeNode } from '../engine/node-streams.js';
 import { parseSync } from 'oxc-parser';
 
@@ -16,75 +18,73 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
     const visit = (node: any) => {
         if (!node) return;
 
-        // generated AST from angular-html-parser
+        // Recurse into children first (generated AST from angular-html-parser).
+        // for-of replaces forEach to avoid allocating a closure on every call.
         if (node.children) {
-            node.children.forEach(visit);
+            for (const child of node.children) visit(child);
         }
 
         // 1. Attributes (Inputs, Structural Directives)
         if (node.attrs) {
-            node.attrs.forEach((attr: any) => {
-                const name = attr.name;
-                const value = attr.value;
+            for (const attr of node.attrs) {
+                const name: string = attr.name;
+                const value: string = attr.value;
+                const attrOffset = attr.valueSpan?.start?.offset ?? 0;
 
-                // Always add to attributes stream
+                // Always register to the attributes stream
                 attributes.push({
                     name,
                     value,
                     sourceSpan: {
                         start: attr.sourceSpan?.start?.offset ?? 0,
-                        end: attr.sourceSpan?.end?.offset ?? 0
-                    }
+                        end: attr.sourceSpan?.end?.offset ?? 0,
+                    },
                 });
 
-                if (!value) return;
+                if (!value) continue;
 
-                // *ngIf="expr"
+                // *ngIf="expr"  — structural directives use microsyntax
                 if (name.startsWith('*')) {
-                    // Check for micorsyntax? parsing strictly the value for now
-                    parseAndAdd(value, attr.valueSpan?.start?.offset ?? 0, expressions);
+                    parseAndAdd(value, attrOffset, expressions);
+                    // [prop]="expr" — property binding
+                } else if (name.startsWith('[') && name.endsWith(']')) {
+                    parseAndAdd(value, attrOffset, expressions);
+                    // bind-prop="expr" — long-form property binding
+                } else if (name.startsWith('bind-')) {
+                    parseAndAdd(value, attrOffset, expressions);
                 }
-                // [prop]="expr"
-                else if (name.startsWith('[') && name.endsWith(']')) {
-                    parseAndAdd(value, attr.valueSpan?.start?.offset ?? 0, expressions);
-                }
-                // bind-prop="expr"
-                else if (name.startsWith('bind-')) {
-                    parseAndAdd(value, attr.valueSpan?.start?.offset ?? 0, expressions);
-                }
-            });
+            }
         }
 
-        // 2. inputs/outputs logic might be needed if the parser segregates them, 
-        // but typically they appear as attributes in the raw parser unless processed.
-        // In angular-html-parser, they are in 'attrs'.
-
-        // 3. Text and Interpolations
+        // 2. Text and Interpolations
         const isText = node.kind === 'text' || node.type === 'text' || node.constructor?.name === 'Text';
         if (isText && node.value) {
-            // If tokens are available (some parser versions), use them
+            // Use tokens when available (some angular-html-parser versions provide them)
             if (node.tokens) {
-                node.tokens.forEach((token: any) => {
+                for (const token of node.tokens) {
                     if (token.type === 8 && token.parts?.length === 3) {
                         const expr = token.parts[1];
                         const startOffset = token.sourceSpan.start.offset + token.parts[0].length;
                         parseAndAdd(expr, startOffset, expressions);
                     }
-                });
+                }
             } else {
-                // Manual interpolation extraction for standard Text nodes
-                const value = node.value as string;
+                // Manual interpolation extraction: scan for {{ ... }} pairs
+                const textValue = node.value as string;
+                const nodeStart = node.sourceSpan?.start?.offset ?? 0;
                 let lastIndex = 0;
+
                 while (true) {
-                    const start = value.indexOf('{{', lastIndex);
+                    const start = textValue.indexOf('{{', lastIndex);
                     if (start === -1) break;
-                    const end = value.indexOf('}}', start + 2);
+                    const end = textValue.indexOf('}}', start + 2);
                     if (end === -1) break;
 
-                    const expr = value.substring(start + 2, end);
-                    // sourceSpan.start.offset is the absolute start of this text node in the template
-                    const nodeStart = node.sourceSpan?.start?.offset ?? 0;
-                    parseAndAdd(expr, nodeStart + start + 2, expressions);
+                    parseAndAdd(
+                        textValue.substring(start + 2, end),
+                        nodeStart + start + 2,
+                        expressions
+                    );
 
                     lastIndex = end + 2;
                 }
@@ -92,7 +92,7 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
         }
     };
 
-    htmlResult.rootNodes.forEach(visit);
+    for (const rootNode of htmlResult.rootNodes) visit(rootNode);
 
     return { expressions, attributes };
 };
