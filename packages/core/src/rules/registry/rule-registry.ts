@@ -35,38 +35,16 @@
  * ```
  */
 
-import type { PluginManifest } from '@ngcompass/common';
+import type { RulePlugin, RegisterOptions, RuleRegistry as IRuleRegistry } from '@ngcompass/common';
 import type { RuleHandler } from '../engine/rule-handler.js';
-import type { RuleMetadata, RuleRegistryEntry } from '../types.js';
+import type { RuleMetadata } from '../types.js';
+import type { RuleRegistryEntry } from '@ngcompass/common';
 
 // ============================================
 // PUBLIC TYPES
 // ============================================
 
-/**
- * A plugin descriptor — the unit external rule authors export.
- */
-export interface RulePlugin {
-    /** Globally unique rule name. Use namespacing: 'my-org/rule-name' */
-    readonly name: string;
-    /** The rule handler (created via createComponentRule, createDecoratedPropertyRule, etc.) */
-    readonly handler: RuleHandler<any>;
-    /** Optional metadata overrides (category, description, dependencyType, etc.) */
-    readonly meta?: Partial<RuleMetadata>;
-    /** Optional manifest (RFC §7.6) */
-    readonly manifest?: PluginManifest;
-}
 
-/**
- * Options controlling registration behaviour.
- */
-export interface RegisterOptions {
-    /**
-     * Allow overwriting an existing rule with the same name.
-     * Default: false — throws on duplicate to prevent silent errors.
-     */
-    allowOverride?: boolean;
-}
 
 // ============================================
 // REGISTRY CLASS
@@ -80,7 +58,7 @@ export interface RegisterOptions {
  *  - Prevent accidental duplicate registration
  *  - Expose read-only views for the engine and adapter
  */
-export class RuleRegistry {
+export class RuleRegistry implements IRuleRegistry {
     private readonly _handlers = new Map<string, RuleHandler<any>>();
     private readonly _meta = new Map<string, Partial<RuleMetadata>>();
 
@@ -165,7 +143,7 @@ export class RuleRegistry {
         return {
             name,
             metadata,
-            defaultConfig: { severity: 'moderate', options: {} },
+            defaultConfig: { severity: 'moderate', options: {} } as any,
         };
     }
 

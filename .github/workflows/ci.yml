@@ -2,73 +2,58 @@ name: CI
 
 on:
   push:
-    branches: [master, develop]
+    branches: [main, master, develop]
   pull_request:
-    branches: [master, develop]
+    branches: [main, master, develop]
 
 jobs:
   test:
-    name: Test
+    name: Node ${{ matrix.node-version }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18.x, 20.x]
-    
+        node-version: [18.x, 20.x, 22.x]
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Install pnpm
         uses: pnpm/action-setup@v2
         with:
           version: 10
-      
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'pnpm'
-      
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
-      - name: Lint
-        run: pnpm run lint
-      
-      - name: Type check
-        run: pnpm run typecheck
-      
-      - name: Test
-        run: pnpm run test -- --coverage
-      
-      - name: Build
-        run: pnpm run build
-      
-      - name: Upload coverage
+
+      - name: Check formatting
         if: matrix.node-version == '20.x'
+        run: pnpm exec prettier --check .
+
+      - name: Run Turbo CI (Lint, Typecheck, Build)
+        run: pnpm turbo run lint typecheck build --concurrency=4
+
+      - name: Run tests with coverage
+        run: pnpm test:coverage
+
+      - name: Upload coverage
         uses: codecov/codecov-action@v3
+        if: matrix.node-version == '20.x'
         with:
           files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: true
 
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 10
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20.x'
-          cache: 'pnpm'
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Check formatting
-        run: pnpm exec prettier --check .
+      - name: Check coverage thresholds
+        if: matrix.node-version == '20.x'
+        run: node scripts/check-coverage.js
+
+      - name: Run integration tests
+        if: matrix.node-version == '20.x'
+        run: pnpm test -- packages/core/tests/integration

@@ -43,9 +43,12 @@ export {
     RuleRegistry,
     getGlobalRegistry,
     resetGlobalRegistry,
-    type RulePlugin,
-    type RegisterOptions,
 } from './registry/rule-registry.js';
+
+export type {
+    RulePlugin,
+    RegisterOptions,
+} from '@ngcompass/common';
 
 // Presets
 export {

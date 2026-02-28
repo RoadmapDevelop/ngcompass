@@ -2,6 +2,7 @@
     "name": "@ngcompass/cli",
     "version": "0.0.1",
     "description": "Command line interface for ngcompass",
+    "sideEffects": false,
     "bin": {
         "compass": "./dist/index.js"
     },
@@ -33,12 +34,17 @@
     },
     "dependencies": {
         "@ngcompass/common": "workspace:*",
-        "@ngcompass/core": "workspace:*",
         "@ngcompass/reporters": "workspace:*",
         "@ngcompass/rules": "workspace:*",
-        "chalk": "^5.0.0",
+        "@ngcompass/cache": "workspace:*",
+        "@ngcompass/config": "workspace:*",
+        "@ngcompass/engine": "workspace:*",
+        "@ngcompass/scanner": "workspace:*",
+        "@ngcompass/planner": "workspace:*",
+        "@ngcompass/ast": "workspace:*",
+        "@ngcompass/testing": "workspace:*",
         "commander": "^11.0.0",
-        "ora": "^7.0.0"
+        "picocolors": "^1.1.1"
     },
     "keywords": [
         "angular",
@@ -48,6 +54,7 @@
     "author": "ngcompass",
     "license": "MIT",
     "devDependencies": {
-        "@types/node": "^25.1.0"
+        "@types/node": "^25.1.0",
+        "typescript": "catalog:"
     }
 }

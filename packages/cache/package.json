@@ -1,0 +1,52 @@
+{
+    "name": "@ngcompass/cache",
+    "version": "0.0.1",
+    "description": "Caching layer for ngcompass",
+    "sideEffects": false,
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
+        "build:prod": "NODE_ENV=production tsup src/index.ts --format cjs,esm --dts --clean --minify",
+        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "test": "vitest run --passWithNoTests",
+        "test:watch": "vitest --passWithNoTests",
+        "lint": "eslint src --ext .ts",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@ngcompass/common": "workspace:*",
+        "cacache": "^20.0.3",
+        "lru-cache": "^11.2.5",
+        "write-file-atomic": "^7.0.0",
+        "xxhash-wasm": "^1.1.0"
+    },
+    "peerDependencies": {
+        "typescript": "catalog:"
+    },
+    "devDependencies": {
+        "@types/cacache": "^20.0.0",
+        "@types/node": "^25.1.0",
+        "@types/write-file-atomic": "^4.0.3"
+    },
+    "keywords": [
+        "angular",
+        "cache",
+        "ngcompass"
+    ],
+    "author": "ngcompass",
+    "license": "MIT"
+}

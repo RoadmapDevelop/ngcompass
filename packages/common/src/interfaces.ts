@@ -1,4 +1,5 @@
 import { Severity } from './types.js';
+import type { RuleConfig } from './types.js';
 
 // ============================================================
 // PLUGIN MANIFEST (RFC §7.6)
@@ -61,17 +62,7 @@ export interface TelemetryConfig {
     onEvent?: (event: TelemetryEventBase) => void;
 }
 
-// ============================================================
-// RULE CONFIGURATION
-// ============================================================
 
-/**
- * Rule configuration with severity and options
- */
-export interface RuleConfig {
-    severity: Severity | 'off';
-    options?: Record<string, unknown>;
-}
 
 /**
  * Reporting output formats

@@ -4,12 +4,11 @@ import type {
     ParseError,
     Reporter,
     ResultSummary,
-    RuleResult,
-    RuleSeverity,
 } from '../types.js';
 import type { ReporterOutput } from '../output.js';
 import { processOutput } from '../output.js';
 import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
+import { RuleResult, Severity } from '@ngcompass/common';
 
 // JSON format severity constants — named to avoid inline magic numbers.
 const JSON_SEVERITY_ERROR: 2 = 2;
@@ -19,7 +18,7 @@ const JSON_SEVERITY_WARNING: 1 = 1;
 // Pure mapping helpers
 // ---------------------------------------------------------------------------
 
-function toJsonSeverity(severity: RuleSeverity): 1 | 2 {
+function toJsonSeverity(severity: Severity): 1 | 2 {
     return isErrorSeverity(severity) ? JSON_SEVERITY_ERROR : JSON_SEVERITY_WARNING;
 }
 
@@ -41,7 +40,7 @@ function groupMessagesByFile(results: readonly RuleResult[]): Map<string, Diagno
         for (const failure of result.failures) {
             const message: DiagnosticMessage = {
                 ruleId: failure.ruleName,
-                severity: toJsonSeverity(failure.severity as RuleSeverity),
+                severity: toJsonSeverity(failure.severity as Severity),
                 message: failure.message,
                 line: failure.line,
                 column: failure.column,

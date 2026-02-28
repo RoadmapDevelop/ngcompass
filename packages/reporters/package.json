@@ -2,6 +2,7 @@
     "name": "@ngcompass/reporters",
     "version": "0.0.1",
     "description": "Reporters for ngcompass analysis results",
+    "sideEffects": false,
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -31,7 +32,6 @@
     "dependencies": {
         "@babel/code-frame": "^7.29.0",
         "@ngcompass/common": "workspace:*",
-        "@ngcompass/core": "workspace:*",
         "picocolors": "^1.1.1"
     },
     "keywords": [
@@ -43,6 +43,7 @@
     "license": "MIT",
     "devDependencies": {
         "@types/babel__code-frame": "^7.27.0",
-        "@types/node": "^25.1.0"
+        "@types/node": "^25.1.0",
+        "typescript": "catalog:"
     }
 }

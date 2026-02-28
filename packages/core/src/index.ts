@@ -98,9 +98,12 @@ export {
     getGlobalRegistry,
     resetGlobalRegistry,
     RuleRegistry,
-    type RulePlugin,
-    type RegisterOptions,
 } from './rules/registry/rule-registry.js';
+
+export type {
+    RulePlugin,
+    RegisterOptions,
+} from '@ngcompass/common';
 export { RuleContextFactory } from './rules/engine/rule-context-factory.js';
 
 // Register built-in rules
