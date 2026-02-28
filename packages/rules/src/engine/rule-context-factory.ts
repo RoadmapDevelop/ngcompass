@@ -27,8 +27,7 @@
  * ```
  */
 
-import { Locator } from '../../utils/locator.js';
-import type { RuleContext } from '@ngcompass/common';
+import { Locator, type RuleContext } from '@ngcompass/common';
 
 export interface ExecutionContext {
     readonly rootDir: string;

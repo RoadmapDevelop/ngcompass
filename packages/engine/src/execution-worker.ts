@@ -3,6 +3,7 @@ import { RuleResult } from "@ngcompass/common";
 import { Task } from "@ngcompass/planner";
 import { createAnalysisContext } from "./analysis-context.js";
 import { executeBatchedTasks } from "./runner.js";
+import { registerAllBuiltinRules } from "@ngcompass/rules";
 
 /**
  * Worker input payload.
@@ -21,6 +22,11 @@ export interface ExecutionWorkerResult {
 }
 
 const main = async () => {
+
+    registerAllBuiltinRules();
+    // Re-register all built-in rules — each worker thread has its own module
+    // registry isolated from the main thread, so registration must happen here.
+
     if (!parentPort) return;
 
     const { rootDir, tasks } = workerData as ExecutionWorkerData;

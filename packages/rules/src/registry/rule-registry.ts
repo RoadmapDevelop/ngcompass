@@ -14,8 +14,8 @@
  * Example plugin package:
  * ```ts
  * // my-org-rules/src/index.ts
- * import type { RulePlugin } from '@ngcompass/core';
- * import { createComponentRule } from '@ngcompass/core';
+ * import type { RulePlugin } from '@ngcompass/rules';
+ * import { createComponentRule } from '@ngcompass/engine';
  *
  * const noBareSelectorRule: RulePlugin = {
  *   name: 'my-org/no-bare-selectors',
@@ -196,7 +196,7 @@ export class RuleRegistry {
 /**
  * The single shared registry instance used by the CLI and built-in rules.
  *
- * Worker threads must re-import register-all.ts to populate their own
+ * Worker threads must call registerAllBuiltinRules() to populate their own
  * in-process registry (they do not share memory with the main thread).
  */
 let _globalRegistry: RuleRegistry | null = null;

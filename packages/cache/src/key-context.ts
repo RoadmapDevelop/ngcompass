@@ -21,6 +21,7 @@
  *     hash(ctx.toolVersion + "::" + ctx.ruleRegistryHash + "::" + ruleName + "::" + inputs...)
  */
 
+import { createRequire } from 'node:module';
 import { PACKAGE_VERSION, CACHE_VERSION } from '@ngcompass/common';
 import { computeHash } from './hashing.js';
 import { stableSerialize } from './utils/stable-serialize.js';
@@ -125,8 +126,7 @@ export function serializeCacheKeyContext(ctx: CacheKeyContext): string {
  */
 function resolveParserVersion(): string {
     try {
-        // Use a sync require to avoid making buildCacheKeyContext async.
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const require = createRequire(import.meta.url);
         const pkg = require('oxc-parser/package.json') as { version?: string };
         return String(pkg.version ?? 'unknown');
     } catch {
