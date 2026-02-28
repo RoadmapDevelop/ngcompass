@@ -1,22 +1,16 @@
 import { Command } from 'commander';
-import {
-    resolveConfig,
-    scan,
-    CacheContext,
-    resolveRules,
-    getEnabledRules,
-    buildExecutionPlan,
-    runAnalysis,
-    loadPlugins,
-    getGlobalRegistry,
-    type ExecutionPlanOutput,
-    type AnalysisResult,
-    type RuleResult,
-    type ResolvedRulesMap
-} from '@ngcompass/core';
-import { type ConfigValidationResult } from '@ngcompass/common';
+
+import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult } from '@ngcompass/common';
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
+import { CacheContext } from '@ngcompass/cache';
+import { getGlobalRegistry } from '@ngcompass/rules';
+import { loadPlugins } from '@ngcompass/config';
+import { runAnalysis } from '@ngcompass/engine';
+import { ExecutionPlanOutput, buildExecutionPlan } from '@ngcompass/planner';
+import { scan } from '@ngcompass/scanner';
+import { resolveRules, getEnabledRules } from '@ngcompass/rules';
+import { resolveConfig } from '@ngcompass/config';
 
 interface AnalyzeOptions {
     profile?: string;
@@ -50,29 +44,30 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
             const startTime = performance.now();
             const format = (options.format ?? 'console') as ReporterFormat;
             const reporter = getReporter(format, { verbose: !!options.verbose, compact: !!options.compact });
+            let exitCode = 0;
 
             try {
                 // 1. Load Config & Plugins
                 const configResult = await loadConfigurationStep(options, cache, reporter);
-                if (!configResult) return;
+                if (!configResult) { exitCode = 1; return; }
 
                 const { config } = configResult;
 
                 // 2. Discover Files
                 const files = await discoverFilesStep(config, options, cache, reporter);
-                if (!files) return;
+                if (!files) { exitCode = 1; return; }
 
                 // 3. Resolve Rules
                 const enabledRules = await resolveRulesStep(config, options, reporter);
-                if (!enabledRules) return;
+                if (!enabledRules) { exitCode = 1; return; }
 
                 // 4. Build Execution Plan
                 const plan = await buildPlanStep(files, enabledRules, cache, options, reporter);
-                if (!plan) return;
+                if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
                 const analysis = await runAnalysisStep(plan, cache, options, reporter);
-                if (!analysis) return;
+                if (!analysis) { exitCode = 1; return; }
 
                 const duration = performance.now() - startTime;
 
@@ -96,11 +91,19 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 }
 
                 if (analysis.stats.totalErrors > 0) {
-                    process.exit(1);
+                    exitCode = 1;
                 }
             } catch (error) {
                 reporter.error(error as Error);
-                process.exit(1);
+                exitCode = 1;
+            } finally {
+                // Single authoritative exit-code decision point.
+                // `finally` fires even after an early `return` from inside `try`, so
+                // step helpers never need to call process.exit themselves.
+                // TODO: flush top-level telemetry collector here once the CLI wires one up.
+                if (exitCode !== 0) {
+                    process.exit(exitCode);
+                }
             }
         });
 }
@@ -109,7 +112,7 @@ async function loadConfigurationStep(
     options: AnalyzeOptions,
     cache: CacheContext,
     reporter: Reporter
-): Promise<ConfigValidationResult | null> {
+): Promise<{ config: NormalizedAnalyzerConfig } | null> {
     const tStart = performance.now();
     reporter.step('Resolving configuration...');
 
@@ -121,21 +124,19 @@ async function loadConfigurationStep(
 
     if (!configResult.report.valid) {
         reporter.error(new Error('Configuration validation failed'));
-        configResult.report.issues.forEach((issue) => {
+        for (const issue of configResult.report.issues) {
             const pathString = issue.path?.join('.') || 'root';
             reporter.error(new Error(`[${issue.severity.toUpperCase()}] ${pathString}: ${issue.message}`));
-        });
-        process.exit(1);
+        }
         return null;
     }
 
     if (!configResult.config) {
         reporter.error(new Error('No configuration found'));
-        process.exit(1);
         return null;
     }
 
-    const pluginList = (configResult.config as any).plugins as string[] | undefined;
+    const pluginList = configResult.config.plugins;
     if (pluginList && pluginList.length > 0) {
         reporter.step(`Loading ${pluginList.length} plugin(s)...`);
         const configDir = process.cwd();
@@ -144,11 +145,11 @@ async function loadConfigurationStep(
     }
 
     reporter.debug(`Config resolve: ${(performance.now() - tStart).toFixed(2)}ms`);
-    return configResult;
+    return { config: configResult.config };
 }
 
 async function discoverFilesStep(
-    config: any,
+    config: NormalizedAnalyzerConfig,
     options: AnalyzeOptions,
     cache: CacheContext,
     reporter: Reporter
@@ -158,8 +159,8 @@ async function discoverFilesStep(
 
     const scanResult = await scan({
         rootDir: process.cwd(),
-        include: config.include || ['src/**/*.ts'],
-        exclude: config.exclude || [],
+        include: config.include ?? [...DEFAULT_INCLUDE_PATTERNS],
+        exclude: config.exclude ?? [],
         respectGitignore: true,
         debug: options.debug,
         cache
@@ -167,7 +168,6 @@ async function discoverFilesStep(
 
     if (!scanResult.ok) {
         reporter.error(new Error(`File discovery failed: ${scanResult.error.message}`));
-        process.exit(1);
         return null;
     }
 
@@ -177,7 +177,7 @@ async function discoverFilesStep(
 }
 
 async function resolveRulesStep(
-    config: any,
+    config: NormalizedAnalyzerConfig,
     options: AnalyzeOptions,
     reporter: Reporter
 ): Promise<ResolvedRulesMap | null> {
@@ -185,10 +185,10 @@ async function resolveRulesStep(
     reporter.step('Resolving rules...');
 
     // If --rule <id> is specified, override config to only run that rule
+    let effectiveConfig: NormalizedAnalyzerConfig = config;
     if (options.rule) {
         reporter.info(`Filtering analysis to single rule: ${options.rule}`);
-        // Create a deep copy or just override the rules object
-        config = {
+        effectiveConfig = {
             ...config,
             rules: {
                 [options.rule]: 'error' // Ensure it's active
@@ -198,11 +198,10 @@ async function resolveRulesStep(
         };
     }
 
-    const rulesResult = await resolveRules(config);
+    const rulesResult = await resolveRules(effectiveConfig);
 
     if (!rulesResult.ok) {
         reporter.error(new Error(`Rule resolution failed: ${rulesResult.error.message}`));
-        process.exit(1);
         return null;
     }
 
@@ -232,7 +231,6 @@ async function buildPlanStep(
 
     if (!planResult.ok) {
         reporter.error(new Error(`Execution plan building failed: ${planResult.error.message}`));
-        process.exit(1);
         return null;
     }
 
@@ -263,7 +261,6 @@ async function runAnalysisStep(
 
     if (!result.ok) {
         reporter.error(new Error(`Analysis failed: ${result.error.message}`));
-        process.exit(1);
         return null;
     }
 
@@ -272,7 +269,7 @@ async function runAnalysisStep(
 }
 
 async function saveToCacheStep(
-    results: RuleResult[],
+    results: readonly RuleResult[],
     cache: CacheContext,
     options: AnalyzeOptions,
     reporter: Reporter

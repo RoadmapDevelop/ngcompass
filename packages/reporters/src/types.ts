@@ -8,10 +8,8 @@
  * - Clear public API documentation.
  */
 
-import type { ConfigReport, HealthReport, InitResult } from '@ngcompass/common';
-import type { RuleFailure, RuleResult, RuleSeverity } from '@ngcompass/core';
+import type { ConfigReport, HealthReport, InitResult, RuleResult } from '@ngcompass/common';
 
-export type { RuleFailure, RuleResult, RuleSeverity };
 
 /** Supported output encodings for analysis results. */
 export type ReporterFormat = 'console' | 'json';

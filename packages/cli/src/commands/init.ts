@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { initConfig, CacheContext } from '@ngcompass/core';
 import { getConfigReporter } from '@ngcompass/reporters';
+import { CacheContext } from '@ngcompass/cache';
+import { initConfig } from '@ngcompass/config';
 
 /**
  * Registers the 'init' command.

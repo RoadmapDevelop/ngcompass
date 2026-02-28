@@ -7,7 +7,8 @@
 
 import { Severity, Result, Ok, Err } from "@ngcompass/common";
 import { Locator } from "../utils/locator";
-
+import { Program } from "oxc-parser";
+import { TypeChecker } from "typescript";
 // ==============================================================================
 // RULE CONFIGURATION
 // ==============================================================================
@@ -209,8 +210,8 @@ export interface RuleContext {
     readonly filePath: string; // The file being analyzed
     readonly fileContent: string; // Raw content for line/col mapping
     readonly locator: Locator; // Line/column mapping helper
-    readonly program?: import('oxc-parser').Program;
-    readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
+    readonly program?: Program;
+    readonly typeChecker?: TypeChecker; // Added for advanced type-aware rules
     readonly template?: any;
     readonly style?: any;
     readonly options?: Readonly<Record<string, unknown>>;

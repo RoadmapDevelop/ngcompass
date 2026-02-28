@@ -4,8 +4,9 @@ import { registerCommands } from '../commands/index.js';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createCacheContext } from '@ngcompass/core';
 import { enableDebug } from '@ngcompass/common';
+import { createCacheContext } from '@ngcompass/cache';
+import { registerAllBuiltinRules } from '@ngcompass/rules';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -47,6 +48,9 @@ export async function run() {
 
     // Initialize shared cache context
     const cache = createCacheContext();
+
+    // Register all built-in rules explicitly
+    registerAllBuiltinRules();
 
     // Register all commands with shared cache
     registerCommands(program, cache);

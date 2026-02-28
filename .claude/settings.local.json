@@ -15,7 +15,11 @@
       "Bash(xargs:*)",
       "Bash(npm run build:*)",
       "Bash(where:*)",
-      "Bash(compass analyze:*)"
+      "Bash(compass analyze:*)",
+      "Bash(pnpm --filter @ngcompass/cli typecheck:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(pnpm --filter @ngcompass/common typecheck:*)",
+      "Bash(pnpm --filter @ngcompass/core typecheck:*)"
     ]
   }
 }

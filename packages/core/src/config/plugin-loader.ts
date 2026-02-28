@@ -31,8 +31,7 @@
 
 import { createRequire } from 'node:module';
 import { warn, debug } from '@ngcompass/common';
-import type { PluginManifest } from '@ngcompass/common';
-import type { RuleRegistry, RulePlugin } from '../rules/registry/rule-registry.js';
+import type { PluginManifest, RulePlugin, RuleRegistry } from '@ngcompass/common';
 import { PACKAGE_VERSION } from '@ngcompass/common';
 
 // ============================================================

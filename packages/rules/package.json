@@ -2,6 +2,7 @@
     "name": "@ngcompass/rules",
     "version": "0.0.1",
     "description": "Rules collection for ngcompass",
+    "sideEffects": false,
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -30,6 +31,7 @@
     },
     "dependencies": {
         "@ngcompass/common": "workspace:*",
+        "@ngcompass/ast": "workspace:*",
         "@ngcompass/core": "workspace:*"
     },
     "keywords": [

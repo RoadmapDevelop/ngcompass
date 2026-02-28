@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { validateConfig, CacheContext } from '@ngcompass/core';
 import { getConfigReporter } from '@ngcompass/reporters';
+import { CacheContext } from '@ngcompass/cache';
+import { validateConfig } from '@ngcompass/config';
 
 /**
  * Registers the 'config' command and its subcommands.

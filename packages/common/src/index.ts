@@ -17,7 +17,6 @@ export {
     OutputFormat,
     ConfigIssue,
     HealthReport,
-    RuleConfig,
     AnalyzerConfig,
     PluginManifest,
     TelemetryConfig,
@@ -27,3 +26,5 @@ export * from './errors';
 export * from './types';
 export * from './ast/utils';
 export * from './logger';
+export * from './utils/stable-serialize';
+export * from './utils/locator';

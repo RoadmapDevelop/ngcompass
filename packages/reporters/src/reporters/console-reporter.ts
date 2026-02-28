@@ -2,8 +2,6 @@ import pc from 'picocolors';
 import path from 'node:path';
 import process from 'node:process';
 import type {
-    RuleFailure,
-    RuleResult,
     ParseError,
     ConsoleReporterOptions,
     Reporter,
@@ -13,6 +11,7 @@ import type { ReporterOutput } from '../output.js';
 import { processOutput } from '../output.js';
 import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
 import { renderCodeFrame, defaultSourceReader, type SourceReader } from '../code-frame.js';
+import { RuleFailure, RuleResult } from '@ngcompass/common';
 
 // ---------------------------------------------------------------------------
 // Named constants — no magic numbers or inline literals
