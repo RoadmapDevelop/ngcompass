@@ -38,8 +38,19 @@ export {
 } from './registry/rule-registry.js';
 
 export { registerAllBuiltinRules } from './registry/register-all.js';
-export { executeBatchedNewEngineRules } from './engine/adapter.js';
-export { RuleHandler } from './engine/rule-handler.js';
-export { isNewEngineRule } from './engine/adapter.js';
-export { resolveRules } from './resolution/resolver.js';
-export { getEnabledRules } from './resolution/resolver.js';
+export { executeBatchedNewEngineRules, isNewEngineRule } from './engine/adapter.js';
+export { type RuleHandler } from './engine/rule-handler.js';
+export { RuleContextFactory } from './engine/rule-context-factory.js';
+
+// Resolution
+export { resolveRules, getEnabledRules, getRulesByCategory, getRulesByDependencyType } from './resolution/resolver.js';
+export { loadPreset, resolveExtendsChain } from './resolution/loader.js';
+export { normalizeRuleConfig, isRuleEnabled, normalizeAllRules } from './resolution/normalize.js';
+export { mergeRuleConfig, mergeRulesConfigs, applyOverrides } from './resolution/merger.js';
+
+// Presets
+export { builtinPresets, isBuiltinPreset, getBuiltinPreset } from './presets/index.js';
+
+// Recommendations and rule utilities
+export * from './recommendations.js';
+export * from './rule-utils.js';

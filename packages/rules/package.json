@@ -31,8 +31,7 @@
     },
     "dependencies": {
         "@ngcompass/common": "workspace:*",
-        "@ngcompass/ast": "workspace:*",
-        "@ngcompass/core": "workspace:*"
+        "@ngcompass/ast": "workspace:*"
     },
     "keywords": [
         "angular",

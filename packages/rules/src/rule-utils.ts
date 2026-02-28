@@ -7,6 +7,8 @@
  * PERFORMANCE: All functions are zero-allocation where possible.
  */
 
+import { RuleContext } from '@ngcompass/common';
+
 // ============================================
 // AST Node Type (replaces `type AnyNode = any`)
 // ============================================
@@ -694,7 +696,7 @@ function requireTypescript(): typeof import('typescript') | undefined {
  */
 export function getTsSymbolAtNode(
     oxcNode: AstNode | null | undefined,
-    context: import('./types.js').RuleContext
+    context: RuleContext
 ): import('typescript').Symbol | undefined {
     if (!oxcNode || !context.typeChecker) return undefined;
 

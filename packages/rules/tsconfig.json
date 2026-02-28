@@ -8,6 +8,6 @@
     "moduleResolution": "bundler",
     "module": "esnext"
   },
-  "include": ["src/**/*", "../core/src/rules/domains"],
+  "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "tests"]
 }

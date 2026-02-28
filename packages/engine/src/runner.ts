@@ -14,7 +14,7 @@ import { Task } from "@ngcompass/planner";
 import { warn, error } from "console";
 import { Program } from "oxc-parser";
 import { RuleContextFactory } from "./rule-context-factory";
-import { isNewEngineRule, executeBatchedNewEngineRules } from "@ngcompass/rules";
+import { executeBatchedNewEngineRules, isNewEngineRule } from "@ngcompass/rules";
 
 
 /**
