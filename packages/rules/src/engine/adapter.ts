@@ -10,8 +10,8 @@
  */
 
 import type { RuleContext, RuleResult } from '@ngcompass/common';
-import { runSinglePassAnalysis } from './single-pass-engine.js';
-import type { RuleHandler } from './rule-handler.js';
+import { runSinglePassAnalysis } from '@ngcompass/engine';
+import type { RuleHandler } from '@ngcompass/engine';
 import { debug } from '@ngcompass/common';
 import { getGlobalRegistry } from '../registry/rule-registry.js';
 import type { RulePlugin } from '../registry/rule-registry.js';

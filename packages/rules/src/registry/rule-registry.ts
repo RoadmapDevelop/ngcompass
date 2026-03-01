@@ -36,7 +36,7 @@
  */
 
 import type { PluginManifest } from '@ngcompass/common';
-import { RuleHandler } from '../engine/rule-handler';
+import type { RuleHandler } from '@ngcompass/engine';
 import { RuleMetadata, RuleRegistryEntry } from '@ngcompass/common';
 
 // ============================================

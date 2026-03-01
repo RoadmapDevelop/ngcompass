@@ -19,7 +19,14 @@
       "Bash(pnpm --filter @ngcompass/cli typecheck:*)",
       "Bash(pnpm typecheck:*)",
       "Bash(pnpm --filter @ngcompass/common typecheck:*)",
-      "Bash(pnpm --filter @ngcompass/core typecheck:*)"
+      "Bash(pnpm --filter @ngcompass/core typecheck:*)",
+      "Bash(for pkg in C:/Users/30694/Desktop/ngcompass_/packages/*/package.json)",
+      "Bash(do echo \"=== $pkg ===\")",
+      "Bash(grep:*)",
+      "Bash(pnpm --filter @ngcompass/engine typecheck:*)",
+      "Bash(pnpm --filter @ngcompass/rules typecheck:*)",
+      "Bash(pnpm --filter @ngcompass/engine build:*)",
+      "Bash(pnpm install:*)"
     ]
   }
 }

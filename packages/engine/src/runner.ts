@@ -13,8 +13,8 @@ import { InfrastructureErrorCollector, RuleResult, RuleSeverity, stableSerialize
 import { Task } from "@ngcompass/planner";
 import { warn, error } from "console";
 import { Program } from "oxc-parser";
-import { RuleContextFactory } from "./rule-context-factory";
-import { executeBatchedNewEngineRules, isNewEngineRule } from "@ngcompass/rules";
+import { RuleContextFactory } from "./rule-context-factory.js";
+import { getConfiguredExecutor, getConfiguredChecker } from "./rule-executor.js";
 
 
 /**
@@ -59,7 +59,7 @@ export const executeBatchedTasks = async (
     const results: RuleResult[] = [];
 
     for (const task of tasks) {
-        if (!isNewEngineRule(task.ruleName)) {
+        if (!getConfiguredChecker()(task.ruleName)) {
             warn("engine", `Skipping task ${task.taskId}: Rule "${task.ruleName}" not registered in engine.`);
             results.push({ ruleName: task.ruleName, taskId: task.taskId, failures: [] });
             continue;
@@ -112,7 +112,7 @@ export const executeBatchedTasks = async (
             );
 
             // Single-pass execution across all rules in this batch
-            const batchResults = executeBatchedNewEngineRules(batch.ruleNames, ruleContext);
+            const batchResults = getConfiguredExecutor()(batch.ruleNames, ruleContext);
 
             // 3. Map results back to task IDs and apply configured severity
             const taskIdMap = new Map<string, string[]>();

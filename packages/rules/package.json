@@ -12,15 +12,19 @@
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js",
             "require": "./dist/index.cjs"
+        },
+        "./execution-worker": {
+            "import": "./dist/execution-worker.js",
+            "require": "./dist/execution-worker.cjs"
         }
     },
     "files": [
         "dist"
     ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-        "build:prod": "NODE_ENV=production tsup src/index.ts --format cjs,esm --dts --clean --minify",
-        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",
@@ -31,7 +35,9 @@
     },
     "dependencies": {
         "@ngcompass/common": "workspace:*",
-        "@ngcompass/ast": "workspace:*"
+        "@ngcompass/ast": "workspace:*",
+        "@ngcompass/engine": "workspace:*",
+        "@ngcompass/planner": "workspace:*"
     },
     "keywords": [
         "angular",
