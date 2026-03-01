@@ -1,6 +1,6 @@
-import { TemplateExpressionNode } from "@ngcompass/ast";
+﻿import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
-import { createTemplateExpressionRule } from "../engine/rule-handler";
+import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
 import { AstNode, unwrapNode, childNodes } from "../rule-utils";
 import { RuleContext } from "@ngcompass/common";

@@ -1,7 +1,7 @@
-import { hasObjectProperty, ObjectExpression } from "@ngcompass/ast";
+﻿import { hasObjectProperty, ObjectExpression } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
-import { createCallExpressionRule } from "../engine/rule-handler";
+import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
 import { AstNode, getObjectProperty, isLiteralTrue, isLiteralNullOrUndefined, isCalleeNamed, getNodeStart, unwrapNode } from "../rule-utils";
 import { RuleContext } from "@ngcompass/common";

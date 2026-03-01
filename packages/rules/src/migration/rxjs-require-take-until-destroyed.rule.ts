@@ -1,10 +1,10 @@
-
+﻿
 // VALID_TEARDOWN_OPERATORS, hasTeardownInPipeCall, and hasTeardownInReceiverChain have been
 // moved to rule-utils.ts so rxjs-no-subscribe-in-component can share the same implementation.
 
 import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
-import { createCallExpressionRule } from "../engine/rule-handler";
+import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
 import { isSubscribeCall, unwrapNode, isMemberExpressionLike, hasTeardownInReceiverChain, getNodeStart } from "../rule-utils";
 import { RuleContext } from "@ngcompass/common";

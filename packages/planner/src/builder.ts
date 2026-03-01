@@ -24,6 +24,7 @@ import { buildIndexes } from "./indexes.js";
 import { serializePlan, deserializePlan } from "./serialize.js";
 import { initHasher } from "@ngcompass/cache";
 import { warmupHashCache, calculateGlobalHash, calculateFileHash } from "./hashing.js";
+import { groupTasksByFile } from "./utils.js";
 
 /**
  * Builds complete execution plan with indexes and optional caching.
@@ -595,24 +596,5 @@ const convertTasksToPlan = (
     return plan;
 };
 
-/**
- * Groups tasks by file path.
- *
- * @param tasks - Flat list of tasks
- * @returns Map keyed by file path
- */
-const groupTasksByFile = (tasks: ReadonlyArray<Task>): Map<string, Task[]> => {
-    const map = new Map<string, Task[]>();
 
-    for (const task of tasks) {
-        const list = map.get(task.filePath);
-        if (list) {
-            list.push(task);
-        } else {
-            map.set(task.filePath, [task]);
-        }
-    }
-
-    return map;
-};
 

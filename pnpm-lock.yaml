@@ -198,9 +198,6 @@ importers:
       '@ngcompass/common':
         specifier: workspace:*
         version: link:../common
-      '@ngcompass/engine':
-        specifier: workspace:*
-        version: link:../engine
       defu:
         specifier: ^6.1.4
         version: 6.1.4
@@ -227,85 +224,6 @@ importers:
         specifier: ^25.1.0
         version: 25.1.0
 
-  packages/core:
-    dependencies:
-      '@ngcompass/common':
-        specifier: workspace:*
-        version: link:../common
-      angular-html-parser:
-        specifier: ^10.4.0
-        version: 10.4.0
-      cacache:
-        specifier: ^20.0.3
-        version: 20.0.3
-      defu:
-        specifier: ^6.1.4
-        version: 6.1.4
-      ignore:
-        specifier: ^7.0.3
-        version: 7.0.5
-      jiti:
-        specifier: ^2.6.1
-        version: 2.6.1
-      lightningcss:
-        specifier: ^1.31.1
-        version: 1.31.1
-      lilconfig:
-        specifier: ^3.1.3
-        version: 3.1.3
-      lru-cache:
-        specifier: ^11.2.5
-        version: 11.2.5
-      minimatch:
-        specifier: ^10.1.1
-        version: 10.1.1
-      oxc-parser:
-        specifier: ^0.112.0
-        version: 0.112.0
-      oxc-resolver:
-        specifier: ^11.17.0
-        version: 11.17.0
-      p-limit:
-        specifier: ^7.3.0
-        version: 7.3.0
-      tinyglobby:
-        specifier: ^0.2.15
-        version: 0.2.15
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      write-file-atomic:
-        specifier: ^7.0.0
-        version: 7.0.0
-      xxhash-wasm:
-        specifier: ^1.1.0
-        version: 1.1.0
-      zod:
-        specifier: ^4.3.6
-        version: 4.3.6
-      zod-error:
-        specifier: ^2.0.0
-        version: 2.0.0(zod@4.3.6)
-      zod-validation-error:
-        specifier: ^5.0.0
-        version: 5.0.0(zod@4.3.6)
-    devDependencies:
-      '@types/cacache':
-        specifier: ^20.0.0
-        version: 20.0.0
-      '@types/lru-cache':
-        specifier: ^7.10.10
-        version: 7.10.10
-      '@types/minimatch':
-        specifier: ^6.0.0
-        version: 6.0.0
-      '@types/node':
-        specifier: ^25.1.0
-        version: 25.1.0
-      '@types/write-file-atomic':
-        specifier: ^4.0.3
-        version: 4.0.3
-
   packages/engine:
     dependencies:
       '@ngcompass/ast':
@@ -320,9 +238,6 @@ importers:
       '@ngcompass/planner':
         specifier: workspace:*
         version: link:../planner
-      '@ngcompass/rules':
-        specifier: workspace:*
-        version: link:../rules
       oxc-parser:
         specifier: ^0.112.0
         version: 0.112.0
@@ -392,9 +307,12 @@ importers:
       '@ngcompass/common':
         specifier: workspace:*
         version: link:../common
-      '@ngcompass/core':
+      '@ngcompass/engine':
         specifier: workspace:*
-        version: link:../core
+        version: link:../engine
+      '@ngcompass/planner':
+        specifier: workspace:*
+        version: link:../planner
     devDependencies:
       '@types/node':
         specifier: ^25.1.0
@@ -1397,14 +1315,6 @@ packages:
 
   '@types/http-cache-semantics@4.2.0':
     resolution: {integrity: sha512-L3LgimLHXtGkWikKnsPg0/VFx9OGZaC+eN1u4r+OB1XRqH3meBIAVC2zr1WdMH+RHmnRkqliQAOHNJ/E0j/e0Q==}
-
-  '@types/lru-cache@7.10.10':
-    resolution: {integrity: sha512-nEpVRPWW9EBmx2SCfNn3ClYxPL7IktPX12HhIoSc/H5mMjdeW3+YsXIpseLQ2xF35+OcpwKQbEUw5VtqE4PDNA==}
-    deprecated: This is a stub types definition. lru-cache provides its own type definitions, so you do not need this installed.
-
-  '@types/minimatch@6.0.0':
-    resolution: {integrity: sha512-zmPitbQ8+6zNutpwgcQuLcsEpn/Cj54Kbn7L5pX0Os5kdWplB7xPgEh/g+SWOB/qmows2gpuCaPyduq8ZZRnxA==}
-    deprecated: This is a stub types definition. minimatch provides its own type definitions, so you do not need this installed.
 
   '@types/node@12.20.55':
     resolution: {integrity: sha512-J8xLz7q2OFulZ2cyGTLE1TbbZcjpno7FaN6zdJNrgAdrJ+DZzh/uFR6YrTb4C+nXakvud8Q4+rbhoIWlYQbUFQ==}
@@ -3132,11 +3042,6 @@ packages:
     resolution: {integrity: sha512-4LCcse/U2MHZ63HAJVE+v71o7yOdIe4cZ70Wpf8D/IyjDKYQLV5GD46B+hSTjJsvV5PztjvHoU580EftxjDZFQ==}
     engines: {node: '>=12.20'}
 
-  zod-error@2.0.0:
-    resolution: {integrity: sha512-ivSoPm7h5SEGG8GUvQ7YTwrnEx36qNmUIU5hSIGcqcdl7+ZFoTrYXAdQEs3KP/rkihrrR9REEdOeGU+fWdMoNw==}
-    peerDependencies:
-      zod: ^4.0.0
-
   zod-validation-error@5.0.0:
     resolution: {integrity: sha512-hmk+pkyKq7Q71PiWVSDUc3VfpzpvcRHZ3QPw9yEMVvmtCekaMeOHnbr3WbxfrgEnQTv6haGP4cmv0Ojmihzsxw==}
     engines: {node: '>=18.0.0'}
@@ -3957,14 +3862,6 @@ snapshots:
   '@types/estree@1.0.8': {}
 
   '@types/http-cache-semantics@4.2.0': {}
-
-  '@types/lru-cache@7.10.10':
-    dependencies:
-      lru-cache: 11.2.5
-
-  '@types/minimatch@6.0.0':
-    dependencies:
-      minimatch: 10.1.1
 
   '@types/node@12.20.55': {}
 
@@ -5725,10 +5622,6 @@ snapshots:
   yocto-queue@0.1.0: {}
 
   yocto-queue@1.2.2: {}
-
-  zod-error@2.0.0(zod@4.3.6):
-    dependencies:
-      zod: 4.3.6
 
   zod-validation-error@5.0.0(zod@4.3.6):
     dependencies:

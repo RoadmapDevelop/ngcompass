@@ -1,6 +1,6 @@
-import { RuleFailure } from "@ngcompass/common";
+﻿import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
-import { createCallExpressionRule } from "../engine/rule-handler";
+import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
 import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getTsSymbolAtNode, getCalleeName, childNodes, isCalleeNamed, getCallbackArg, getFunctionBody, getNodeStart } from "../rule-utils";
 import { RuleContext } from "@ngcompass/common";

@@ -1,9 +1,9 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { RuleResult } from "@ngcompass/common";
 import { Task } from "@ngcompass/planner";
-import { createAnalysisContext } from "./analysis-context.js";
-import { executeBatchedTasks } from "./runner.js";
-import { registerAllBuiltinRules } from "@ngcompass/rules";
+import { createAnalysisContext, executeBatchedTasks, configureRuleExecutor } from "@ngcompass/engine";
+import { registerAllBuiltinRules } from "./registry/register-all.js";
+import { executeBatchedNewEngineRules, isNewEngineRule } from "./engine/adapter.js";
 
 /**
  * Worker input payload.
@@ -23,9 +23,13 @@ export interface ExecutionWorkerResult {
 
 const main = async () => {
 
-    registerAllBuiltinRules();
     // Re-register all built-in rules — each worker thread has its own module
     // registry isolated from the main thread, so registration must happen here.
+    registerAllBuiltinRules();
+
+    // Wire the rule executor into the engine's DI boundary so that
+    // executeBatchedTasks() can call back into the rules registry.
+    configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
     if (!parentPort) return;
 
@@ -63,4 +67,3 @@ const main = async () => {
 };
 
 void main();
-

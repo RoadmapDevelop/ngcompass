@@ -4,9 +4,9 @@ import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
 import { CacheContext } from '@ngcompass/cache';
-import { getGlobalRegistry } from '@ngcompass/rules';
+import { getGlobalRegistry, executeBatchedNewEngineRules, isNewEngineRule } from '@ngcompass/rules';
 import { loadPlugins } from '@ngcompass/config';
-import { runAnalysis } from '@ngcompass/engine';
+import { runAnalysis, configureRuleExecutor } from '@ngcompass/engine';
 import { ExecutionPlanOutput, buildExecutionPlan } from '@ngcompass/planner';
 import { scan } from '@ngcompass/scanner';
 import { resolveRules, getEnabledRules } from '@ngcompass/rules';
@@ -252,6 +252,10 @@ async function runAnalysisStep(
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
     reporter.step('Running analysis...');
+
+    // Wire the rule executor into the engine's DI boundary so the engine's
+    // runner can call back into the rules registry without a circular import.
+    configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
     const result = await runAnalysis(plan, {
         rootDir: process.cwd(),

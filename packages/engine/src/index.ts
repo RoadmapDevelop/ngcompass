@@ -23,6 +23,18 @@ export * from './rule-context-factory.js';
 // Orchestrator
 export * from './orchestrator.js';
 
+// Analysis context (memoized file/AST accessors — used by execution-worker in @ngcompass/rules)
+export { createAnalysisContext } from './analysis-context.js';
+export type { AnalysisContext } from './analysis-context.js';
+
+// Runner (batched task execution — used by execution-worker in @ngcompass/rules)
+// Note: ExecutionContext is NOT re-exported here to avoid conflict with rule-context-factory.ts
+export { executeBatchedTasks } from './runner.js';
+
+// Rule executor DI boundary — breaks the engine ↔ rules circular dependency
+export { configureRuleExecutor } from './rule-executor.js';
+export type { BatchRuleExecutorFn, RuleCheckerFn } from './rule-executor.js';
+
 // Analysis stats
 export * from './analysis-stats.js';
 

@@ -1,6 +1,6 @@
-import { TemplateAttributeNode } from "@ngcompass/ast";
+﻿import { TemplateAttributeNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
-import { createTemplateAttributeRule } from "../engine/rule-handler";
+import { createTemplateAttributeRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
 import { RuleContext } from "@ngcompass/common";
 

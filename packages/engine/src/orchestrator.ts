@@ -14,13 +14,13 @@
 import os from "node:os";
 import pLimit from "p-limit";
 
-import { Task, ExecutionPlanOutput } from "@ngcompass/planner";
+import { Task, ExecutionPlanOutput, groupTasksByFile } from "@ngcompass/planner";
 import { CacheContext } from "@ngcompass/cache";
 import { RuleResult, Result, Ok, Err, AnalysisResult } from "@ngcompass/common";
 import { debug, createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
 
 import { createAnalysisContext } from "./analysis-context.js";
-import { runAnalysisParallel, groupTasksByFile } from "./worker-pool.js";
+import { runAnalysisParallel } from "./worker-pool.js";
 import { calculateStats } from "./analysis-stats.js";
 import { executeBatchedTasks } from "./runner.js";
 

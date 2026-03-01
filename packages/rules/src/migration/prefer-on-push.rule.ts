@@ -1,5 +1,5 @@
-import { ChangeDetectionStrategy, type AngularClassNode } from '@ngcompass/ast';
-import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations'; import { createComponentRule } from '../engine/rule-handler';
+﻿import { ChangeDetectionStrategy, type AngularClassNode } from '@ngcompass/ast';
+import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations'; import { createComponentRule } from '@ngcompass/engine';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 
 type AnyNode = any;

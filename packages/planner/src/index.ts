@@ -87,3 +87,5 @@ export {
     pruneStaleCache,
 } from './incremental.js';
 
+export { groupTasksByFile } from './utils.js';
+

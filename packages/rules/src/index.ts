@@ -39,8 +39,7 @@ export {
 
 export { registerAllBuiltinRules } from './registry/register-all.js';
 export { executeBatchedNewEngineRules, isNewEngineRule } from './engine/adapter.js';
-export { type RuleHandler } from './engine/rule-handler.js';
-export { RuleContextFactory } from './engine/rule-context-factory.js';
+export { type RuleHandler, RuleContextFactory } from '@ngcompass/engine';
 
 // Resolution
 export { resolveRules, getEnabledRules, getRulesByCategory, getRulesByDependencyType } from './resolution/resolver.js';

@@ -1,6 +1,6 @@
-import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations';
-import { createAnyAngularClassRule } from '../engine/rule-handler';
-import { AnyAngularClassNode } from '../engine/node-streams';
+﻿import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations';
+import { createAnyAngularClassRule } from '@ngcompass/engine';
+import { AnyAngularClassNode } from '@ngcompass/ast';
 import { AstNode, unwrapNode, getTsSymbolAtNode, isLikelyAngularInjectableSymbol, getParamIdentifierName, getParamTypeName, getClassBody, getConstructorMember, getParamsArray, getNodeStart } from '../rule-utils';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 

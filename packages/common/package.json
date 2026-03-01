@@ -25,9 +25,9 @@
         "oxc-parser": "^0.112.0"
     },
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean --external typescript",
-        "build:prod": "NODE_ENV=production tsup src/index.ts --format cjs,esm --dts --clean --external typescript --minify",
-        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",

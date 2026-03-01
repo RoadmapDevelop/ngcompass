@@ -1,6 +1,6 @@
-import { AnyAngularClassNode } from "@ngcompass/ast";
+﻿import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
-import { createAnyAngularClassRule } from "../engine/rule-handler";
+import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
 import { AstNode, getClassBody, getConstructorMember, getMethodBody, findEffectCalls, getNodeStart } from "../rule-utils";
 import { RuleContext } from "@ngcompass/common";

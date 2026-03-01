@@ -27,6 +27,7 @@ import type { RuleHandler } from './rule-handler.js';
 import { resetComponentCacheStats, getComponentCacheStats } from '@ngcompass/ast';
 import { analyzeTemplate } from '@ngcompass/ast';
 import { buildVisitorMap } from './visitor-registry.js';
+import { InfrastructureErrorCollector, createInfrastructureError } from '@ngcompass/common';
 
 // ============================================
 // PERFORMANCE BUDGETS (Enforced by CI)
@@ -51,6 +52,7 @@ export interface PerformanceReport {
     ruleTimings: RuleTiming[];
     cacheStats: { hits: number; misses: number };
     budgetViolations: string[];
+    hasBudgetViolations: boolean;
 }
 
 // ============================================
@@ -70,6 +72,7 @@ const dispatchTemplateHandlers = (
     context: RuleContext,
     failuresByRule: Map<string, RuleFailure[]>,
     ruleTimings: Map<string, RuleTiming>,
+    errorCollector?: InfrastructureErrorCollector
 ): void => {
     if (handlers.length === 0) return;
     for (const templateNode of nodes) {
@@ -88,7 +91,12 @@ const dispatchTemplateHandlers = (
                     failuresByRule.set(handler.name, existing);
                 }
             } catch (e) {
-                console.error(`Rule ${handler.name} failed on template node:`, e);
+                errorCollector?.record(createInfrastructureError('RuleExecutionError', {
+                    cause: `Rule ${handler.name} failed on template node: ${e instanceof Error ? e.message : String(e)}`,
+                    recoverable: true,
+                    phase: 'engine',
+                    details: { ruleName: handler.name, errorName: e instanceof Error ? e.name : undefined }
+                }));
             }
             const elapsed = performance.now() - ruleStart;
             const timing = ruleTimings.get(handler.name)!;
@@ -114,7 +122,8 @@ const dispatchTemplateHandlers = (
  */
 export const runSinglePassAnalysis = (
     rules: ReadonlyArray<RuleHandler<any>>,
-    context: RuleContext
+    context: RuleContext,
+    options?: { errorCollector?: InfrastructureErrorCollector }
 ): { results: RuleResult[]; performance: PerformanceReport } => {
     const { program } = context;
 
@@ -127,6 +136,7 @@ export const runSinglePassAnalysis = (
                 ruleTimings: [],
                 cacheStats: { hits: 0, misses: 0 },
                 budgetViolations: [],
+                hasBudgetViolations: false,
             },
         };
     }
@@ -186,7 +196,12 @@ export const runSinglePassAnalysis = (
                         }
                     }
                 } catch (e) {
-                    console.error(`Rule ${entry.ruleName} failed:`, e);
+                    options?.errorCollector?.record(createInfrastructureError('RuleExecutionError', {
+                        cause: `Rule ${entry.ruleName} failed: ${e instanceof Error ? e.message : String(e)}`,
+                        recoverable: true,
+                        phase: 'engine',
+                        details: { ruleName: entry.ruleName, errorName: e instanceof Error ? e.name : undefined }
+                    }));
                 }
 
                 const elapsed = performance.now() - ruleStart;
@@ -202,8 +217,8 @@ export const runSinglePassAnalysis = (
     // Phase 4: Dispatch to template streams (post-walk, different parser)
     if (context.template && (templateExpressionHandlers.length > 0 || templateAttributeHandlers.length > 0)) {
         const templateAnalysis = analyzeTemplate(context.template);
-        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, context, failuresByRule, ruleTimings);
-        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, context, failuresByRule, ruleTimings);
+        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
     }
 
     // Phase 5: Collect results
@@ -245,6 +260,7 @@ export const runSinglePassAnalysis = (
             ruleTimings: Array.from(ruleTimings.values()),
             cacheStats: getComponentCacheStats(),
             budgetViolations,
+            hasBudgetViolations: budgetViolations.length > 0,
         },
     };
 };
