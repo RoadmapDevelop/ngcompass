@@ -425,6 +425,9 @@ export function getFunctionBody(fn: AstNode | null | undefined): AstNode | null 
 /**
  * Collects import aliases for a given exported name from rxjs imports.
  * E.g., `import { BehaviorSubject as BS } from 'rxjs'` -> Set(['BehaviorSubject', 'BS'])
+ *
+ * @deprecated Use `collectAllRxjsAliases` instead for better performance — it scans the
+ * source text only once for all requested names instead of once per name.
  */
 export function collectRxjsAliases(sourceText: string | undefined, exportedName: string): Set<string> {
     const names = new Set<string>([exportedName]);
@@ -593,7 +596,7 @@ export function getTemplateAbsoluteOffset(
 ): number {
     const templateStartOffset = ((context as any).template as any)?.templateStartOffset;
     if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
-        return nodeStart + (templateStartOffset as number);
+        return nodeStart + templateStartOffset;
     }
     return nodeStart;
 }

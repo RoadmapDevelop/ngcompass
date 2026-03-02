@@ -37,7 +37,7 @@ export const registerNewEngineRule = (handler: RuleHandler<any>): void => {
         },
     };
 
-    getGlobalRegistry().register(plugin, { allowOverride: true });
+    getGlobalRegistry().register(plugin);
 
     debug('engine', `Registered rule: ${handler.name}`);
 };

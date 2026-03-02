@@ -1,0 +1,36 @@
+﻿TAP version 13
+1..1
+not ok 1 - tests/scan.test.ts # time=5.61ms {
+    1..1
+    not ok 1 - scan # time=5.00ms {
+        1..4
+        not ok 1 - uses standard glob when not in git repo # time=3.23ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockResolvedValue is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/scan.test.ts:31:34"
+            ...
+        not ok 2 - uses git discovery when in git repo # time=0.35ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockResolvedValue is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/scan.test.ts:31:34"
+            ...
+        not ok 3 - returns error when discovery fails # time=0.34ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockResolvedValue is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/scan.test.ts:31:34"
+            ...
+        not ok 4 - integrates with cache if provided # time=0.36ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockResolvedValue is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/scan.test.ts:31:34"
+            ...
+    }
+}

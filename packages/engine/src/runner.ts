@@ -9,9 +9,8 @@
  */
 
 import { HtmlParserResult, CssResult } from "@ngcompass/ast";
-import { InfrastructureErrorCollector, RuleResult, RuleSeverity, stableSerialize, SerializationError, createInfrastructureError } from "@ngcompass/common";
+import { InfrastructureErrorCollector, RuleResult, RuleFailure, RuleSeverity, stableSerialize, SerializationError, createInfrastructureError, debug } from "@ngcompass/common";
 import { Task } from "@ngcompass/planner";
-import { warn, error } from "console";
 import { Program } from "oxc-parser";
 import { RuleContextFactory } from "./rule-context-factory.js";
 import { getConfiguredExecutor, getConfiguredChecker } from "./rule-executor.js";
@@ -60,7 +59,7 @@ export const executeBatchedTasks = async (
 
     for (const task of tasks) {
         if (!getConfiguredChecker()(task.ruleName)) {
-            warn("engine", `Skipping task ${task.taskId}: Rule "${task.ruleName}" not registered in engine.`);
+            debug("engine", `Skipping task ${task.taskId}: Rule "${task.ruleName}" not registered in engine.`);
             results.push({ ruleName: task.ruleName, taskId: task.taskId, failures: [] });
             continue;
         }
@@ -75,7 +74,7 @@ export const executeBatchedTasks = async (
             // SerializationError means the rule's options contain something
             // illegal (circular ref, function, etc.). Skip gracefully.
             const msg = serErr instanceof SerializationError ? serErr.message : String(serErr);
-            warn("engine", `Skipping task ${task.taskId}: failed to serialize options — ${msg}`);
+            debug("engine", `Skipping task ${task.taskId}: failed to serialize options — ${msg}`);
             errorCollector?.record(createInfrastructureError('SerializationError', {
                 cause: msg,
                 phase: 'engine',
@@ -99,9 +98,12 @@ export const executeBatchedTasks = async (
     // 2. Execute each batch — all tasks in a batch share the same file + options
     for (const batch of batches.values()) {
         try {
+            // Pre-build a Set for O(1) membership checks — avoids the O(n×k)
+            // quadratic scan that Array.includes() would cause inside .some().
+            const batchTaskIdSet = new Set(batch.taskIds);
             // Determine if any task in this batch requires the template
             const needsTemplate = tasks.some(
-                t => batch.taskIds.includes(t.taskId) && t.inputs.template?.needsAst
+                t => batchTaskIdSet.has(t.taskId) && t.inputs.template?.needsAst
             );
 
             // RuleContextFactory handles all I/O: read, parse, Locator, template
@@ -132,7 +134,7 @@ export const executeBatchedTasks = async (
                 const finalResult = configuredSeverity
                     ? {
                         ...result,
-                        failures: result.failures.map((f: any) => ({ ...f, severity: configuredSeverity })),
+                        failures: result.failures.map((f: RuleFailure): RuleFailure => ({ ...f, severity: configuredSeverity })),
                     }
                     : result;
 
@@ -145,7 +147,7 @@ export const executeBatchedTasks = async (
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            error("engine", `Failed to execute batch for ${tasks[0].filePath}:`, e);
+            debug("engine", `Failed to execute batch for ${tasks[0].filePath}: ${msg}`);
             errorCollector?.record(createInfrastructureError('ParseError', {
                 filePath: tasks[0].filePath,
                 cause: msg,

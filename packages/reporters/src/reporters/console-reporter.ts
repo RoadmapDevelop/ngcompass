@@ -57,9 +57,10 @@ const TRAILING_PERIOD_RE = /\.$/;
  */
 function buildIndexedSeparator(index: number, total: number): string {
     const label = `[${index}/${total}]`;
-    const FIXED_WIDTH = 160;
-    // Dotted line with label at the end, total width 160
-    const dotCount = Math.max(1, FIXED_WIDTH - label.length);
+    // Adapt to the actual terminal width; cap at 120 to avoid sprawl on ultra-wide displays.
+    // Falls back to 80 when stdout is not a TTY (e.g. piped output, CI).
+    const width = Math.min(process.stdout.columns ?? 80, 120);
+    const dotCount = Math.max(1, width - label.length);
     const content = '·'.repeat(dotCount) + label;
     return pc.dim(pc.gray(content));
 }
@@ -99,7 +100,8 @@ function countSeverities(failures: readonly RuleFailure[]): SeverityCounts {
 /**
  * Groups failures by relative file path, keyed to `cwd`.
  *
- * Uses a reduce accumulator so the Map is built declaratively.
+ * O(n) — iterates failures once and pushes into an existing bucket rather than
+ * creating a new spread array on every iteration (avoids O(n²) allocations).
  * `path.relative` is applied once per failure to avoid repeated computation
  * inside the render loop.
  */
@@ -107,11 +109,17 @@ function groupFailuresByFile(
     failures: readonly RuleFailure[],
     cwd: string,
 ): Map<string, RuleFailure[]> {
-    return failures.reduce<Map<string, RuleFailure[]>>((map, failure) => {
+    const map = new Map<string, RuleFailure[]>();
+    for (const failure of failures) {
         const relativePath = path.relative(cwd, failure.filePath);
-        const existing = map.get(relativePath) ?? [];
-        return map.set(relativePath, [...existing, failure]);
-    }, new Map());
+        const existing = map.get(relativePath);
+        if (existing) {
+            existing.push(failure);
+        } else {
+            map.set(relativePath, [failure]);
+        }
+    }
+    return map;
 }
 
 /** Returns a new array of failures sorted by source position. */
@@ -201,7 +209,7 @@ function buildCardMessageLine(failure: RuleFailure): string {
     const isError = isErrorSeverity(failure.severity);
     const message = failure.message.replace(TRAILING_PERIOD_RE, '');
     const coloredMsg = isError ? pc.red(message) : pc.yellow(message);
-    return `${coloredMsg}  ${pc.dim(pc.dim(failure.ruleName))}`;
+    return `${coloredMsg}  ${pc.dim(failure.ruleName)}`;
 }
 
 /**
@@ -345,7 +353,7 @@ export class ConsoleReporter implements Reporter {
 
     /** Flattens results into a single typed failure list (no narrowing needed later). */
     private extractAllFailures(results: ReadonlyArray<RuleResult>): RuleFailure[] {
-        return results.flatMap(result => result.failures as RuleFailure[]);
+        return results.flatMap(result => [...result.failures]);
     }
 
     /**
@@ -438,15 +446,15 @@ export class ConsoleReporter implements Reporter {
         // Resolve source lines once per file — avoids repeated I/O per individual failure card.
         const sourceLines = this.sourceReader.readLines(sorted[0]?.filePath ?? '');
 
-        sorted.forEach((failure, offset) => {
+        for (let offset = 0; offset < sorted.length; offset++) {
             this.renderRichCard({
-                failure,
+                failure: sorted[offset],
                 index: startIndex + offset + 1,
                 total,
                 relFilePath: filePath,
                 sourceLines,
             });
-        });
+        }
 
         return startIndex + sorted.length;
     }

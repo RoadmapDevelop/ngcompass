@@ -32,7 +32,7 @@ export const executeGlob = async (
             absolute: true,
             followSymbolicLinks: options.followSymlinks,
             onlyFiles: true,
-            dot: false, // Skip hidden files
+            dot: false,
         });
 
         return Ok({ files });
@@ -50,10 +50,7 @@ export const executeGlob = async (
  * @returns True if patterns look reasonable
  */
 export const patternsLikelyHaveMatches = (patterns: ExpandedPatterns): boolean => {
-    // If include is empty, no matches
     if (patterns.include.length === 0) return false;
-
-    // If only negations, no matches
     if (patterns.include.every(p => p.startsWith('!'))) return false;
 
     return true;

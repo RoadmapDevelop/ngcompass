@@ -1,0 +1,69 @@
+﻿TAP version 13
+1..1
+not ok 1 - tests/git.test.ts # time=16.65ms {
+    1..3
+    not ok 1 - isGitRepo # time=10.44ms {
+        1..2
+        not ok 1 - returns true if command succeeds # time=9.14ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected false to be true // Object.is equality"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:33:24"
+            actual: "false"
+            expected: "true"
+            ...
+        not ok 2 - returns false if command fails # time=0.55ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockImplementationOnce is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:37:38"
+            ...
+    }
+    not ok 2 - executeGitDiscovery # time=2.24ms {
+        1..2
+        not ok 1 - returns absolute paths from git ls-files # time=1.83ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected +0 to be 2 // Object.is equality"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:51:31"
+            actual: "0"
+            expected: "2"
+            ...
+        not ok 2 - returns empty array on error # time=0.35ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockImplementationOnce is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:57:38"
+            ...
+    }
+    not ok 3 - getRepoFingerprint # time=2.90ms {
+        1..3
+        not ok 1 - returns combined head and index mtime # time=1.87ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected '' to be 'abcdef123456-1000000' // Object.is equality"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:70:24"
+            actual: 
+            expected: "abcdef123456-1000000"
+            ...
+        not ok 2 - falls back to HEAD only if stat fails # time=0.55ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockRejectedValueOnce is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:74:28"
+            ...
+        not ok 3 - returns empty string if rev-parse fails # time=0.38ms
+            ---
+            error:
+                name: "TypeError"
+                message: "__vite_ssr_import_0__.vi.mocked(...).mockImplementationOnce is not a function"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/git.test.ts:81:38"
+            ...
+    }
+}

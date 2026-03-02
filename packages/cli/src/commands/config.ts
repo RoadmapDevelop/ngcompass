@@ -3,15 +3,11 @@ import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
 import { validateConfig } from '@ngcompass/config';
 
-/**
- * Registers the 'config' command and its subcommands.
- */
 export function registerConfigCommand(program: Command, cache: CacheContext) {
     const configGroup = program
         .command('config')
         .description('Manage and validate configuration');
 
-    // Health check subcommand
     configGroup
         .command('health')
         .description('Validate the current configuration for semantic correctness')

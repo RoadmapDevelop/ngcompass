@@ -1,10 +1,16 @@
 import { createRequire } from "node:module";
-import { Result, AnalysisResult, RuleResult, createInfrastructureError, Ok } from "@ngcompass/common";
-import { warn, error } from "node:console";
+import os from "node:os";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { existsSync } from "node:fs";
+import { Result, AnalysisResult, RuleResult, createInfrastructureError, Ok, debug } from "@ngcompass/common";
 import { createAnalysisContext } from "./analysis-context.js";
 import { calculateStats } from "./analysis-stats.js";
 import { executeBatchedTasks } from "./runner.js";
 import { Task, groupTasksByFile } from "@ngcompass/planner";
+/** Local mirror of ExecutionWorkerResult to avoid a circular @ngcompass/rules import. */
+interface WorkerTaskError { task: { taskId: string }; error: string; }
+interface WorkerMessageResult { results: RuleResult[]; errors: WorkerTaskError[]; }
 import pLimit from "p-limit";
 import { Spinner } from "./spinner.js";
 
@@ -32,14 +38,13 @@ export const runAnalysisParallel = async (
     concurrency?: number
 ): Promise<Result<AnalysisResult>> => {
     const { Worker } = await import("node:worker_threads");
-    const os = await import("node:os");
 
     // Use caller-supplied value (already clamped); fall back to previous default
     const workerCount = maxWorkers ?? Math.max(2, os.cpus().length);
     const workerPath = await resolveWorkerPath();
 
     if (!workerPath) {
-        warn("workers", "Execution worker not found, falling back to local execution.");
+        debug("workers", "Execution worker not found, falling back to local execution.");
         return runLocalFallback(tasks, rootDir, startTime, concurrency ?? workerCount);
     }
 
@@ -50,6 +55,8 @@ export const runAnalysisParallel = async (
     const spinner = new Spinner();
     spinner.start(`Analyzing ${tasks.length} tasks across ${workerCount} workers...`);
 
+    // `completedWorkers` is mutated only from Promise microtask callbacks which are
+    // serialized on the JS event loop — no concurrent mutation is possible.
     let completedWorkers = 0;
     const updateSpinner = () => {
         completedWorkers++;
@@ -71,12 +78,12 @@ export const runAnalysisParallel = async (
                 },
             });
 
-            worker.on("message", (msg: { results: RuleResult[], errors: any[] }) => {
+            worker.on("message", (msg: WorkerMessageResult) => {
                 if (settled) return;
                 settled = true;
                 if (msg.errors && msg.errors.length > 0) {
-                    msg.errors.forEach(e => {
-                        error("workers", `Worker failed task ${e.task.taskId}:`, e.error);
+                    msg.errors.forEach((e: WorkerTaskError) => {
+                        debug("workers", `Worker failed task ${e.task.taskId}: ${e.error}`);
                     });
                 }
                 updateSpinner();
@@ -102,7 +109,7 @@ export const runAnalysisParallel = async (
                     recoverable: true,
                     details: { exitCode: code },
                 });
-                error("workers", `Worker crashed: ${infraErr.cause}`);
+                debug("workers", `Worker crashed: ${infraErr.cause}`);
                 reject(new Error(infraErr.cause));
             });
         });
@@ -171,10 +178,6 @@ const runLocalFallback = async (
  *     where packages haven't been built into node_modules yet.
  */
 const resolveWorkerPath = async (): Promise<string | null> => {
-    const { fileURLToPath } = await import("node:url");
-    const { dirname, join } = await import("node:path");
-    const { existsSync } = await import("node:fs");
-
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
 

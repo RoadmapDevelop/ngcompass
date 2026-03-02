@@ -1,12 +1,5 @@
-/**
- * Gitignore Handling
- *
- * Higher-order functions for creating gitignore filters.
- * Uses functional patterns: HOF, pure functions, composition.
- */
-
 import ignore, { type Ignore } from 'ignore';
-import fs from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { GitignoreFilter, Result, Option } from './types.js';
 import { Ok, Err } from './types.js';
@@ -25,10 +18,9 @@ export const loadGitignore = async (rootDir: string): Promise<Option<string>> =>
     const gitignorePath = path.join(rootDir, '.gitignore');
 
     try {
-        const content = await fs.readFile(gitignorePath, 'utf-8');
+        const content = await readFile(gitignorePath, 'utf-8');
         return content;
     } catch (error) {
-        // .gitignore doesn't exist or can't be read
         debug('scanner', `Failed to load .gitignore from ${rootDir}: ${error instanceof Error ? error.message : String(error)}`);
         return null;
     }
@@ -78,7 +70,6 @@ export const loadAndCreateGitignoreFilter = async (
         const content = await loadGitignore(rootDir);
 
         if (!content) {
-            // No .gitignore found, return pass-through filter
             return Ok(createPassThroughFilter());
         }
 

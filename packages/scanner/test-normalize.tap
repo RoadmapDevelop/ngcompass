@@ -1,0 +1,23 @@
+﻿TAP version 13
+1..1
+not ok 1 - tests/normalize.test.ts # time=9.54ms {
+    1..2
+    ok 1 - normalizeOptions # time=3.25ms {
+        1..2
+        ok 1 - applies defaults when options are minimal # time=1.88ms
+        ok 2 - retains provided values over defaults # time=0.49ms
+    }
+    not ok 2 - validateOptions # time=5.62ms {
+        1..4
+        ok 1 - returns empty array for valid options # time=0.27ms
+        ok 2 - returns error when rootDir is empty # time=1.00ms
+        ok 3 - returns error when rootDir is missing # time=0.23ms
+        not ok 4 - returns warning error when include patterns are empty # time=4.02ms
+            ---
+            error:
+                name: "AssertionError"
+                message: "expected [] to include 'No include patterns specified (will uέΑο'"
+            at: "C:/Users/30694/Desktop/ngcompass_/packages/scanner/tests/normalize.test.ts:82:24"
+            ...
+    }
+}

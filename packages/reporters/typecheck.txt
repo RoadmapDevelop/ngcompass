@@ -1,0 +1,6 @@
+﻿
+> @ngcompass/reporters@0.0.1 typecheck C:\Users\30694\Desktop\ngcompass_\packages\reporters
+> tsc --noEmit
+
+src/severity-utils.ts(1,15): error TS2305: Module '"./types.js"' has no exported member 'RuleSeverity'.
+έΑΚELIFECYCLEέΑΚ Command failed with exit code 2.

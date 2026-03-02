@@ -1,10 +1,3 @@
-/**
- * Options Normalization
- *
- * Pure functions for normalizing scanner options.
- * No side effects - always returns new values.
- */
-
 import path from 'node:path';
 import type { ScanOptions, NormalizedOptions } from './types.js';
 
@@ -48,8 +41,7 @@ export const validateOptions = (options: ScanOptions): ReadonlyArray<string> => 
         errors.push('rootDir cannot be empty');
     }
 
-    if (options.include.length === 0 && !options.include) {
-        // Will use defaults, but warn
+    if (!options.include || options.include.length === 0) {
         errors.push('No include patterns specified (will use defaults)');
     }
 
