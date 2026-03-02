@@ -1,12 +1,5 @@
-/**
- * Main Scan Pipeline
- *
- * Composes pure functions into a complete file scanning pipeline.
- * Follows functional programming principles: pure functions, immutability, composition.
- */
-
 import { debug, time, timeEnd } from '@ngcompass/common';
-import type { ScanOptions, ScanResult, Result } from './types.js';
+import type { ScanOptions, ScanResult, Result, ScanTimings, NormalizedOptions, ExpandedPatterns } from './types.js';
 import { Ok } from './types.js';
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
@@ -15,173 +8,213 @@ import { isGitRepo, executeGitDiscovery, getRepoFingerprint } from './git.js';
 import { applyFilters, filterByGlob } from './filters.js';
 import { calculateStats } from './stats.js';
 
-/**
- * Scans for files matching the given options.
- *
- * Functional pipeline composition:
- * 1. Normalize options (pure)
- * 2. Expand patterns (pure)
- * 3. Execute glob (side effect - isolated)
- * 4. Apply filters (side effect - isolated)
- * 5. Calculate stats (pure)
- *
- * @param options - Scanner configuration
- * @returns Result containing scan results or error
- */
 export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> => {
     time('file-scan');
     const startTime = performance.now();
-    const timings = {
-        normalization: 0,
-        discovery: 0,
-        filtering: 0,
-        total: 0
-    };
 
-    if (options.debug) {
-        debug('scanner', `Starting file discovery in: ${options.rootDir}`);
-        debug('scanner', `Include patterns: ${options.include.join(', ')}`);
-        debug('scanner', `Exclude patterns: ${options.exclude.join(', ')}`);
-    }
+    logScanStart(options);
 
-    // Step 1: Normalize options (pure function)
     const t0 = performance.now();
     const normalized = normalizeOptions(options);
-    if (options.debug) debug('scanner', `Normalized rootDir: ${normalized.rootDir}`);
-
-    // Step 2: Expand patterns (pure function)
     const patterns = expandPatterns(normalized);
-    if (options.debug) debug('scanner', `Expanded to ${patterns.include.length} include patterns, ${patterns.ignore.length} ignore patterns`);
+    const normalizationTime = performance.now() - t0;
 
-    timings.normalization = performance.now() - t0;
+    logNormalization(normalized, patterns, options.debug);
 
-    // Early Git check for optimization & caching
     const isGit = await isGitRepo(normalized.rootDir);
 
-    // Step 2.5: Cache Check (Milestone 1)
-    let cacheKey = '';
-    const tCacheStart = performance.now();
-
-    if (options.cache && isGit) {
-        const fingerprint = await getRepoFingerprint(normalized.rootDir);
-        if (fingerprint) {
-            // Include patterns in key to invalidate if config changes
-            cacheKey = options.cache.computeHash([
-                normalized.rootDir,
-                JSON.stringify(patterns),
-                fingerprint,
-                'v1'
-            ].join('|'));
-
-            const cached = await options.cache.files.get(cacheKey);
-            if (cached) {
-                if (options.debug) debug('scanner', `Cache HIT. Loaded ${cached.files.length} files.`);
-
-                const tCacheEnd = performance.now();
-                timings.discovery = tCacheEnd - tCacheStart;
-                timings.total = tCacheEnd - startTime;
-
-                const stats = calculateStats(cached.files, startTime, true);
-
-                return Ok({
-                    files: cached.files,
-                    stats,
-                    timestamp: Date.now(),
-                    timings: options.debug ? timings : undefined
-                });
-            }
-        }
+    const cacheResult = await tryLoadFromCache(normalized, patterns, isGit, options);
+    if (cacheResult) {
+        return buildCachedResult(cacheResult, startTime, options.debug);
     }
 
-    // Step 3: Execute discovery (Prefer Git-native for speed)
     const t1 = performance.now();
-    let rawFiles: ReadonlyArray<string>;
-    // const isGit = await isGitRepo(normalized.rootDir);
+    const discoveryResult = await discoverFiles(normalized, patterns, isGit, options.debug);
 
-    if (isGit) {
-        if (options.debug) debug('scanner', 'Git repository detected. Using fast Git discovery...');
-        const gitFiles = await executeGitDiscovery(normalized.rootDir);
-
-        // Filter Git results by the user's include/exclude patterns
-        rawFiles = filterByGlob(
-            gitFiles,
-            patterns.include,
-            patterns.ignore,
-            normalized.rootDir
-        ) as string[];
-
-        if (options.debug) debug('scanner', `Git discovery found ${rawFiles.length} files (after glob filtering)`);
-    } else {
-        if (options.debug) debug('scanner', 'Not a Git repository. Falling back to standard globbing...');
-        const rawResult = await executeGlob(patterns, normalized.rootDir, {
-            followSymlinks: normalized.followSymlinks,
-        });
-
-        if (!rawResult.ok) {
-            const scanTime = timeEnd('file-scan');
-            if (options.debug) debug('scanner', `Scan failed after ${scanTime.toFixed(1)}ms: ${rawResult.error.message}`);
-            return rawResult;
-        }
-        rawFiles = rawResult.data.files;
-        if (options.debug) debug('scanner', `Glob found ${rawFiles.length} files`);
+    if (!discoveryResult.ok) {
+        logAndReturnError('Scan', discoveryResult.error, options.debug);
+        return discoveryResult;
     }
 
-    timings.discovery = performance.now() - t1;
+    const rawFiles = discoveryResult.data;
+    const discoveryTime = performance.now() - t1;
 
-    // Step 4: Apply filters (side effect isolated in gitignore loading)
     const t2 = performance.now();
-    const filteredResult = await applyFilters({ files: rawFiles }, normalized);
+    const filterResult = await applyFilters({ files: rawFiles }, normalized);
 
-    if (!filteredResult.ok) {
-        const scanTime = timeEnd('file-scan');
-        if (options.debug) debug('scanner', `Filter failed after ${scanTime.toFixed(1)}ms: ${filteredResult.error.message}`);
-        return filteredResult;
+    if (!filterResult.ok) {
+        logAndReturnError('Filter', filterResult.error, options.debug);
+        return filterResult;
     }
 
-    timings.filtering = performance.now() - t2;
+    const finalFiles = filterResult.data.files as string[];
+    const filteringTime = performance.now() - t2;
 
-    if (options.debug) debug('scanner', `After filters: ${filteredResult.data.files.length} files (${filteredResult.data.filtered} filtered out)`);
+    logFiltering(finalFiles.length, filterResult.data.filtered, options.debug);
 
-    // Cache Save
-    if (options.cache && cacheKey && filteredResult.data.files.length > 0) {
-        await options.cache.files.set(cacheKey, filteredResult.data.files as string[]);
-        if (options.debug) debug('scanner', 'File list cached.');
-    }
+    await saveToCache(normalized, patterns, finalFiles, isGit, options);
 
-    // Step 5: Calculate stats (pure function)
-    const stats = calculateStats(filteredResult.data.files, startTime, false);
+    const stats = calculateStats(finalFiles, startTime, false);
+    const totalTime = timeEnd('file-scan');
 
-    const scanTime = timeEnd('file-scan');
-    timings.total = scanTime;
+    logScanEnd(stats, totalTime, options.debug);
 
-    if (options.debug) {
-        debug('scanner', `Scan complete: ${stats.totalFiles} files in ${scanTime.toFixed(1)}ms`);
-        debug('scanner', `Breakdown: ${formatExtensionBreakdown(stats.byExtension)}`);
-    }
+    const timings: ScanTimings = {
+        normalization: normalizationTime,
+        discovery: discoveryTime,
+        filtering: filteringTime,
+        total: totalTime
+    };
 
-    // Warn if no files found
-    if (stats.totalFiles === 0 && options.debug) {
-        debug('scanner', '⚠️  No files found matching patterns. Check your include/exclude configuration.');
-    }
-
-    // Return result (immutable)
     return Ok({
-        files: filteredResult.data.files,
+        files: finalFiles,
         stats,
         timestamp: Date.now(),
         timings: options.debug ? timings : undefined
     });
 };
 
-/**
- * Helper to format extension breakdown for debug output.
- *
- * Pure function.
- */
-const formatExtensionBreakdown = (byExtension: ReadonlyMap<string, number>): string => {
-    const entries = Array.from(byExtension.entries())
-        .sort(([, a], [, b]) => b - a)
-        .slice(0, 5); // Show top 5
+async function discoverFiles(
+    normalized: NormalizedOptions,
+    patterns: ExpandedPatterns,
+    isGit: boolean,
+    isDebug?: boolean
+): Promise<Result<ReadonlyArray<string>>> {
+    if (isGit) {
+        if (isDebug) debug('scanner', 'Git repository detected. Using fast Git discovery...');
+        const gitFiles = await executeGitDiscovery(normalized.rootDir);
 
-    return entries.map(([ext, count]) => `${ext}:${count}`).join(', ');
-};
+        const filtered = filterByGlob(
+            gitFiles,
+            patterns.include,
+            patterns.ignore,
+            normalized.rootDir
+        ) as string[];
+
+        if (isDebug) debug('scanner', `Git discovery found ${filtered.length} files (after glob filtering)`);
+        return Ok(filtered);
+    }
+
+    if (isDebug) debug('scanner', 'Not a Git repository. Falling back to standard globbing...');
+    const result = await executeGlob(patterns, normalized.rootDir, {
+        followSymlinks: normalized.followSymlinks,
+    });
+
+    if (result.ok && isDebug) {
+        debug('scanner', `Glob found ${result.data.files.length} files`);
+    }
+
+    return result.ok ? Ok(result.data.files) : result;
+}
+
+async function getCacheKey(
+    normalized: NormalizedOptions,
+    patterns: ExpandedPatterns,
+    isGit: boolean,
+    options: ScanOptions
+): Promise<string | null> {
+    if (!options.cache || !isGit) return null;
+
+    const fingerprint = await getRepoFingerprint(normalized.rootDir);
+    if (!fingerprint) return null;
+
+    return options.cache.computeHash([
+        normalized.rootDir,
+        JSON.stringify(patterns),
+        fingerprint,
+        'v1'
+    ].join('|'));
+}
+
+async function tryLoadFromCache(
+    normalized: NormalizedOptions,
+    patterns: ExpandedPatterns,
+    isGit: boolean,
+    options: ScanOptions
+): Promise<ReadonlyArray<string> | null> {
+    const key = await getCacheKey(normalized, patterns, isGit, options);
+    if (!key || !options.cache) return null;
+
+    const cached = await options.cache.files.get(key);
+    if (cached) {
+        if (options.debug) debug('scanner', `Cache HIT. Loaded ${cached.files.length} files.`);
+        return cached.files;
+    }
+
+    return null;
+}
+
+async function saveToCache(
+    normalized: NormalizedOptions,
+    patterns: ExpandedPatterns,
+    files: string[],
+    isGit: boolean,
+    options: ScanOptions
+): Promise<void> {
+    if (!options.cache || files.length === 0) return;
+
+    const key = await getCacheKey(normalized, patterns, isGit, options);
+    if (key) {
+        await options.cache.files.set(key, files);
+        if (options.debug) debug('scanner', 'File list cached.');
+    }
+}
+
+function buildCachedResult(
+    files: ReadonlyArray<string>,
+    startTime: number,
+    isDebug?: boolean
+): Result<ScanResult> {
+    const stats = calculateStats(files, startTime, true);
+    const totalTime = performance.now() - startTime;
+
+    return Ok({
+        files,
+        stats,
+        timestamp: Date.now(),
+        timings: isDebug ? { normalization: 0, discovery: totalTime, filtering: 0, total: totalTime } : undefined
+    });
+}
+
+function logScanStart(options: ScanOptions): void {
+    if (!options.debug) return;
+    debug('scanner', `Starting file discovery in: ${options.rootDir}`);
+    debug('scanner', `Include patterns: ${options.include.join(', ')}`);
+    debug('scanner', `Exclude patterns: ${options.exclude.join(', ')}`);
+}
+
+function logNormalization(normalized: NormalizedOptions, patterns: ExpandedPatterns, isDebug?: boolean): void {
+    if (!isDebug) return;
+    debug('scanner', `Normalized rootDir: ${normalized.rootDir}`);
+    debug('scanner', `Expanded to ${patterns.include.length} include patterns, ${patterns.ignore.length} ignore patterns`);
+}
+
+function logFiltering(fileCount: number, filteredCount: number, isDebug?: boolean): void {
+    if (!isDebug) return;
+    debug('scanner', `After filters: ${fileCount} files (${filteredCount} filtered out)`);
+}
+
+function logScanEnd(stats: ReturnType<typeof calculateStats>, scanTime: number, isDebug?: boolean): void {
+    if (!isDebug) return;
+
+    debug('scanner', `Scan complete: ${stats.totalFiles} files in ${scanTime.toFixed(1)}ms`);
+
+    const breakdown = Array.from(stats.byExtension.entries())
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5)
+        .map(([ext, count]) => `${ext}:${count}`)
+        .join(', ');
+
+    debug('scanner', `Breakdown: ${breakdown}`);
+
+    if (stats.totalFiles === 0) {
+        debug('scanner', 'No files found matching patterns. Check your include/exclude configuration.');
+    }
+}
+
+function logAndReturnError(phase: string, error: Error, isDebug?: boolean): void {
+    const scanTime = timeEnd('file-scan');
+    if (isDebug) {
+        debug('scanner', `${phase} failed after ${scanTime.toFixed(1)}ms: ${error.message}`);
+    }
+}

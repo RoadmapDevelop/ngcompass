@@ -1,4 +1,4 @@
-import type { RuleSeverity } from './types.js';
+import type { RuleSeverity } from '@ngcompass/common';
 
 /**
  * Numeric priority values for each severity level.

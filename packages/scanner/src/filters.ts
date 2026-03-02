@@ -69,7 +69,6 @@ export const applyFilters = async (
         let files = rawFiles.files;
         const startCount = files.length;
 
-        // Apply gitignore if enabled
         if (options.respectGitignore) {
             const filterResult = await loadAndCreateGitignoreFilter(options.rootDir);
 
@@ -80,7 +79,6 @@ export const applyFilters = async (
             files = applyGitignoreFilter(files, options.rootDir, filterResult.data);
         }
 
-        // Deduplicate (pure operation)
         files = deduplicateFiles(files);
 
         return Ok({
@@ -145,11 +143,9 @@ export const filterByGlob = (
     return files.filter((file) => {
         const relativePath = path.relative(rootDir, file).replace(/\\/g, '/');
 
-        // Check if matches any include pattern
         const isIncluded = includes.some((p) => minimatch(relativePath, p, { dot: true }));
         if (!isIncluded) return false;
 
-        // Check if matches any ignore pattern
         const isIgnored = ignores.some((p) => minimatch(relativePath, p, { dot: true }));
         if (isIgnored) return false;
 

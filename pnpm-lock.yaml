@@ -282,6 +282,9 @@ importers:
       '@babel/code-frame':
         specifier: ^7.29.0
         version: 7.29.0
+      '@ngcompass/cache':
+        specifier: workspace:*
+        version: link:../cache
       '@ngcompass/common':
         specifier: workspace:*
         version: link:../common

@@ -9,10 +9,10 @@
  */
 
 import type { ConfigReport, HealthReport, InitResult, RuleResult } from '@ngcompass/common';
-
+import type { CacheInfo } from '@ngcompass/cache';
 
 /** Supported output encodings for analysis results. */
-export type ReporterFormat = 'console' | 'json';
+export type ReporterFormat = 'console' | 'json' | 'html';
 
 export interface ConsoleReporterOptions {
     /** Enables additional diagnostic output (verbose/fix recommendations). */
@@ -23,6 +23,13 @@ export interface ConsoleReporterOptions {
      * Suitable for CI environments and editor integration.
      */
     readonly compact?: boolean;
+
+    /**
+     * Output file path for the HTML reporter.
+     * Defaults to `ngcompass-report.html` in the current working directory.
+     * Only used when `ReporterFormat` is `'html'`.
+     */
+    readonly outputPath?: string;
 }
 
 /**
@@ -164,4 +171,21 @@ export interface FileDiagnosticResult {
     readonly messages: readonly DiagnosticMessage[];
     readonly errorCount: number;
     readonly warningCount: number;
+}
+
+/**
+ * Reporter contract for cache-related commands (`compass cache`).
+ */
+export interface CacheReporter {
+    /**
+     * Renders the clear cache result.
+     * @param type - The type of cache cleared (ast, config, results, all).
+     */
+    renderClearResult(type: 'ast' | 'config' | 'results' | 'all'): void;
+
+    /**
+     * Renders cache statistics and information.
+     * @param info - The cache information object.
+     */
+    renderCacheInfo(info: CacheInfo): void;
 }

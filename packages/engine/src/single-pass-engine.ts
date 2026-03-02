@@ -24,6 +24,7 @@
 import type { RuleContext, RuleResult, RuleFailure } from './types.js';
 import { walkProgram, toAngularClassStream, toAnyAngularClassStream, toDecoratedPropertyStream, toCallExpressionStream, toNewExpressionStream } from '@ngcompass/ast';
 import type { RuleHandler } from './rule-handler.js';
+import type { TemplateExpressionNode, TemplateAttributeNode } from '@ngcompass/ast';
 import { resetComponentCacheStats, getComponentCacheStats } from '@ngcompass/ast';
 import { analyzeTemplate } from '@ngcompass/ast';
 import { buildVisitorMap } from './visitor-registry.js';
@@ -60,6 +61,11 @@ export interface PerformanceReport {
 // ============================================
 
 /**
+ * Union of the two node types that template-stream handlers receive.
+ */
+type AnyTemplateNode = TemplateExpressionNode | TemplateAttributeNode;
+
+/**
  * Dispatches pre-filtered template nodes to handlers that opted into a
  * template stream (TemplateExpression or TemplateAttribute).
  *
@@ -67,8 +73,8 @@ export interface PerformanceReport {
  * different parser (angular-html-parser) not the Oxc AST.
  */
 const dispatchTemplateHandlers = (
-    nodes: ReadonlyArray<any>,
-    handlers: ReadonlyArray<RuleHandler<any>>,
+    nodes: ReadonlyArray<AnyTemplateNode>,
+    handlers: ReadonlyArray<RuleHandler<AnyTemplateNode>>,
     context: RuleContext,
     failuresByRule: Map<string, RuleFailure[]>,
     ruleTimings: Map<string, RuleTiming>,
@@ -234,7 +240,7 @@ export const runSinglePassAnalysis = (
 
     // Phase 6: Check budgets
     const budgetViolations: string[] = [];
-    const budget = context.options?.typeChecker ? BUDGET_MS_PER_FILE_WITH_TYPES : BUDGET_MS_PER_FILE_WITHOUT_TYPES;
+    const budget = context.typeChecker ? BUDGET_MS_PER_FILE_WITH_TYPES : BUDGET_MS_PER_FILE_WITHOUT_TYPES;
 
     if (traversalMs > budget) {
         budgetViolations.push(

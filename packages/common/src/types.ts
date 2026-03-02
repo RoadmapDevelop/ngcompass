@@ -7,7 +7,17 @@ import type { Locator } from "./utils/locator.js";
 import type { ParseError } from "./errors.js";
 
 /**
- * Severity levels for violations
+ * Violation severity levels, ordered from most to least severe:
+ *
+ *   critical > high > error* > moderate > warning* > low > info > hint
+ *
+ * (*) ESLint-compatibility aliases:
+ *   - `'error'`   ≈ between `'high'` and `'moderate'` — use for hard-constraint violations
+ *   - `'warning'` ≈ between `'moderate'` and `'low'`  — use for advisory violations
+ *
+ * Prefer the custom scale (`critical`, `high`, `moderate`, `low`, `info`, `hint`) for
+ * new rules. The `'error'` / `'warning'` aliases exist for ecosystem compatibility
+ * and are accepted by all reporters and the config schema.
  */
 export type Severity = 'critical' | 'high' | 'moderate' | 'low' | 'info' | 'warning' | 'error' | 'hint';
 
@@ -208,17 +218,23 @@ export interface RegisterOptions {
 
 export interface RulePlugin {
     readonly name: string;
-    readonly handler: any;
+    /**
+     * The rule handler. Typed as `unknown` here because `@ngcompass/common`
+     * cannot import `RuleHandler` from `@ngcompass/engine` (would create a
+     * circular dependency). Call sites in `@ngcompass/rules` narrow this to
+     * `RuleHandler<unknown>` when registering.
+     */
+    readonly handler: unknown;
     readonly meta?: Partial<RuleMetadata>;
     readonly manifest?: import('./interfaces.js').PluginManifest;
 }
 
 export interface RuleRegistry {
     register(plugin: RulePlugin, opts?: RegisterOptions): void;
-    get(name: string): any;
+    get(name: string): unknown;
     has(name: string): boolean;
     getRuleNames(): ReadonlyArray<string>;
-    getAll(): ReadonlyMap<string, any>;
+    getAll(): ReadonlyMap<string, unknown>;
     getMeta(name: string): Partial<RuleMetadata> | undefined;
     getMetadata(name: string): RuleMetadata | undefined;
     getRegistryEntry(name: string): RuleRegistryEntry | undefined;
@@ -258,14 +274,33 @@ export interface RuleResult {
 }
 
 export interface RuleContext {
-    readonly sourceFile?: import('typescript').SourceFile; // Deprecated
+    /**
+     * Lazily-created TypeScript `SourceFile` for this file.
+     *
+     * Populated on first access by `rule-utils.ts`:`getTsSymbolAtNode()` when a rule
+     * requests TypeChecker-based symbol resolution. Creating a `SourceFile` is O(n)
+     * in source length; caching it here ensures the cost is paid at most once per
+     * file, regardless of how many rules request type information.
+     *
+     * Rule authors: **do not read or write this field directly.** Use
+     * `getTsSymbolAtNode(node, context)` from `rule-utils` instead.
+     */
+    readonly sourceFile?: import('typescript').SourceFile;
     readonly filePath: string; // The file being analyzed
     readonly fileContent: string; // Raw content for line/col mapping
     readonly locator: Locator; // Line/column mapping helper
     readonly program?: Program;
     readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
-    readonly template?: any;
-    readonly style?: any;
+    /**
+     * Parsed template AST node. Structurally matches `@ngcompass/ast`'s `Node`
+     * interface — typed inline to avoid a circular package dependency
+     * (`@ngcompass/ast` already depends on `@ngcompass/common`).
+     */
+    readonly template?: { readonly type: string; readonly start?: number; readonly end?: number };
+    /**
+     * Parsed style AST node. Same structural contract as `template` above.
+     */
+    readonly style?: { readonly type: string; readonly start?: number; readonly end?: number };
     readonly options?: Readonly<Record<string, unknown>>;
 }
 

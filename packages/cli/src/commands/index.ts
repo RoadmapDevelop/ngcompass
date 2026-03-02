@@ -5,9 +5,7 @@ import { registerConfigCommand } from './config.js';
 import { registerCacheCommand } from './cache.js';
 import { CacheContext } from '@ngcompass/cache';
 
-/**
- * Registers all CLI commands.
- */
+
 export function registerCommands(program: Command, cache: CacheContext) {
     registerInitCommand(program, cache);
     registerAnalyzeCommand(program, cache);

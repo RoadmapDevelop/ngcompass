@@ -26,7 +26,12 @@
       "Bash(pnpm --filter @ngcompass/engine typecheck:*)",
       "Bash(pnpm --filter @ngcompass/rules typecheck:*)",
       "Bash(pnpm --filter @ngcompass/engine build:*)",
-      "Bash(pnpm install:*)"
+      "Bash(pnpm install:*)",
+      "Bash(python3:*)",
+      "Bash(pnpm --filter @ngcompass/engine test:*)",
+      "Bash(pnpm --filter @ngcompass/reporters typecheck)",
+      "Bash(pnpm --filter @ngcompass/reporters build)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp"
     ]
   }
 }

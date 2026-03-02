@@ -8,10 +8,6 @@ export interface ValidateConfigOptions {
     cache?: CacheContext;
 }
 
-/**
- * Validates the configuration.
- * Resolves the configuration (discovery + merge + full validation) and returns the health report and the config.
- */
 export async function validateConfig(options: ValidateConfigOptions = {}): Promise<ConfigValidationResult> {
     try {
         return await resolveConfig(options);

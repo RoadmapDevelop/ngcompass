@@ -1,7 +1,9 @@
 import { ConsoleReporter } from './reporters/console-reporter.js';
 import { JsonReporter } from './reporters/json-reporter.js';
+import { HtmlReporter } from './reporters/html-reporter.js';
 import { TextConfigReporter } from './reporters/config.js';
-import type { Reporter, ConfigReporter, ReporterFormat, ConsoleReporterOptions } from './types.js';
+import { TextCacheReporter } from './reporters/cache.js';
+import type { Reporter, ConfigReporter, CacheReporter, ReporterFormat, ConsoleReporterOptions } from './types.js';
 
 /**
  * Creates an analysis reporter instance based on the requested format.
@@ -24,6 +26,8 @@ export function getReporter(
             return new JsonReporter();
         case 'console':
             return new ConsoleReporter(undefined, options);
+        case 'html':
+            return new HtmlReporter(options?.outputPath);
         default: {
             // TypeScript narrows `format` to `never` here if `ReporterFormat` is exhaustive.
             // The cast exists so we can emit a clear runtime message if called from JS or
@@ -43,4 +47,15 @@ export function getReporter(
  */
 export function getConfigReporter(): ConfigReporter {
     return new TextConfigReporter();
+}
+
+/**
+ * Creates a cache reporter instance.
+ *
+ * Used for cache-specific commands like `compass cache info` and `compass cache clear`.
+ *
+ * @returns A reporter implementing the `CacheReporter` contract.
+ */
+export function getCacheReporter(): CacheReporter {
+    return new TextCacheReporter();
 }

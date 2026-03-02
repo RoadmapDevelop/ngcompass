@@ -3,9 +3,6 @@ import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
 import { initConfig } from '@ngcompass/config';
 
-/**
- * Registers the 'init' command.
- */
 export function registerInitCommand(program: Command, _cache: CacheContext) {
     program
         .command('init')

@@ -30,6 +30,16 @@ export type { AnalysisContext } from "./analysis-context.js";
 export { createAnalysisContext } from "./analysis-context.js";
 
 /**
+ * Minimal runtime type-guard for cached rule results.
+ * Validates the structural contract without importing a full schema library.
+ */
+function isRuleResult(value: unknown): value is RuleResult {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    return typeof v['ruleName'] === 'string' && Array.isArray(v['failures']);
+}
+
+/**
  * Options for running the analysis.
  */
 export interface AnalysisOptions {
@@ -218,8 +228,8 @@ const retrieveSkippedResults = async (
     if (cachedResults) {
         for (const task of skippedTasks) {
             const result = cachedResults.get(task.taskId);
-            if (result) {
-                skippedResults.push(result as unknown as RuleResult);
+            if (result && isRuleResult(result)) {
+                skippedResults.push(result);
             } else {
                 tasksToFetch.push(task);
             }
@@ -236,8 +246,8 @@ const retrieveSkippedResults = async (
 
         for (const task of tasksToFetch) {
             const entry = cachedEntries.get(task.taskId);
-            if (entry) {
-                skippedResults.push(entry as unknown as RuleResult);
+            if (entry && isRuleResult(entry)) {
+                skippedResults.push(entry);
             }
         }
     }

@@ -22,28 +22,30 @@ interface AnalyzeOptions {
     verbose?: boolean;
     compact?: boolean;
     rule?: string;
+    /** Output file path when --format html is used. */
+    output?: string;
 }
 
-/**
- * Registers the 'analyze' command.
- */
+
 export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
     program
         .command('analyze')
         .description('Run analysis on the project')
         .option('-p, --profile <name>', 'Configuration profile to use')
-        .option('--incremental', 'Enable incremental analysis (only run changed files)')
         .option('--force', 'Force re-execution of all tasks')
-        .option('--show', 'Display the first 50 tasks')
         .option('--debug', 'Enable debug timing output')
-        .option('--format <fmt>', 'Output format: console|json', 'console')
-        .option('--verbose', 'Show an actionable recommendation for each violation')
+        .option('--format <fmt>', 'Output format: console|json|html', 'console')
         .option('--compact', 'Use compact ESLint-style output instead of the rich default')
+        .option('--output <path>', 'Output file path for --format html (default: ngcompass-report.html)')
         .option('--rule <id>', 'Run only a single rule in isolation')
         .action(async (options: AnalyzeOptions) => {
             const startTime = performance.now();
             const format = (options.format ?? 'console') as ReporterFormat;
-            const reporter = getReporter(format, { verbose: !!options.verbose, compact: !!options.compact });
+            const reporter = getReporter(format, {
+                verbose: !!options.verbose,
+                compact: !!options.compact,
+                outputPath: options.output,
+            });
             let exitCode = 0;
 
             try {
@@ -97,10 +99,6 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 reporter.error(error as Error);
                 exitCode = 1;
             } finally {
-                // Single authoritative exit-code decision point.
-                // `finally` fires even after an early `return` from inside `try`, so
-                // step helpers never need to call process.exit themselves.
-                // TODO: flush top-level telemetry collector here once the CLI wires one up.
                 if (exitCode !== 0) {
                     process.exit(exitCode);
                 }
@@ -184,16 +182,14 @@ async function resolveRulesStep(
     const tStart = performance.now();
     reporter.step('Resolving rules...');
 
-    // If --rule <id> is specified, override config to only run that rule
     let effectiveConfig: NormalizedAnalyzerConfig = config;
     if (options.rule) {
         reporter.info(`Filtering analysis to single rule: ${options.rule}`);
         effectiveConfig = {
             ...config,
             rules: {
-                [options.rule]: 'error' // Ensure it's active
+                [options.rule]: 'error'
             },
-            // Disable extends for isolation if needed, but usually overrides are enough
             extends: []
         };
     }
@@ -226,7 +222,8 @@ async function buildPlanStep(
         rules,
         rootDir: process.cwd(),
         cache,
-        debug: options.debug
+        debug: options.debug,
+        incremental: options.force ? { forceRerun: true } : undefined
     });
 
     if (!planResult.ok) {
@@ -253,8 +250,6 @@ async function runAnalysisStep(
     const tStart = performance.now();
     reporter.step('Running analysis...');
 
-    // Wire the rule executor into the engine's DI boundary so the engine's
-    // runner can call back into the rules registry without a circular import.
     configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
     const result = await runAnalysis(plan, {

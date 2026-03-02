@@ -31,6 +31,7 @@
     },
     "dependencies": {
         "@babel/code-frame": "^7.29.0",
+        "@ngcompass/cache": "workspace:*",
         "@ngcompass/common": "workspace:*",
         "picocolors": "^1.1.1"
     },

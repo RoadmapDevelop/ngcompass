@@ -2,36 +2,38 @@
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
-import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName } from "../rule-utils";
+import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getTemplateAbsoluteOffset } from "../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 
-/**
- * Per-file state tracking with automatic cleanup.
- * The Map is keyed by template key; entries are cleaned up when a new file is detected.
- */
-let _lastFilePath = '';
-const seenByTemplateKey = new Map<string, Set<string>>();
+// ============================================================================
+// Per-context state — scoped to RuleContext via WeakMap so each analysis
+// run gets its own isolated tracking table.
+//
+// WHY WeakMap: Module-level Maps (the previous design) are shared across
+// all invocations in the same worker thread module instance. Two sequential
+// files could bleed state if the file-change detection logic ever fails.
+// WeakMap keys are the RuleContext object, which is created fresh per file
+// per batch, so GC automatically reclaims the sets when the context is dropped.
+// ============================================================================
+const seenByTemplateKey = new WeakMap<RuleContext, Map<string, Set<string>>>();
 
-function resetIfNewFile(filePath: string): void {
-    if (filePath !== _lastFilePath) {
-        seenByTemplateKey.clear();
-        _lastFilePath = filePath;
+/**
+ * Returns (or creates) the template-key → seen-expressions map for a context.
+ */
+function getContextState(context: RuleContext): Map<string, Set<string>> {
+    let state = seenByTemplateKey.get(context);
+    if (!state) {
+        state = new Map<string, Set<string>>();
+        seenByTemplateKey.set(context, state);
     }
+    return state;
 }
 
 function getTemplateKey(context: RuleContext): string {
-    const templateStartOffset = (context as any).template?.templateStartOffset;
+    const templateStartOffset = (context as unknown as { template?: { templateStartOffset?: number } }).template?.templateStartOffset;
     const offsetPart = typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset) ? `@${templateStartOffset}` : '@0';
     return `${context.filePath}${offsetPart}`;
-}
-
-function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateExpressionNode): number {
-    const templateStartOffset = (context as any).template?.templateStartOffset;
-    if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
-        return node.sourceSpan.start + templateStartOffset;
-    }
-    return node.sourceSpan.start;
 }
 
 function findAsyncPipedExpression(nodeRaw: AstNode | null | undefined): AstNode | null {
@@ -104,26 +106,26 @@ function stringifyExpression(nodeRaw: AstNode | null | undefined, depth = 0): st
 }
 
 function getSeenSetForTemplate(context: RuleContext): Set<string> {
+    const state = getContextState(context);
     const key = getTemplateKey(context);
-    let set = seenByTemplateKey.get(key);
+    let set = state.get(key);
     if (!set) {
         set = new Set<string>();
-        seenByTemplateKey.set(key, set);
+        state.set(key, set);
     }
     return set;
 }
 
 /**
  * Detects repeated `| async` usage on the same observable-like expression within a single template.
- * FIX: Clears state between files to prevent memory leak.
+ *
+ * State is scoped to the RuleContext instance (via WeakMap) so each file's analysis run
+ * gets its own isolated tracking table. No module-level mutable state is used.
  */
 export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
     'template-no-async-pipe-duplication',
     (node: TemplateExpressionNode, context: RuleContext): RuleFailure | null => {
-        // Reset state when processing a new file
-        resetIfNewFile(context.filePath);
-
-        const asyncTarget = findAsyncPipedExpression((node as any).expression);
+        const asyncTarget = findAsyncPipedExpression(node.expression as unknown as AstNode);
         if (!asyncTarget) return null;
 
         const observableKey = stringifyExpression(asyncTarget);
@@ -132,7 +134,7 @@ export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
         const seen = getSeenSetForTemplate(context);
 
         if (seen.has(observableKey)) {
-            const offset = getTemplateAbsoluteOffset(context, node);
+            const offset = getTemplateAbsoluteOffset(context as unknown as { template?: { templateStartOffset?: number } }, node.sourceSpan.start);
             const { line, column } = context.locator.location(offset);
 
             return {
@@ -154,12 +156,4 @@ export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
         requires: { htmlAst: true },
     }
 );
-
-/**
- * Exported for testing: resets internal state.
- */
-export function _resetAsyncPipeDuplicationState(): void {
-    seenByTemplateKey.clear();
-    _lastFilePath = '';
-}
 
