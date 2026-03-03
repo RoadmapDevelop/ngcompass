@@ -189,6 +189,14 @@ export const MESSAGES = {
         severity: "warning"
     }),
 
+    // Extends chain
+    EXTENDS_NOT_FOUND: (preset: string): IssueTemplate => ({
+        code: "extends-not-found",
+        message: `Cannot resolve preset "${preset}". Make sure the package is installed.`,
+        suggestion: `Run: npm install --save-dev ${preset}`,
+        severity: "error",
+    }),
+
     // Deprecated
     DEPRECATED_CACHE_LOCATION: (): IssueTemplate => ({
         code: "warn-deprecated-cache-location",

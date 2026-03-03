@@ -12,7 +12,6 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
         .command('health')
         .description('Validate the current configuration for semantic correctness')
         .option('-p, --profile <name>', 'Select configuration profile')
-        .option('--no-cache', 'Bypass the configuration validation cache')
         .action(async (options) => {
             try {
                 const result = await validateConfig({

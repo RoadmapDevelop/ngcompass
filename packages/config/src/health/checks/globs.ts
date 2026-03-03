@@ -3,6 +3,26 @@ import { ConfigIssue } from "@ngcompass/common";
 import { MESSAGES } from "../messages.js";
 import { ConfigBlockValidation, ValidatedConfig } from "../types.js";
 
+/**
+ * Constants and Regular Expressions for glob pattern validation.
+ */
+const GLOB_RULES = {
+    TRIPLE_SLASH: /\/\/\//,
+    BRACE_OPEN: /\{/g,
+    BRACE_CLOSE: /\}/g,
+    SAMPLE_FILE: "sample.ts"
+} as const;
+
+/**
+ * Validates an individual glob pattern string against structural and 
+ * syntax-based rules.
+ *
+ * @param field - The configuration property name (e.g., 'include').
+ * @param pattern - The specific glob string to validate.
+ * @param index - The array index of the pattern for error reporting.
+ * @param basePath - The structural path prefix.
+ * @returns An array of discovered issues for the single pattern.
+ */
 function validateSingleGlob(
     field: string,
     pattern: string,
@@ -12,37 +32,55 @@ function validateSingleGlob(
     const issues: ConfigIssue[] = [];
     const path = [...basePath, field, index];
 
-    // Check for empty patterns
+    /**
+     * Constraint: Content Existence
+     * Patterns must not be empty or purely whitespace.
+     */
     if (!pattern || pattern.trim() === "") {
         issues.push({ ...MESSAGES.EMPTY_GLOB_PATTERN(field), path });
         return issues;
     }
 
-    // Check for unclosed brackets
+    /**
+     * Syntax: Character Class Integrity
+     * Checks for common errors like unclosed brackets.
+     */
     if (pattern.includes("[") && !pattern.includes("]")) {
         issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "unclosed bracket"), path });
         return issues;
     }
 
-    // Check for invalid path patterns
-    if (pattern.startsWith("///") || pattern.match(/\/\/\//)) {
+    /**
+     * Syntax: Path Separators
+     * Prevents invalid path constructs like triple slashes or trailing slashes.
+     */
+    const hasTripleSlash = GLOB_RULES.TRIPLE_SLASH.test(pattern) || pattern.startsWith("///");
+    if (hasTripleSlash) {
         issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "invalid path pattern with multiple slashes"), path });
         return issues;
     }
 
-    // Trailing slash
     if (pattern.endsWith("\\") || pattern.endsWith("/")) {
         issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "trailing slash not allowed"), path });
     }
 
-    // Unmatched braces
-    if ((pattern.match(/\{/g) || []).length !== (pattern.match(/\}/g) || []).length) {
+    /**
+     * Syntax: Braces Balancing
+     * Ensures that expansion braces {} are correctly balanced.
+     */
+    const openBraces = (pattern.match(GLOB_RULES.BRACE_OPEN) || []).length;
+    const closeBraces = (pattern.match(GLOB_RULES.BRACE_CLOSE) || []).length;
+
+    if (openBraces !== closeBraces) {
         issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "unmatched braces"), path });
     }
 
-    // Try minimatch
+    /**
+     * Engine: Minimatch Verification
+     * Performs a dry-run using the underlying library to catch deeper syntax errors.
+     */
     try {
-        minimatch("sample.ts", pattern);
+        minimatch(GLOB_RULES.SAMPLE_FILE, pattern);
     } catch (err) {
         issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, (err as Error).message), path });
     }
@@ -50,23 +88,51 @@ function validateSingleGlob(
     return issues;
 }
 
+/**
+ * Validates all glob-based fields within the configuration, including 
+ * uniqueness checks and mandatory field presence.
+ *
+ * @param config - The composed configuration object.
+ * @param basePath - The structural path prefix.
+ * @returns A validation result containing all glob-related issues.
+ */
 export function validateGlobPatterns(
     config: ValidatedConfig,
     basePath: (string | number)[] = []
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
+    const targetFields = ["include", "exclude", "ignorePatterns"] as const;
 
-    const fields = ["include", "exclude", "ignorePatterns"] as const;
-
-    for (const field of fields) {
+    /**
+     * Iterative Check: Field-Level Validation
+     * Processes each glob field to check for individual pattern validity 
+     * and array-wide properties like uniqueness.
+     */
+    for (const field of targetFields) {
         const patterns = config[field];
-        if (!patterns) continue;
 
+        /**
+         * Guard: Array Integrity
+         * Skips processing if the field is missing or incorrectly typed 
+         * (e.g., due to a failed schema cast).
+         */
+        if (!Array.isArray(patterns)) {
+            continue;
+        }
+
+        /**
+         * Logic: Pattern Syntax
+         * Delegates individual string validation to the helper function.
+         */
         patterns.forEach((pattern, index) => {
             issues.push(...validateSingleGlob(field, pattern, index, basePath));
         });
 
-        // Check for duplicates
+        /**
+         * Logic: Uniqueness
+         * Identifies duplicate patterns within the same field to prevent 
+         * redundant processing.
+         */
         const duplicates = patterns.filter((item, index) => patterns.indexOf(item) !== index);
         if (duplicates.length > 0) {
             issues.push({
@@ -76,7 +142,11 @@ export function validateGlobPatterns(
         }
     }
 
-    // Check for empty include/exclude
+    /**
+     * Integrity: Mandatory Collections
+     * Ensures that 'include' and 'exclude' are not empty, as this would 
+     * result in an invalid or ineffective analysis run.
+     */
     if (!config.include || config.include.length === 0) {
         issues.push({ ...MESSAGES.EMPTY_INCLUDE(), path: [...basePath, "include"] });
     }

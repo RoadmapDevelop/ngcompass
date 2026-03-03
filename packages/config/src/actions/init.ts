@@ -189,14 +189,9 @@ const config: AnalyzerConfig = {
 export default config;
 `;
 
-/**
- * Initializes a new configuration file.
- */
 export async function initConfig(options: InitOptions = {}): Promise<InitResult> {
     const cwd = options.cwd ?? process.cwd();
     const targetPath = path.join(cwd, 'ngcompass.config.ts');
-
-    // 1. Check if config already exists
     const existing = await findAndLoadConfig(cwd);
 
     if (existing && !options.force) {
@@ -207,7 +202,6 @@ export async function initConfig(options: InitOptions = {}): Promise<InitResult>
         };
     }
 
-    // 2. Write the template
     try {
         await fs.writeFile(targetPath, TEMPLATE, 'utf-8');
         return {
