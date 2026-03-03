@@ -92,13 +92,22 @@ const needsAst = (task: any, astType: "typescript" | "html" | "css"): boolean =>
 /**
  * Builds an index of files needing a TypeChecker.
  *
+ * A file is included when at least one of its tasks has
+ * `needsTypeChecker === true`, which is set by task-builder when the
+ * underlying rule declares `requires.typeChecker` in its metadata.
+ *
  * @param plan - Execution plan
  * @returns Sorted array of file paths
  */
 const buildFilesNeedingTypeChecker = (plan: ExecutionPlan): ReadonlyArray<string> => {
-    void plan;
-
     const files = new Set<string>();
+
+    for (const [filePath, unit] of Object.entries(plan)) {
+        if (unit.tasks.some((task) => task.needsTypeChecker === true)) {
+            files.add(filePath);
+        }
+    }
+
     return Array.from(files).sort();
 };
 

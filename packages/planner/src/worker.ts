@@ -7,11 +7,18 @@ import { initHasher } from "@ngcompass/cache";
 
 /**
  * Worker input payload.
+ *
+ * Rules and fileTypeCache are transmitted as serialized entry arrays rather
+ * than Map instances because Node.js structured-clone does not preserve Map
+ * entries containing complex objects (prototype chains are stripped).
+ * The worker reconstructs the Maps from the entries.
  */
 export interface WorkerData {
     files: string[];
-    rules: Map<string, ResolvedRule>;
-    fileTypeCache?: Map<string, FileType>;
+    /** Serialized Map<string, ResolvedRule> entries */
+    rulesEntries: [string, ResolvedRule][];
+    /** Serialized Map<string, FileType> entries (optional) */
+    fileTypeCacheEntries?: [string, FileType][];
 }
 
 /**
@@ -26,7 +33,13 @@ const main = async (): Promise<void> => {
     if (!port) return;
 
     try {
-        const { files, rules, fileTypeCache } = workerData as WorkerData;
+        const { files, rulesEntries, fileTypeCacheEntries } = workerData as WorkerData;
+
+        // Reconstruct Maps from serialized entries.
+        const rules = new Map<string, ResolvedRule>(rulesEntries);
+        const fileTypeCache = fileTypeCacheEntries
+            ? new Map<string, FileType>(fileTypeCacheEntries)
+            : undefined;
 
         await initHasher();
 
@@ -39,7 +52,10 @@ const main = async (): Promise<void> => {
 
         port.postMessage({ tasks } satisfies WorkerResult);
     } catch (error) {
+        // Report the error before exiting so the parent can log it.
         port.postMessage({ tasks: [] } satisfies WorkerResult);
+        // Re-throw so the worker process exits with a non-zero code, which
+        // triggers the "exit" handler in the parent and surfaces the failure.
         throw error;
     }
 };
@@ -62,4 +78,3 @@ const buildTasksForFiles = async (
 };
 
 void main();
-

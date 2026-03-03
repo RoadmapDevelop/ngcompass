@@ -25,6 +25,7 @@ import { serializePlan, deserializePlan } from "./serialize.js";
 import { initHasher } from "@ngcompass/cache";
 import { warmupHashCache, calculateGlobalHash, calculateFileHash } from "./hashing.js";
 import { groupTasksByFile } from "./utils.js";
+import { ComponentDependencyGraph } from "./component-graph.js";
 
 /**
  * Builds complete execution plan with indexes and optional caching.
@@ -49,7 +50,7 @@ export const buildExecutionPlan = async (
             return Err(validationError);
         }
 
-        const context = createTaskBuilderContext();
+        const context = createTaskBuilderContext(options);
         const fileTypeCache = new Map<string, FileType>();
 
         const errorCollector = new InfrastructureErrorCollector();
@@ -66,6 +67,16 @@ export const buildExecutionPlan = async (
             debug("planner", `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
         }
 
+        // Build the component dependency graph once (O(N)) so task-builder can
+        // resolve template/styles/spec paths in O(1) instead of per-file dir scans.
+        if (!cachedPlan) {
+            const graph = new ComponentDependencyGraph();
+            graph.build(options.files);
+            context.componentGraph = graph;
+            context.graphStats = { hits: 0, misses: 0, fallbacks: 0 };
+            debug("planner", "Component dependency graph built");
+        }
+
         let allTasks: ReadonlyArray<Task>;
 
         if (cachedPlan && cachedPlan.precomputedAnalysis) {
@@ -80,6 +91,10 @@ export const buildExecutionPlan = async (
         } else {
             debug("planner", "Building tasks...");
             allTasks = await buildAllTasks(files, rules, context, fileTypeCache);
+            if (options.debug && context.graphStats) {
+                const { hits, misses, fallbacks } = context.graphStats;
+                debug("planner", `Graph stats — hits: ${hits}, misses: ${misses}, fallbacks: ${fallbacks}`);
+            }
 
             // Save full plan to cache
             if (options.cache && context.globalHash) {
@@ -192,13 +207,15 @@ const validateBuildInputs = (
 /**
  * Creates a context object used by the task builder to share caches.
  *
+ * @param options - Execution plan options (used for cacheKeyCtx)
  * @returns TaskBuilderContext
  */
-const createTaskBuilderContext = (): TaskBuilderContext => {
+const createTaskBuilderContext = (options?: Pick<ExecutionPlanOptions, 'cacheKeyCtx'>): TaskBuilderContext => {
     return {
         hashCache: new Map(),
         resourceCache: new Map(),
         directoryCache: new Map(),
+        cacheKeyCtx: options?.cacheKeyCtx,
     };
 };
 
@@ -503,6 +520,11 @@ const splitIntoChunks = (items: ReadonlyArray<string>, chunkCount: number): stri
 /**
  * Runs worker threads over file chunks and collects all tasks.
  *
+ * Rules and fileTypeCache are serialized to plain arrays of entries before
+ * being sent via workerData because Node.js structured-clone does not
+ * preserve Map instances with complex object values (prototype chains are
+ * lost). The worker reconstructs the Maps from the serialized entries.
+ *
  * @param chunks - File chunks
  * @param workerPath - Worker script path
  * @param rules - Resolved rules
@@ -517,18 +539,25 @@ const runWorkerChunks = async (
 ): Promise<Task[]> => {
     const { Worker } = await import("node:worker_threads");
 
+    // Serialize Maps to plain arrays so structured-clone preserves all data.
+    const rulesEntries = Array.from(rules.entries());
+    const fileTypeCacheEntries = fileTypeCache ? Array.from(fileTypeCache.entries()) : undefined;
+
     const workerPromises = chunks.map((chunk, index) => {
         return new Promise<Task[]>((resolve, reject) => {
             const worker = new Worker(workerPath, {
                 workerData: {
                     files: chunk,
-                    rules,
-                    fileTypeCache,
+                    rulesEntries,
+                    fileTypeCacheEntries,
                 },
             });
 
             worker.on("message", (message: { tasks: Task[] }) => resolve(message.tasks));
-            worker.on("error", reject);
+            worker.on("error", (err) => {
+                debug("planner", `Worker ${index} error: ${String(err)}`);
+                reject(err);
+            });
             worker.on("exit", (code) => {
                 if (code !== 0) reject(new Error(`Worker ${index} stopped with exit code ${code}`));
             });
@@ -585,6 +614,7 @@ const convertTasksToPlan = (
             options: task.options,
             cacheKey: task.taskId,
             inputs: task.inputs,
+            needsTypeChecker: task.needsTypeChecker,
         }));
 
         plan[filePath] = {

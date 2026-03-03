@@ -91,6 +91,17 @@ const serializeUnit = (
 /**
  * Serializes a RuleTask into compact tuple representation.
  *
+ * Tuple layout (index → field):
+ *   0  ruleId          – StringInterner id for ruleName
+ *   1  severity        – RuleSeverity string
+ *   2  optId           – ReferenceInterner id for options
+ *   3  cacheKeyId      – hash id (or -1)
+ *   4  ts              – encoded TypeScript FileInput
+ *   5  tpl             – encoded template FileInput (or undefined)
+ *   6  styles          – encoded style FileInputs (or undefined)
+ *   7  spec            – encoded spec FileInput (or undefined)
+ *   8  needsTypeChecker – 1 if the rule requires the TypeChecker, else 0
+ *
  * @param task - RuleTask
  * @param rules - Rule name interner
  * @param files - File path interner
@@ -116,8 +127,9 @@ const serializeRuleTask = (
             ? task.inputs.styles.map((s) => encodeInput(s, files, hashes))
             : undefined;
     const spec = task.inputs.spec ? encodeInput(task.inputs.spec, files, hashes) : undefined;
+    const typeCheckerFlag = task.needsTypeChecker ? 1 : 0;
 
-    return [ruleId, task.severity, optId, cacheKeyId, ts, tpl, styles, spec];
+    return [ruleId, task.severity, optId, cacheKeyId, ts, tpl, styles, spec, typeCheckerFlag];
 };
 
 /**
@@ -162,6 +174,12 @@ const deserializeUnit = (
 /**
  * Deserializes a compact RuleTask tuple.
  *
+ * Element [8] (needsTypeChecker flag) is optional for backward compatibility
+ * with v1 entries written before the field was introduced. When absent the
+ * flag defaults to false, meaning old cached plans are safe to read — the
+ * TypeChecker index will simply be empty for those entries until they are
+ * regenerated on the next cold build.
+ *
  * @param tData - Compact task tuple
  * @param rules - Rule names
  * @param files - File paths
@@ -170,7 +188,7 @@ const deserializeUnit = (
  * @returns RuleTask
  */
 const deserializeRuleTask = (tData: any[], rules: string[], files: string[], hashes: string[], options: any[]): RuleTask => {
-    const [ruleId, severity, optId, cacheKeyId, tsCompact, tplCompact, stylesCompact, specCompact] = tData;
+    const [ruleId, severity, optId, cacheKeyId, tsCompact, tplCompact, stylesCompact, specCompact, typeCheckerFlag] = tData;
 
     const ruleName = rules[ruleId];
     const ruleOptions = options[optId];
@@ -181,7 +199,10 @@ const deserializeRuleTask = (tData: any[], rules: string[], files: string[], has
     if (stylesCompact) inputs.styles = (stylesCompact as any[]).map((d) => decodeInput(d, files, hashes));
     if (specCompact) inputs.spec = decodeInput(specCompact, files, hashes);
 
-    return { ruleName, severity, options: ruleOptions, cacheKey, inputs };
+    // typeCheckerFlag is 1 when present; absent in pre-fix v1 entries (defaults to false).
+    const needsTypeChecker = typeCheckerFlag === 1 ? true : undefined;
+
+    return { ruleName, severity, options: ruleOptions, cacheKey, inputs, needsTypeChecker };
 };
 
 /**
@@ -226,6 +247,7 @@ const toTask = (filePath: string, ruleTask: RuleTask): Task => {
         severity: ruleTask.severity,
         options: ruleTask.options,
         inputs: ruleTask.inputs,
+        needsTypeChecker: ruleTask.needsTypeChecker,
     };
 };
 

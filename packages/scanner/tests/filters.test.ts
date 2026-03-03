@@ -77,7 +77,8 @@ describe('applyFilters', () => {
             exclude: [],
             ignorePatterns: [],
             respectGitignore: false,
-            followSymlinks: false
+            followSymlinks: false,
+            dot: false
         };
 
         const result = await applyFilters({ files: ['a.ts', 'a.ts'] }, options);
