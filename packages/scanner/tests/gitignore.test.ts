@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { readFile } from 'node:fs/promises';
 import {
     loadGitignore,
     createGitignoreFilter,
@@ -7,21 +6,21 @@ import {
     loadAndCreateGitignoreFilter
 } from '../src/gitignore.js';
 
-vi.mock('node:fs/promises', () => ({
-    readFile: vi.fn()
-}));
+// Use vi.hoisted so the mock reference is stable under SWC + Vitest.
+const mockReadFile = vi.hoisted(() => vi.fn());
+vi.mock('node:fs/promises', () => ({ readFile: mockReadFile }));
 
 describe('loadGitignore', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
     it('returns content when file exists', async () => {
-        vi.mocked(readFile).mockResolvedValue('node_modules\n.env\n');
+        mockReadFile.mockResolvedValue('node_modules\n.env\n');
         const content = await loadGitignore('/root');
         expect(content).toBe('node_modules\n.env\n');
     });
 
     it('returns null when file does not exist', async () => {
-        vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+        mockReadFile.mockRejectedValue(new Error('ENOENT'));
         const content = await loadGitignore('/root');
         expect(content).toBeNull();
     });
@@ -48,7 +47,7 @@ describe('loadAndCreateGitignoreFilter', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
     it('creates active filter if gitignore exists', async () => {
-        vi.mocked(readFile).mockResolvedValue('node_modules\n');
+        mockReadFile.mockResolvedValue('node_modules\n');
 
         const result = await loadAndCreateGitignoreFilter('/root');
 
@@ -60,7 +59,7 @@ describe('loadAndCreateGitignoreFilter', () => {
     });
 
     it('creates pass-through filter if gitignore missing', async () => {
-        vi.mocked(readFile).mockRejectedValue(new Error('ENOENT'));
+        mockReadFile.mockRejectedValue(new Error('ENOENT'));
 
         const result = await loadAndCreateGitignoreFilter('/root');
 

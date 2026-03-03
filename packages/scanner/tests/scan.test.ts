@@ -6,10 +6,17 @@ import * as gitignore from '../src/gitignore.js';
 import { CacheContext } from '@ngcompass/cache';
 import type { ScanOptions } from '../src/types.js';
 
+// Allow rootDir existence check to pass for all fake paths in tests.
+vi.mock('node:fs/promises', () => ({
+    access: vi.fn().mockResolvedValue(undefined),
+    stat: vi.fn().mockResolvedValue({ size: 0 })
+}));
+
 vi.mock('../src/git.js', () => ({
     isGitRepo: vi.fn(),
     executeGitDiscovery: vi.fn(),
-    getRepoFingerprint: vi.fn()
+    getRepoFingerprint: vi.fn(),
+    getDirectoryFingerprint: vi.fn()
 }));
 
 vi.mock('../src/glob.js', () => ({
@@ -96,6 +103,25 @@ describe('scan', () => {
         expect(result.ok).toBe(false);
         if (!result.ok) {
             expect(result.error.message).toContain('Discovery error');
+        }
+    });
+
+    it('returns error when rootDir does not exist', async () => {
+        const { access } = await import('node:fs/promises');
+        vi.mocked(access).mockRejectedValueOnce(new Error('ENOENT'));
+
+        const options: ScanOptions = {
+            rootDir: '/does/not/exist',
+            include: ['**/*.ts'],
+            exclude: []
+        };
+
+        const result = await scan(options);
+
+        expect(result.ok).toBe(false);
+        if (!result.ok) {
+            expect(result.error.message).toContain('rootDir does not exist');
+            expect(result.error.message).toContain('/does/not/exist');
         }
     });
 

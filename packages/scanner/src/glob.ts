@@ -23,7 +23,7 @@ import { Ok, Err } from './types.js';
 export const executeGlob = async (
     patterns: ExpandedPatterns,
     rootDir: string,
-    options: { readonly followSymlinks: boolean }
+    options: { readonly followSymlinks: boolean; readonly dot: boolean }
 ): Promise<Result<RawFileList>> => {
     try {
         const files = await glob([...patterns.include], {
@@ -32,7 +32,7 @@ export const executeGlob = async (
             absolute: true,
             followSymbolicLinks: options.followSymlinks,
             onlyFiles: true,
-            dot: false,
+            dot: options.dot,
         });
 
         return Ok({ files });

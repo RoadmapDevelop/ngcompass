@@ -34,7 +34,8 @@
       "mcp__Claude_in_Chrome__tabs_context_mcp",
       "Bash(pnpm --filter @ngcompass/config typecheck)",
       "Bash(pnpm --filter @ngcompass/config test)",
-      "Bash(pnpm --filter @ngcompass/config build)"
+      "Bash(pnpm --filter @ngcompass/config build)",
+      "Bash(npx turbo run test --filter=@ngcompass/scanner)"
     ]
   }
 }
