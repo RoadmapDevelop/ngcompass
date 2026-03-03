@@ -5,6 +5,7 @@
  */
 
 import type { ResolvedRule } from "@ngcompass/common";
+import type { CacheKeyContext } from "@ngcompass/cache";
 import type { FileInput, FileType, Task, TaskInputs } from "./types.js";
 import { discoverResources } from "./resources.js";
 import { hashFile, calculateTaskId } from "./hashing.js";
@@ -27,6 +28,13 @@ export interface TaskBuilderContext {
     globalHash?: string;
     componentGraph?: ComponentDependencyGraph;
     graphStats?: GraphStats;
+    /**
+     * Version context forwarded to calculateTaskId.
+     * When provided, toolVersion and ruleRegistryHash are mixed into every
+     * taskId so that upgrading the tool or a plugin invalidates per-task
+     * result-cache entries automatically.
+     */
+    cacheKeyCtx?: CacheKeyContext;
 }
 
 /**
@@ -158,8 +166,12 @@ export const buildTask = async (
         return null;
     }
 
+    const requirements = resolveAstRequirements(rule);
     const inputs = await buildTaskInputsWithHashes(filePath, rule, context);
-    const taskId = calculateTaskId(rule.name, inputs, rule.options);
+
+    // Pass cacheKeyCtx so the taskId is scoped to the current tool + rule-set
+    // version. Without this, upgrading the tool can produce stale cache hits.
+    const taskId = calculateTaskId(rule.name, inputs, rule.options, context?.cacheKeyCtx);
 
     return {
         taskId,
@@ -168,6 +180,7 @@ export const buildTask = async (
         severity: rule.severity,
         options: rule.options,
         inputs,
+        needsTypeChecker: requirements.needsTypeChecker,
     };
 };
 
@@ -274,6 +287,8 @@ const resolveAstRequirements = (rule: ResolvedRule) => {
         needsHtmlAst: Boolean(requires.htmlAst),
         needsCssAst: Boolean(requires.cssAst),
         needsSpecAst: Boolean(requires.specAst),
+        /** True when the rule needs full semantic type information. */
+        needsTypeChecker: Boolean(requires.typeChecker),
     };
 };
 

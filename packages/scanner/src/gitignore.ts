@@ -38,7 +38,6 @@ export const loadGitignore = async (rootDir: string): Promise<Option<string>> =>
 export const createGitignoreFilter = (gitignoreContent: string): GitignoreFilter => {
     const ig: Ignore = ignore().add(gitignoreContent);
 
-    // Return a filter function (closure over ig)
     return (file: string, rootDir: string): boolean => {
         const relative = path.relative(rootDir, file);
         return !ig.ignores(relative);

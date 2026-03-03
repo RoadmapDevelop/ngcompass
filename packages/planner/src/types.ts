@@ -1,8 +1,7 @@
 /**
  * Execution Plan Types
  *
- * Types for Phase 1.75: Build Execution Map
- * Maps discovered files + resolved rules → executable tasks with indexes
+ * Maps discovered files + resolved rules → executable tasks with indexes.
  */
 
 import type { CacheContext } from '@ngcompass/cache';
@@ -16,7 +15,6 @@ import { Result, Ok, Err, ResolvedRule, RuleSeverity, AnalysisResult } from '@ng
 /**
  * Complete execution plan output (plan + tasks + indexes)
  *
- * Enhanced in Phase 1.75: Task-Centric Migration
  * - tasks: Flat array of all tasks (task-centric, content-addressed)
  * - plan: File-grouped view (file-centric, backward compatible)
  * - indexes: Pre-computed indexes for both file and task queries
@@ -115,6 +113,13 @@ export interface RuleTask {
 
     /** What files this task needs to read and analyze */
     readonly inputs: TaskInputs;
+
+    /**
+     * Whether this task requires the TypeScript type-checker (expensive!).
+     * When true the file is included in `indexes.filesNeedingTypeChecker` so
+     * the engine can set up a full TypeScript Program for that file.
+     */
+    readonly needsTypeChecker?: boolean;
 }
 
 /**
@@ -136,8 +141,6 @@ export interface TaskInputs {
 
 /**
  * A single file input for a task
- *
- * Enhanced in Phase 1.75: Added hash for content-based cache keys
  */
 export interface FileInput {
     /** Path to the file (absolute) */
@@ -170,8 +173,6 @@ export type ResourceType = 'typescript' | 'template' | 'styles' | 'spec';
  * - taskId: Content-based (SHA-256 of all inputs + options)
  * - filePath: Explicit (not embedded in cache key)
  * - inputs: Include content hashes for each file
- *
- * @since Phase 1.75 - Task-Centric Migration
  */
 export interface Task {
     /**
@@ -200,6 +201,12 @@ export interface Task {
 
     /** Input files with content hashes */
     readonly inputs: TaskInputs;
+
+    /**
+     * Whether this task requires the TypeScript type-checker (expensive!).
+     * Mirrors `RuleTask.needsTypeChecker` on the task-centric view.
+     */
+    readonly needsTypeChecker?: boolean;
 }
 
 // ==============================================================================
@@ -207,9 +214,8 @@ export interface Task {
 // ==============================================================================
 
 /**
- * Pre-computed indexes for efficient Phase 2 queries
+ * Pre-computed indexes for efficient engine queries
  *
- * Enhanced in Phase 1.75: Added task-level indexes alongside file-level indexes
  * - File-level indexes: For parsing optimization (parse once, reuse)
  * - Task-level indexes: For execution strategies (by rule, by severity, etc)
  */
@@ -224,7 +230,10 @@ export interface ExecutionIndexes {
     /** Files that need CSS AST parsing */
     readonly filesNeedingCssAst: ReadonlyArray<string>;
 
-    /** Files that need TypeChecker (expensive!) */
+    /**
+     * Files that need the TypeScript type-checker (expensive!).
+     * The engine should allocate a full TypeScript Program only for these files.
+     */
     readonly filesNeedingTypeChecker: ReadonlyArray<string>;
 
     // Task-level indexes (for execution strategies)
@@ -309,13 +318,11 @@ export interface ExecutionPlanOptions {
 }
 
 // ==============================================================================
-// PHASE 2.0: INCREMENTAL ANALYSIS
+// INCREMENTAL ANALYSIS
 // ==============================================================================
 
 /**
  * Incremental execution plan with cache-based filtering
- *
- * @since Phase 2.0 - Incremental Analysis
  */
 export interface IncrementalPlan {
     /** Tasks with results in cache (can be skipped) */
@@ -347,7 +354,13 @@ export interface CacheFilterStats {
     /** Cache hit rate (0.0 to 1.0) */
     readonly cacheHitRate: number;
 
-    /** Estimated time saved (percentage) */
+    /**
+     * Estimated percentage of execution time saved due to caching (0–100).
+     *
+     * Computed as `cacheHitRate × 100`, which is accurate when tasks have
+     * roughly equal cost. Use as a fast approximation for progress UIs and
+     * log messages.
+     */
     readonly timeSavedEstimate: number;
 }
 
@@ -389,4 +402,3 @@ export interface CachePruneOptions {
 // Result type imported from @ngcompass/common
 export type { Result };
 export { Ok, Err };
-

@@ -33,19 +33,26 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .description('Run analysis on the project')
         .option('-p, --profile <name>', 'Configuration profile to use')
         .option('--force', 'Force re-execution of all tasks')
-        .option('--debug', 'Enable debug timing output')
         .option('--format <fmt>', 'Output format: console|json|html', 'console')
         .option('--compact', 'Use compact ESLint-style output instead of the rich default')
         .option('--output <path>', 'Output file path for --format html (default: ngcompass-report.html)')
         .option('--rule <id>', 'Run only a single rule in isolation')
         .action(async (options: AnalyzeOptions) => {
+            const globalOptions = program.opts();
+            const isDebug = !!globalOptions.debug;
+            const isVerbose = !!globalOptions.verbose || isDebug;
+
             const startTime = performance.now();
             const format = (options.format ?? 'console') as ReporterFormat;
             const reporter = getReporter(format, {
-                verbose: !!options.verbose,
                 compact: !!options.compact,
+                verbose: isVerbose,
                 outputPath: options.output,
             });
+
+            // Ensure debug flag is correctly passed to sub-components that might still check it
+            options.debug = isDebug;
+            options.verbose = isVerbose;
             let exitCode = 0;
 
             try {
