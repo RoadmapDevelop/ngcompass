@@ -25,6 +25,7 @@
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",
         "test:coverage": "vitest run --coverage --passWithNoTests",
+        "test:e2e": "playwright test",
         "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist .turbo"
@@ -40,6 +41,8 @@
     "author": "ngcompass",
     "license": "MIT",
     "devDependencies": {
+        "@ngcompass/config": "workspace:*",
+        "@playwright/test": "^1.50.1",
         "@types/node": "^25.1.0",
         "typescript": "catalog:"
     }

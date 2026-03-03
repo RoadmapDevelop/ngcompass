@@ -6,6 +6,7 @@ import { createDefaultContext } from "./context.js";
 import { ValidatedConfig, ValidationContext } from "./types.js";
 import {
     validateCrossFields,
+    validateExtendsChain,
     validateGlobPatterns,
     validatePaths,
     validateRules,
@@ -14,11 +15,19 @@ import {
 import { enrichIssueLocations } from "./enricher.js";
 import { AstCache } from "@ngcompass/cache";
 
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
 const ERROR_CODES = {
-    SEMANTIC_VALIDATION_FAILED: "error-semantic",
+    /** Emitted when an individual semantic check throws an unexpected error. */
+    CHECK_FAILED: "check-failed",
     PROFILE_NOT_FOUND: "error-profile-not-found",
 } as const;
 
+// ---------------------------------------------------------------------------
+// Interfaces
+// ---------------------------------------------------------------------------
 
 interface BlockValidationOptions {
     config: unknown;
@@ -35,11 +44,31 @@ interface BlockValidationResult {
     validated?: ValidatedConfig;
 }
 
+/**
+ * Describes a single semantic check so that per-check errors can be isolated
+ * and reported with the check name for easier debugging.
+ */
+interface CheckDescriptor {
+    name: string;
+    run: () => ConfigIssue[];
+}
+
+// ---------------------------------------------------------------------------
+// Schema parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs Zod schema validation on `config`.
+ *
+ * On failure the raw config is cast to `ValidatedConfig` so that semantic
+ * checks can still run on a best-effort basis — catching issues in checks
+ * that don't require a fully-valid schema.
+ */
 function parseSchema(
     config: unknown,
     basePath: (string | number)[],
     filePath: string | undefined,
-): { issues: ConfigIssue[]; validated: ValidatedConfig | undefined; success: boolean } {
+): { issues: ConfigIssue[]; validated: ValidatedConfig; success: boolean } {
     const result = AnalyzerConfigSchema.safeParse(config);
 
     if (!result.success) {
@@ -51,39 +80,89 @@ function parseSchema(
             file: filePath,
         }));
 
+        // Cast to ValidatedConfig so semantic checks can still run
         return { issues, validated: config as ValidatedConfig, success: false };
     }
 
     return { issues: [], validated: result.data, success: true };
 }
 
+// ---------------------------------------------------------------------------
+// Semantic checks (Gap 1 + Gap 2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Runs all semantic checks against a (possibly best-effort) validated config.
+ *
+ * Gap 2 fix: each check runs in its own try-catch so that a crash in one
+ * check never suppresses the results of all others.
+ *
+ * Gap 1 fix: `validateExtendsChain` is included in the check list and
+ * receives the project `cwd` so it can resolve npm packages correctly.
+ *
+ * @param validated - Validated (or best-effort cast) config object.
+ * @param config    - Raw, unvalidated config (used by deprecated-fields check).
+ * @param context   - Validation context (fs/os/path abstractions + cwd).
+ * @param basePath  - Ancestor path for issue attribution.
+ * @param filePath  - Source file, used for issue attribution on check errors.
+ */
 function runSemanticChecks(
-    validated: ValidatedConfig | undefined,
+    validated: ValidatedConfig,
     config: unknown,
     context: ValidationContext,
     basePath: (string | number)[],
     filePath: string | undefined,
 ): ConfigIssue[] {
-    if (!validated) return [];
+    const checks: CheckDescriptor[] = [
+        {
+            name: "cross-fields",
+            run: () => validateCrossFields(validated, context, basePath).issues,
+        },
+        {
+            name: "glob-patterns",
+            run: () => validateGlobPatterns(validated, basePath).issues,
+        },
+        {
+            name: "paths",
+            run: () => validatePaths(validated, context, basePath).issues,
+        },
+        {
+            name: "rules",
+            run: () => validateRules(validated, basePath).issues,
+        },
+        {
+            name: "extends-chain",
+            run: () => validateExtendsChain(validated, basePath, context.cwd).issues,
+        },
+        {
+            name: "deprecated",
+            run: () => validateDeprecatedFields(config, basePath).issues,
+        },
+    ];
 
-    try {
-        return [
-            validateCrossFields(validated, context, basePath),
-            validateGlobPatterns(validated, basePath),
-            validatePaths(validated, context, basePath),
-            validateRules(validated, basePath),
-            validateDeprecatedFields(config, basePath),
-        ].flatMap(check => check.issues);
-    } catch (err) {
-        return [{
-            code: ERROR_CODES.SEMANTIC_VALIDATION_FAILED,
-            message: `Semantic validation failed: ${(err as Error).message}`,
-            path: basePath,
-            severity: "error" as const,
-            file: filePath,
-        }];
+    const allIssues: ConfigIssue[] = [];
+
+    for (const check of checks) {
+        try {
+            allIssues.push(...check.run());
+        } catch (err) {
+            // One check crashing must not silence the remaining checks.
+            allIssues.push({
+                code: ERROR_CODES.CHECK_FAILED,
+                message: `Check "${check.name}" encountered an unexpected error: ${(err as Error).message}`,
+                path: basePath,
+                severity: "error" as const,
+                file: filePath,
+            });
+        }
     }
+
+    return allIssues;
 }
+
+// ---------------------------------------------------------------------------
+// Location enrichment
+// ---------------------------------------------------------------------------
 
 async function attachFileLocations(
     issues: ConfigIssue[],
@@ -97,10 +176,15 @@ async function attachFileLocations(
         return;
     }
 
-    for (const issue of issues) {
+    type WritableIssue = { -readonly [K in keyof ConfigIssue]: ConfigIssue[K] };
+    for (const issue of issues as WritableIssue[]) {
         if (!issue.file) issue.file = filePath;
     }
 }
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
 function deduplicateIssues(issues: ConfigIssue[]): ConfigIssue[] {
     const seen = new Set<string>();

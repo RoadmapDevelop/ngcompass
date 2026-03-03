@@ -257,14 +257,14 @@ export interface AnalyzerConfig {
  * Structured configuration issue
  */
 export interface ConfigIssue {
-    code: string;
-    message: string;
-    path?: (string | number)[];
-    severity: 'error' | 'warning';
-    file?: string;
-    line?: number;
-    column?: number;
-    suggestion?: string;
+    readonly code: string;
+    readonly message: string;
+    readonly path?: ReadonlyArray<string | number>;
+    readonly severity: 'error' | 'warning';
+    readonly file?: string;
+    readonly line?: number;
+    readonly column?: number;
+    readonly suggestion?: string;
 }
 
 /**

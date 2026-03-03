@@ -3,12 +3,26 @@ import { MESSAGES } from "../messages.js";
 import { ConfigBlockValidation, ValidatedConfig, ValidationContext } from "../types.js";
 import { validateConfigBlock } from "./base.js";
 
+/**
+ * Validates the 'profiles' section of the configuration. This includes 
+ * individual block validation for each profile, format-specific constraints, 
+ * and detection of circular inheritance chains.
+ *
+ * @param config - The composed configuration object.
+ * @param context - Validation context providing access to environmental data.
+ * @returns A validation result containing issues found within the profiles.
+ */
 export function validateProfiles(
     config: ValidatedConfig,
     context: ValidationContext
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
 
+    /**
+     * Guard: Profiles Existence
+     * Ensures the profiles field is a valid object before proceeding with 
+     * key-based iteration.
+     */
     if (!config.profiles || typeof config.profiles !== "object") {
         return { issues };
     }
@@ -16,6 +30,10 @@ export function validateProfiles(
     const profiles = config.profiles as Record<string, any>;
     const profileNames = Object.keys(profiles);
 
+    /**
+     * Constraint: Collection Content
+     * A 'profiles' object that exists but is empty is considered a configuration error.
+     */
     if (profileNames.length === 0) {
         issues.push({
             ...MESSAGES.PROFILE_EMPTY(),
@@ -24,16 +42,32 @@ export function validateProfiles(
         return { issues };
     }
 
+    /**
+     * Iterative Check: Individual Profile Logic
+     * Validates each profile as a standalone ConfigBlock and checks 
+     * for incompatible property combinations.
+     */
     for (const [profileName, profile] of Object.entries(profiles)) {
-        if (typeof profile !== "object" || profile === null) continue;
+        if (!profile || typeof profile !== "object") {
+            continue;
+        }
 
-        const blockValidation = validateConfigBlock(profile, context, ["profiles", profileName]);
-        issues.push(...blockValidation.issues);
+        /**
+         * Delegation: Base Block Validation
+         * Reuses standard block validation for common fields (workers, cache, etc.)
+         */
+        const { issues: blockIssues } = validateConfigBlock(profile, context, ["profiles", profileName]);
+        issues.push(...blockIssues);
 
-        if (
-            profile.outputFormat === "html" &&
-            (profile.autoFix || profile.autoFixOnSave)
-        ) {
+        /**
+         * Constraint: HTML Format vs AutoFix
+         * Prevents the use of auto-fix features when the output format is set to HTML,
+         * as these are typically mutually exclusive in CI/reporting workflows.
+         */
+        const isHtml = profile.outputFormat === "html";
+        const hasAutoFix = profile.autoFix || profile.autoFixOnSave;
+
+        if (isHtml && hasAutoFix) {
             issues.push({
                 ...MESSAGES.PROFILE_HTML_OUTPUT_CI(profileName),
                 path: ["profiles", profileName, "outputFormat"]
@@ -41,32 +75,39 @@ export function validateProfiles(
         }
     }
 
+    /**
+     * Integrity: Circular Inheritance Detection
+     * Traverses the 'extends' chain of each profile to ensure no recursive 
+     * loops exist, which would cause infinite resolution cycles.
+     */
     const visited = new Set<string>();
-    const detectCircular = (name: string, chain: string[] = []): boolean => {
-        if (visited.has(name)) return true;
-        visited.add(name);
+
+    const detectCircular = (name: string, chain: string[] = []): void => {
+        if (visited.has(name)) {
+            return;
+        }
 
         const profile = profiles[name];
-        if (profile && typeof profile === "object" && "extends" in profile) {
+        const hasParent = profile && typeof profile === "object" && "extends" in profile;
+
+        if (hasParent) {
             const parent = profile.extends;
+
             if (chain.includes(parent)) {
                 issues.push({
-                    ...MESSAGES.PROFILE_CIRCULAR_INHERITANCE([
-                        ...chain,
-                        name,
-                        parent,
-                    ]),
+                    ...MESSAGES.PROFILE_CIRCULAR_INHERITANCE([...chain, name, parent]),
                     path: ["profiles", name, "extends"]
                 });
-                return true;
+                return;
             }
-            return detectCircular(parent, [...chain, name]);
+
+            detectCircular(parent, [...chain, name]);
         }
-        return false;
+
+        visited.add(name);
     };
 
     profileNames.forEach((name) => detectCircular(name));
 
     return { issues };
 }
-

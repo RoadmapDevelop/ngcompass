@@ -6,6 +6,8 @@ export type CacheConfig = ValidatedConfig["cache"];
 
 export interface ValidationContext {
     profile?: string;
+    /** Working directory used for module resolution (e.g. extends chain). Defaults to process.cwd(). */
+    cwd?: string;
     fs: {
         existsSync: (path: string) => boolean;
         accessSync: (path: string, mode: number) => void;

@@ -87,7 +87,8 @@ function applyLocationsToIssues(
     locationMap: LocationMap,
     filePath: string,
 ): void {
-    for (const issue of issues) {
+    type WritableIssue = { -readonly [K in keyof ConfigIssue]: ConfigIssue[K] };
+    for (const issue of issues as WritableIssue[]) {
         if (!issue.file) {
             issue.file = filePath;
         }

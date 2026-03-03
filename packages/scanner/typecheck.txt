@@ -1,9 +1,0 @@
-﻿
-> @ngcompass/scanner@0.0.1 typecheck C:\Users\30694\Desktop\ngcompass_\packages\scanner
-> tsc --noEmit
-
-src/scan.ts(26,13): error TS2540: Cannot assign to 'normalization' because it is a read-only property.
-src/scan.ts(48,13): error TS2540: Cannot assign to 'discovery' because it is a read-only property.
-src/scan.ts(60,13): error TS2540: Cannot assign to 'filtering' because it is a read-only property.
-src/scan.ts(69,13): error TS2540: Cannot assign to 'total' because it is a read-only property.
-έΑΚELIFECYCLEέΑΚ Command failed with exit code 2.
