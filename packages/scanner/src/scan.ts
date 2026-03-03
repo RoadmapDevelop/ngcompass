@@ -1,10 +1,11 @@
+import { access } from 'node:fs/promises';
 import { debug, time, timeEnd } from '@ngcompass/common';
 import type { ScanOptions, ScanResult, Result, ScanTimings, NormalizedOptions, ExpandedPatterns } from './types.js';
-import { Ok } from './types.js';
+import { Ok, Err } from './types.js';
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
 import { executeGlob } from './glob.js';
-import { isGitRepo, executeGitDiscovery, getRepoFingerprint } from './git.js';
+import { isGitRepo, executeGitDiscovery, getRepoFingerprint, getDirectoryFingerprint } from './git.js';
 import { applyFilters, filterByGlob } from './filters.js';
 import { calculateStats } from './stats.js';
 
@@ -21,11 +22,19 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     logNormalization(normalized, patterns, options.debug);
 
+    // Guard: fail early with a clear message if rootDir does not exist.
+    try {
+        await access(normalized.rootDir);
+    } catch {
+        timeEnd('file-scan');
+        return Err(new Error(`rootDir does not exist or is not accessible: ${normalized.rootDir}`));
+    }
+
     const isGit = await isGitRepo(normalized.rootDir);
 
     const cacheResult = await tryLoadFromCache(normalized, patterns, isGit, options);
     if (cacheResult) {
-        return buildCachedResult(cacheResult, startTime, options.debug);
+        return await buildCachedResult(cacheResult, startTime, options.debug);
     }
 
     const t1 = performance.now();
@@ -54,7 +63,7 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     await saveToCache(normalized, patterns, finalFiles, isGit, options);
 
-    const stats = calculateStats(finalFiles, startTime, false);
+    const stats = await calculateStats(finalFiles, startTime, false);
     const totalTime = timeEnd('file-scan');
 
     logScanEnd(stats, totalTime, options.debug);
@@ -98,6 +107,7 @@ async function discoverFiles(
     if (isDebug) debug('scanner', 'Not a Git repository. Falling back to standard globbing...');
     const result = await executeGlob(patterns, normalized.rootDir, {
         followSymlinks: normalized.followSymlinks,
+        dot: normalized.dot,
     });
 
     if (result.ok && isDebug) {
@@ -113,9 +123,15 @@ async function getCacheKey(
     isGit: boolean,
     options: ScanOptions
 ): Promise<string | null> {
-    if (!options.cache || !isGit) return null;
+    if (!options.cache) return null;
 
-    const fingerprint = await getRepoFingerprint(normalized.rootDir);
+    // Use the git fingerprint for repos (precise: HEAD + index mtime).
+    // Fall back to a directory mtime fingerprint for non-git projects so
+    // that even plain directories benefit from caching.
+    const fingerprint = isGit
+        ? await getRepoFingerprint(normalized.rootDir)
+        : await getDirectoryFingerprint(normalized.rootDir);
+
     if (!fingerprint) return null;
 
     return options.cache.computeHash([
@@ -160,12 +176,12 @@ async function saveToCache(
     }
 }
 
-function buildCachedResult(
+async function buildCachedResult(
     files: ReadonlyArray<string>,
     startTime: number,
     isDebug?: boolean
-): Result<ScanResult> {
-    const stats = calculateStats(files, startTime, true);
+): Promise<Result<ScanResult>> {
+    const stats = await calculateStats(files, startTime, true);
     const totalTime = performance.now() - startTime;
 
     return Ok({
@@ -194,7 +210,7 @@ function logFiltering(fileCount: number, filteredCount: number, isDebug?: boolea
     debug('scanner', `After filters: ${fileCount} files (${filteredCount} filtered out)`);
 }
 
-function logScanEnd(stats: ReturnType<typeof calculateStats>, scanTime: number, isDebug?: boolean): void {
+function logScanEnd(stats: Awaited<ReturnType<typeof calculateStats>>, scanTime: number, isDebug?: boolean): void {
     if (!isDebug) return;
 
     debug('scanner', `Scan complete: ${stats.totalFiles} files in ${scanTime.toFixed(1)}ms`);

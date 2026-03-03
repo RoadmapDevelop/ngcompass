@@ -30,6 +30,12 @@ export interface ScanOptions {
     readonly ignorePatterns?: ReadonlyArray<string>;
     readonly respectGitignore?: boolean;
     readonly followSymlinks?: boolean;
+    /**
+     * Whether to match dotfiles and dot-directories (e.g. `.angular/`, `.nx/`).
+     * Corresponds to tinyglobby's `dot` option.
+     * @default false
+     */
+    readonly dot?: boolean;
     readonly debug?: boolean;
     readonly cache?: CacheContext;
 }
@@ -44,6 +50,8 @@ export interface NormalizedOptions {
     readonly ignorePatterns: ReadonlyArray<string>;
     readonly respectGitignore: boolean;
     readonly followSymlinks: boolean;
+    /** Resolved value of ScanOptions.dot — always a boolean after normalization. */
+    readonly dot: boolean;
 }
 
 /**

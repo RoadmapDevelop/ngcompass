@@ -1,11 +1,12 @@
 /**
  * Statistics Calculation
  *
- * Pure functions for calculating scan statistics.
- * All functions are deterministic and side-effect free.
+ * Mostly pure functions for calculating scan statistics.
+ * calculateTotalSize and calculateStats are async due to fs.stat I/O.
  */
 
 import path from 'node:path';
+import { stat } from 'node:fs/promises';
 import type { ScanStatistics } from './types.js';
 
 /**
@@ -27,42 +28,42 @@ export const groupFilesByExtension = (
     }, new Map<string, number>());
 
 /**
- * Calculates total size of files (placeholder - requires I/O).
+ * Calculates the total size of all files in bytes.
  *
- * For now returns 0 (actual implementation would require fs.stat calls).
+ * Runs all fs.stat calls concurrently via Promise.allSettled so that a
+ * single unreadable file never blocks the rest. Files that cannot be
+ * stat-ed (race-condition deletion, permissions) silently contribute 0.
  *
- * @param _files - Array of file paths
- * @returns Total size in bytes (currently 0)
+ * @param files - Absolute file paths
+ * @returns Total size in bytes
  */
-export const calculateTotalSize = (
-    _files: ReadonlyArray<string>
-): number => {
-    // TODO: Implement actual size calculation
-    // Would require fs.stat for each file (side effect)
-    // For FP approach, could be done as separate optional enrichment step
-    return 0;
+export const calculateTotalSize = async (
+    files: ReadonlyArray<string>
+): Promise<number> => {
+    const results = await Promise.allSettled(files.map(f => stat(f)));
+    return results.reduce<number>((sum, result) => {
+        return sum + (result.status === 'fulfilled' ? result.value.size : 0);
+    }, 0);
 };
 
 /**
  * Calculates scan statistics from file list.
  *
- * Pure function:
- * - No side effects
- * - Deterministic
- * - Returns new object
+ * Async because totalSize requires fs.stat I/O.
+ * Timing captures wall-clock time up to the point statistics are finalized.
  *
  * @param files - Array of discovered files
  * @param startTime - Scan start time (from performance.now())
  * @param cacheHit - Whether result came from cache
  * @returns Complete scan statistics
  */
-export const calculateStats = (
+export const calculateStats = async (
     files: ReadonlyArray<string>,
     startTime: number,
     cacheHit: boolean = false
-): ScanStatistics => {
+): Promise<ScanStatistics> => {
     const byExtension = groupFilesByExtension(files);
-    const totalSize = calculateTotalSize(files);
+    const totalSize = await calculateTotalSize(files);
     const scanTime = performance.now() - startTime;
 
     return {

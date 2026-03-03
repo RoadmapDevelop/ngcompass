@@ -19,6 +19,7 @@ describe('normalizeOptions', () => {
         expect(result.ignorePatterns).toEqual([]);
         expect(result.respectGitignore).toBe(true);
         expect(result.followSymlinks).toBe(false);
+        expect(result.dot).toBe(false);
     });
 
     it('retains provided values over defaults', () => {
@@ -28,7 +29,8 @@ describe('normalizeOptions', () => {
             exclude: ['node_modules'],
             ignorePatterns: ['.env'],
             respectGitignore: false,
-            followSymlinks: true
+            followSymlinks: true,
+            dot: true
         };
 
         const result = normalizeOptions(options);
@@ -39,6 +41,7 @@ describe('normalizeOptions', () => {
         expect(result.ignorePatterns).toEqual(['.env']);
         expect(result.respectGitignore).toBe(false);
         expect(result.followSymlinks).toBe(true);
+        expect(result.dot).toBe(true);
     });
 });
 

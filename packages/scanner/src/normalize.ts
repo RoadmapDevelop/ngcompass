@@ -24,6 +24,7 @@ export const normalizeOptions = (options: ScanOptions): NormalizedOptions => ({
     ignorePatterns: options.ignorePatterns ?? [],
     respectGitignore: options.respectGitignore ?? true,
     followSymlinks: options.followSymlinks ?? false,
+    dot: options.dot ?? false,
 });
 
 /**
