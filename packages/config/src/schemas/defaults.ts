@@ -40,7 +40,7 @@ export const DEFAULT_CACHE_OPTIONS: Required<CacheOptions> = {
  */
 export const DEFAULT_CONFIG = {
     outputFormat: 'text' as OutputFormat,
-    failOnSeverity: 'high' as FailSeverity,
+    failOnSeverity: 'error' as FailSeverity,
     maxWarnings: 10,
     reportUnusedDisableDirectives: true,
     failOnInfrastructureError: false,

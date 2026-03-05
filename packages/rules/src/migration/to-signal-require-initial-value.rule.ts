@@ -1,4 +1,4 @@
-﻿import { hasObjectProperty, ObjectExpression } from "@ngcompass/ast";
+import { hasObjectProperty, ObjectExpression } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
@@ -42,7 +42,7 @@ export const toSignalRequireInitialValueRule = createCallExpressionRule(
                 message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
                 line,
                 column,
-                severity: 'moderate',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['toSignal-require-initialValue'],
             };
         }
@@ -62,7 +62,7 @@ export const toSignalRequireInitialValueRule = createCallExpressionRule(
             message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
             line,
             column,
-            severity: 'moderate',
+            severity: 'warn',
             fix: RECOMMENDATIONS['toSignal-require-initialValue'],
         };
     }

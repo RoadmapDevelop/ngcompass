@@ -39,7 +39,7 @@ export const calculateStats = (results: ReadonlyArray<RuleResult>, startTime: nu
  * @returns true if severity counts as error
  */
 export const isErrorSeverity = (severity: unknown): boolean => {
-    return severity === "critical" || severity === "high" || severity === "error";
+    return severity === "error";
 };
 
 /**
@@ -49,6 +49,6 @@ export const isErrorSeverity = (severity: unknown): boolean => {
  * @returns true if severity counts as warning
  */
 export const isWarningSeverity = (severity: unknown): boolean => {
-    return severity === "moderate" || severity === "low" || severity === "warn";
+    return severity === "warn";
 };
 

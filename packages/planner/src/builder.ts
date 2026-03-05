@@ -175,14 +175,6 @@ export const getExecutionPlanSummary = (output: ExecutionPlanOutput): string => 
     lines.push(`Files with specs: ${stats.filesWithSpecs}`);
     lines.push("");
 
-    const { tasksBySeverity } = output.indexes;
-    lines.push("Tasks by severity:");
-    lines.push(`  Critical: ${tasksBySeverity.critical}`);
-    lines.push(`  High: ${tasksBySeverity.high}`);
-    lines.push(`  Moderate: ${tasksBySeverity.moderate}`);
-    lines.push(`  Low: ${tasksBySeverity.low}`);
-    lines.push(`  Info: ${tasksBySeverity.info}`);
-
     return lines.join("\n");
 };
 

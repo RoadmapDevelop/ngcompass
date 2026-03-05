@@ -1,4 +1,4 @@
-﻿
+
 // VALID_TEARDOWN_OPERATORS, hasTeardownInPipeCall, and hasTeardownInReceiverChain have been
 // moved to rule-utils.ts so rxjs-no-subscribe-in-component can share the same implementation.
 
@@ -34,7 +34,7 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
                 'Subscriptions in components must include a teardown operator in the subscribe chain (takeUntilDestroyed, takeUntil, take, first, takeWhile) to reduce leak risk.',
             line,
             column,
-            severity: 'high',
+            severity: 'error',
             fix: RECOMMENDATIONS['rxjs-require-takeUntilDestroyed'],
         };
     }

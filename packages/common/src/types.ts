@@ -7,19 +7,12 @@ import type { Locator } from "./utils/locator.js";
 import type { ParseError } from "./errors.js";
 
 /**
- * Violation severity levels, ordered from most to least severe:
+ * Violation severity levels:
  *
- *   critical > high > error* > moderate > warning* > low > info > hint
- *
- * (*) ESLint-compatibility aliases:
- *   - `'error'`   ≈ between `'high'` and `'moderate'` — use for hard-constraint violations
- *   - `'warning'` ≈ between `'moderate'` and `'low'`  — use for advisory violations
- *
- * Prefer the custom scale (`critical`, `high`, `moderate`, `low`, `info`, `hint`) for
- * new rules. The `'error'` / `'warning'` aliases exist for ecosystem compatibility
- * and are accepted by all reporters and the config schema.
+ *   error  — hard-constraint violations that should block CI / fail the run.
+ *   warn   — advisory violations surfaced as warnings.
  */
-export type Severity = 'critical' | 'high' | 'moderate' | 'low' | 'info' | 'warning' | 'error' | 'hint';
+export type Severity = 'warn' | 'error';
 
 /**
  * Rule categories for organization
@@ -161,14 +154,7 @@ export type BuiltinPreset =
     | 'recommended'
     | 'strict'
     | 'performance'
-    | 'accessibility'
-    | 'architecture'
-    | 'security'
     | 'reactivity'
-    | 'best-practice'
-    | 'code-smell'
-    | 'ssr'
-    | 'testing'
     | 'all';
 
 /**

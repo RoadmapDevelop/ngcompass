@@ -1,4 +1,4 @@
-﻿import { AnyAngularClassNode } from "@ngcompass/ast";
+import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -157,7 +157,7 @@ export const rxjsPreferToSignalRule = createAnyAngularClassRule(
                 message: `Property "${propName}" appears to be Observable-like. Consider converting it to a Signal with toSignal() when used for template/view state.`,
                 line,
                 column,
-                severity: 'low',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['rxjs-prefer-toSignal-for-template-state'],
             });
         }

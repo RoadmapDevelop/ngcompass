@@ -1,4 +1,4 @@
-﻿import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations';
+import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { AnyAngularClassNode } from '@ngcompass/ast';
 import { AstNode, unwrapNode, getTsSymbolAtNode, isLikelyAngularInjectableSymbol, getParamIdentifierName, getParamTypeName, getClassBody, getConstructorMember, getParamsArray, getNodeStart } from '../rule-utils';
@@ -151,7 +151,7 @@ export const preferInjectRule = createAnyAngularClassRule(
             message: `Use inject() instead of constructor parameters for dependency injection.${suffix}`,
             line,
             column,
-            severity: 'moderate',
+            severity: 'warn',
             fix: RECOMMENDATIONS['prefer-inject-over-constructor-di'],
             codeExample: CODE_EXAMPLES['prefer-inject-over-constructor-di'],
         };

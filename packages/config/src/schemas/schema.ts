@@ -6,7 +6,7 @@ import { DEFAULT_CONFIG, DEFAULT_CACHE_OPTIONS, getDefaultMaxWorkers } from './d
  * Shared Schema Fragments
  * Reusable Zod definitions to maintain consistency across the base config and overrides.
  */
-const SeveritySchema = z.enum(['critical', 'high', 'moderate', 'low', 'info', 'warning', 'error', 'hint']);
+const SeveritySchema = z.enum(['warn', 'error']);
 const OutputFormatSchema = z.enum(['json', 'text', 'sarif', 'html']);
 
 /**

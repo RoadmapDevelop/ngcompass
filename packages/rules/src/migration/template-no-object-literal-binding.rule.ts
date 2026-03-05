@@ -1,4 +1,4 @@
-﻿import { TemplateExpressionNode } from "@ngcompass/ast";
+import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -57,7 +57,7 @@ export const templateNoObjectLiteralBindingRule = createTemplateExpressionRule(
                     'Avoid object literals in template bindings. Move the object to a component field, a signal/computed value, or a pure pipe.',
                 line,
                 column,
-                severity: 'moderate',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['template-no-object-literal-binding'],
             };
         });

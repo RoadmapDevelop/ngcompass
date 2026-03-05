@@ -197,7 +197,7 @@ const buildTasksBySeverity = (plan: ExecutionPlan): Readonly<Record<RuleSeverity
  * @returns Initialized severity counts
  */
 const createEmptySeverityCounts = (): Record<RuleSeverity, number> => {
-    return { off: 0, low: 0, moderate: 0, high: 0, critical: 0, info: 0, warning: 0, error: 0, hint: 0 };
+    return { off: 0, warn: 0, error: 0 };
 };
 
 /**
@@ -328,7 +328,7 @@ const buildTasksBySeverityLevel = (
  * @returns Empty tasks-by-severity index
  */
 const createEmptyTasksBySeverityLevel = (): Readonly<Record<RuleSeverity, ReadonlyArray<Task>>> => {
-    return { off: [], low: [], moderate: [], high: [], critical: [], info: [], warning: [], error: [], hint: [] };
+    return { off: [], warn: [], error: [] };
 };
 
 /**
@@ -337,7 +337,7 @@ const createEmptyTasksBySeverityLevel = (): Readonly<Record<RuleSeverity, Readon
  * @returns Empty tasks-by-severity index
  */
 const createEmptyTasksBySeverityLevelMutable = (): Record<RuleSeverity, Task[]> => {
-    return { off: [], low: [], moderate: [], high: [], critical: [], info: [], warning: [], error: [], hint: [] };
+    return { off: [], warn: [], error: [] };
 };
 
 /**

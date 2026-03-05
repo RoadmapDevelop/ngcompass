@@ -165,7 +165,7 @@ export class RuleRegistry {
         return {
             name,
             metadata,
-            defaultConfig: { severity: 'moderate', options: {} },
+            defaultConfig: { severity: 'warn', options: {} },
         };
     }
 

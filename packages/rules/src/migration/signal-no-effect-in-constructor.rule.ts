@@ -1,4 +1,4 @@
-﻿import { AnyAngularClassNode } from "@ngcompass/ast";
+import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -36,7 +36,7 @@ export const signalNoEffectInConstructorRule = createAnyAngularClassRule(
                 message: 'Move effect() from the constructor to a field initializer.',
                 line,
                 column,
-                severity: 'low',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['signal-no-effect-in-constructor'],
             });
         }
