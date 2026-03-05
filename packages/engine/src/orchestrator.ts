@@ -30,13 +30,46 @@ export type { AnalysisContext } from "./analysis-context.js";
 export { createAnalysisContext } from "./analysis-context.js";
 
 /**
- * Minimal runtime type-guard for cached rule results.
- * Validates the structural contract without importing a full schema library.
+ * Runtime type-guard for cached rule results. (ENGINE-005)
+ *
+ * Validates every field so a corrupted or schema-mismatched cache entry
+ * (e.g. `{ ruleName: 42, failures: "oops" }`) cannot silently pass through.
  */
 function isRuleResult(value: unknown): value is RuleResult {
     if (!value || typeof value !== 'object') return false;
     const v = value as Record<string, unknown>;
-    return typeof v['ruleName'] === 'string' && Array.isArray(v['failures']);
+    if (typeof v['ruleName'] !== 'string') return false;
+    if (!Array.isArray(v['failures'])) return false;
+    for (const f of v['failures'] as unknown[]) {
+        if (!f || typeof f !== 'object') return false;
+        const failure = f as Record<string, unknown>;
+        if (typeof failure['filePath'] !== 'string') return false;
+        if (typeof failure['line'] !== 'number') return false;
+        if (typeof failure['column'] !== 'number') return false;
+        if (typeof failure['severity'] !== 'string') return false;
+    }
+    return true;
+}
+
+/**
+ * Runtime type-guard for a full AnalysisResult. (ENGINE-010)
+ *
+ * Used to validate precomputed (globally-cached) results before returning them.
+ * A schema version mismatch after a tool upgrade would otherwise silently
+ * return corrupted data with no error surfaced.
+ */
+function isValidAnalysisResult(value: unknown): value is AnalysisResult {
+    if (!value || typeof value !== 'object') return false;
+    const v = value as Record<string, unknown>;
+    if (!Array.isArray(v['results'])) return false;
+    if (!Array.isArray(v['parseErrors'])) return false;
+    if (!v['stats'] || typeof v['stats'] !== 'object') return false;
+    const stats = v['stats'] as Record<string, unknown>;
+    if (typeof stats['totalFiles'] !== 'number') return false;
+    if (typeof stats['totalErrors'] !== 'number') return false;
+    if (typeof stats['totalWarnings'] !== 'number') return false;
+    if (typeof stats['duration'] !== 'number') return false;
+    return true;
 }
 
 /**
@@ -89,10 +122,15 @@ export const runAnalysis = async (
     options: AnalysisOptions
 ): Promise<Result<AnalysisResult>> => {
     try {
-        // 0. Short-circuit: Return cached analysis if available
+        // 0. Short-circuit: Return cached analysis if available (ENGINE-010: validate schema first)
         if (plan.precomputedAnalysis) {
-            debug("engine", "Returning precomputed analysis from cache (global hash match)");
-            return Ok(plan.precomputedAnalysis);
+            if (!isValidAnalysisResult(plan.precomputedAnalysis)) {
+                debug("engine", "Precomputed analysis failed schema validation — discarding stale cache entry and re-running analysis");
+                // Fall through to fresh execution below
+            } else {
+                debug("engine", "Returning precomputed analysis from cache (global hash match)");
+                return Ok(plan.precomputedAnalysis);
+            }
         }
 
         const startTime = performance.now();
@@ -128,10 +166,14 @@ export const runAnalysis = async (
         // 3. Aggregate Results
         const successful = [...executedResults, ...skippedResults];
 
+        // ENGINE-012: Compute cache hit rate so CLI consumers can report it.
+        const totalTasks = tasks.length + skippedTasks.length;
+        const cacheHitRate = totalTasks > 0 ? skippedResults.length / totalTasks : undefined;
+
         const finalResult: AnalysisResult = {
             results: successful,
             parseErrors: [],
-            stats: calculateStats(successful, startTime),
+            stats: calculateStats(successful, startTime, cacheHitRate),
         };
 
         // 4. Cache the full analysis result if global hash is present

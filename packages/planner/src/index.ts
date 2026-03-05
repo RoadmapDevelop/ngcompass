@@ -89,3 +89,17 @@ export {
 
 export { groupTasksByFile } from './utils.js';
 
+// ==============================================================================
+// INTEGRATION UTILITIES (Scanner → Planner bridge)
+// ==============================================================================
+
+export {
+    scanResultToPlanInput,
+    hasScanFiles,
+    getScanFileCount,
+} from './integration.js';
+
+export type {
+    ScanResultBridge,
+    ScanToPlanOptions,
+} from './integration.js';

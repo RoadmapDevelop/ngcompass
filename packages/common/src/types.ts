@@ -259,6 +259,48 @@ export interface RuleResult {
     readonly taskId?: string;
 }
 
+// ==============================================================================
+// TEMPLATE / STYLE AST TYPES
+// (Defined here — not imported from @ngcompass/ast — to avoid a circular dep:
+//  @ngcompass/ast already depends on @ngcompass/common)
+// ==============================================================================
+
+/**
+ * Minimal parsed template AST handed to rules via `RuleContext.template`.
+ * Mirrors `@ngcompass/ast`'s `HtmlParserResult` without importing it.
+ *
+ * Rule authors: access `rootNodes` to traverse the Angular HTML tree.
+ * Each node is typed `unknown` here; use `@ngcompass/ast`'s node interfaces
+ * (e.g. `Element`, `Text`, `BoundAttribute`) for narrowing.
+ */
+export interface TemplateAst {
+    /** Root-level parsed nodes from the Angular HTML parser. */
+    readonly rootNodes: ReadonlyArray<unknown>;
+    /** Parse errors emitted by the HTML parser (does not throw). */
+    readonly errors: ReadonlyArray<unknown>;
+    /**
+     * Byte offset of the first template character inside the source file.
+     * - External `.html` files: always `0`.
+     * - Inline templates inside `.ts` files: position after the opening quote.
+     * Add this value to node `sourceSpan.start` before calling
+     * `context.locator.location()` to obtain correct line/column numbers.
+     */
+    readonly templateStartOffset: number;
+}
+
+/**
+ * Minimal parsed style AST handed to rules via `RuleContext.style`.
+ * Mirrors `@ngcompass/ast`'s `CssResult` without importing it.
+ */
+export interface StyleAst {
+    /** Whether parsing succeeded. */
+    readonly ok: boolean;
+    /** Transformed CSS bytes — present when `ok` is `true`. */
+    readonly code?: Buffer | Uint8Array;
+    /** Parse/transform error — present when `ok` is `false`. */
+    readonly error?: unknown;
+}
+
 export interface RuleContext {
     /**
      * Lazily-created TypeScript `SourceFile` for this file.
@@ -278,15 +320,15 @@ export interface RuleContext {
     readonly program?: Program;
     readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
     /**
-     * Parsed template AST node. Structurally matches `@ngcompass/ast`'s `Node`
-     * interface — typed inline to avoid a circular package dependency
-     * (`@ngcompass/ast` already depends on `@ngcompass/common`).
+     * Parsed template AST — use `rootNodes` to traverse the Angular HTML tree.
+     * Typed as `TemplateAst` (defined above) to avoid a circular dep on `@ngcompass/ast`.
      */
-    readonly template?: { readonly type: string; readonly start?: number; readonly end?: number };
+    readonly template?: TemplateAst;
     /**
-     * Parsed style AST node. Same structural contract as `template` above.
+     * Parsed style AST — check `ok` before accessing `code`.
+     * Typed as `StyleAst` (defined above) to avoid a circular dep on `@ngcompass/ast`.
      */
-    readonly style?: { readonly type: string; readonly start?: number; readonly end?: number };
+    readonly style?: StyleAst;
     readonly options?: Readonly<Record<string, unknown>>;
 }
 
@@ -306,5 +348,29 @@ export interface AnalysisResult {
         readonly totalErrors: number;
         readonly totalWarnings: number;
         readonly duration: number;
+        /**
+         * Fraction of tasks whose results were served from cache (0–1).
+         * `undefined` when no cache is in use (e.g. first cold run or worker path).
+         * Consumers can display this as a percentage: `(cacheHitRate * 100).toFixed(1)%`.
+         */
+        readonly cacheHitRate?: number;
     };
+}
+
+// ==============================================================================
+// WORKER INTEROP TYPES  (ENGINE-008)
+// Defined here so both @ngcompass/engine and @ngcompass/rules share a single
+// source of truth instead of duplicating local interfaces in each package.
+// ==============================================================================
+
+/** Describes a task that failed inside a worker thread. */
+export interface WorkerTaskError {
+    readonly task: { readonly taskId: string };
+    readonly error: string;
+}
+
+/** Message posted back from a worker thread to the orchestrator. */
+export interface WorkerMessageResult {
+    readonly results: RuleResult[];
+    readonly errors: WorkerTaskError[];
 }

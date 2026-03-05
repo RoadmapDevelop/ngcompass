@@ -1,7 +1,7 @@
 import { exec, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import path from 'node:path';
-import { stat } from 'node:fs/promises';
+import { stat, readdir } from 'node:fs/promises';
 import { debug } from '@ngcompass/common';
 
 const execAsync = promisify(exec);
@@ -94,21 +94,50 @@ export const getRepoFingerprint = async (dir: string): Promise<string> => {
 };
 
 /**
- * Computes a lightweight fingerprint for a non-git directory.
+ * Computes a robust fingerprint for a non-git directory by statting its
+ * first-level children.
  *
- * Uses the directory's mtime so the cache invalidates whenever files are
- * added, removed, or the directory itself is modified. This is not as
- * precise as the git fingerprint (e.g. touch-without-edit won't be
- * detected) but prevents stale cache hits on repeated CLI invocations
- * where nothing has changed.
+ * Unlike a plain directory mtime (which only updates when entries are
+ * added/removed, not when file contents change on some OSes), this
+ * fingerprint captures:
+ *   - Total number of direct children (entry count)
+ *   - Latest child mtime  (detects modifications)
+ *   - Total size of direct children (detects content changes)
+ *
+ * The operation is deliberately limited to the first level so it stays
+ * O(N) in directory entries rather than O(total files).
  *
  * @param dir - Absolute path to the directory to fingerprint
  * @returns Fingerprint string, or empty string on error
  */
 export const getDirectoryFingerprint = async (dir: string): Promise<string> => {
     try {
-        const dirStat = await stat(dir);
-        return `dir-${dirStat.mtimeMs}`;
+        const entries = await readdir(dir, { withFileTypes: true });
+
+        // Stat each direct child concurrently to capture mtime, size, and
+        // presence changes. A single inaccessible entry is silently skipped.
+        const statResults = await Promise.allSettled(
+            entries.map(entry => stat(path.join(dir, entry.name)))
+        );
+
+        let totalSize = 0;
+        let latestMtime = 0;
+        let statSuccessCount = 0;
+
+        for (const result of statResults) {
+            if (result.status === 'fulfilled') {
+                totalSize += result.value.size;
+                if (result.value.mtimeMs > latestMtime) {
+                    latestMtime = result.value.mtimeMs;
+                }
+                statSuccessCount++;
+            }
+        }
+
+        // Fingerprint encodes: entry count, successful stats, total size,
+        // latest mtime — any file addition, removal, modification, or size
+        // change produces a different string.
+        return `dir-${entries.length}-${statSuccessCount}-${totalSize}-${latestMtime}`;
     } catch (error) {
         debug('scanner', `Failed to get directory fingerprint: ${error instanceof Error ? error.message : String(error)}`);
         return '';

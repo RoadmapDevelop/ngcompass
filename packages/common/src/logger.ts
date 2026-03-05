@@ -5,6 +5,8 @@
  * Follows industry standards (ESLint, TypeScript debug patterns).
  */
 
+import pc from 'picocolors';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type Namespace =
     | 'discovery'
@@ -52,6 +54,27 @@ const KNOWN_NAMESPACES: ReadonlySet<string> = new Set<string>(
         'planner', 'incremental', 'dry-run', 'engine', 'plugin-loader', 'env-fingerprint',
     ] satisfies Namespace[]
 );
+
+const COLORS = [
+    pc.cyan,
+    pc.green,
+    pc.yellow,
+    pc.blue,
+    pc.magenta,
+    pc.magentaBright,
+    pc.cyanBright,
+    pc.greenBright,
+    pc.yellowBright,
+    pc.blueBright
+];
+
+function getNamespaceColor(namespace: string) {
+    let hash = 0;
+    for (let i = 0; i < namespace.length; i++) {
+        hash = namespace.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return COLORS[Math.abs(hash) % COLORS.length];
+}
 
 class Logger {
     private config: LoggerConfig;
@@ -141,10 +164,12 @@ class Logger {
         if (!this.config.enabled) return;
         if (this.config.namespaces !== 'all' && !this.config.namespaces.has(namespace)) return;
 
-        const prefix = `[ngcompass:${namespace}]`;
-        const timestamp = this.config.showTimestamps ? `[${new Date().toISOString()}]` : '';
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        const colorFn = getNamespaceColor(namespace);
+        const prefix = `${pc.gray(`[${timeStr}]`)} ${colorFn(`[ngcompass:${namespace}]`)}`;
+        let timestamp = this.config.showTimestamps ? pc.gray(`[${now.toISOString()}] `) : '';
 
-        // Use stderr to keep stdout clean for actual output
         console.error(`${timestamp}${prefix} ${message}`, ...args);
     }
 

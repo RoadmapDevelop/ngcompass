@@ -5,7 +5,7 @@
  * Handles loading, merging, and resolving rules from config + presets
  */
 
-import { Severity, Result, Ok, Err, Locator } from "@ngcompass/common";
+import { Severity, Result, Ok, Err, Locator, TemplateAst, StyleAst } from "@ngcompass/common";
 
 // ==============================================================================
 // RULE CONFIGURATION
@@ -210,8 +210,10 @@ export interface RuleContext {
     readonly locator: Locator; // Line/column mapping helper
     readonly program?: import('oxc-parser').Program;
     readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
-    readonly template?: any;
-    readonly style?: any;
+    /** Parsed template AST — access `rootNodes` to traverse the Angular HTML tree. */
+    readonly template?: TemplateAst;
+    /** Parsed style AST — check `ok` before accessing `code`. */
+    readonly style?: StyleAst;
     readonly options?: Readonly<Record<string, unknown>>;
 }
 
@@ -231,6 +233,11 @@ export interface AnalysisResult {
         readonly totalErrors: number;
         readonly totalWarnings: number;
         readonly duration: number;
+        /**
+         * Fraction of tasks served from cache (0–1).
+         * `undefined` when cache is not in use.
+         */
+        readonly cacheHitRate?: number;
     };
 }
 

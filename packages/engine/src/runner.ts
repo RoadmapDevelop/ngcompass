@@ -8,25 +8,15 @@
  * responsible only for batching by options and mapping results back to task IDs.
  */
 
-import { HtmlParserResult, CssResult } from "@ngcompass/ast";
+
 import { InfrastructureErrorCollector, RuleResult, RuleFailure, RuleSeverity, stableSerialize, SerializationError, createInfrastructureError, debug } from "@ngcompass/common";
 import { Task } from "@ngcompass/planner";
-import { Program } from "oxc-parser";
-import { RuleContextFactory } from "./rule-context-factory.js";
+
+import { RuleContextFactory, type ExecutionContext } from "./rule-context-factory.js";
 import { getConfiguredExecutor, getConfiguredChecker } from "./rule-executor.js";
 
 
-/**
- * Interface definition for context required to execute tasks.
- * Abstracts over local vs worker environment.
- */
-export interface ExecutionContext {
-    readonly rootDir: string;
-    readonly readFile: (filePath: string) => Promise<string>;
-    readonly getProgram: (filePath: string) => Promise<Program>;
-    readonly getTemplate: (filePath: string) => Promise<HtmlParserResult | undefined>;
-    readonly getStyle: (filePath: string) => Promise<CssResult | undefined>;
-}
+
 
 /**
  * Executes a batch of tasks for a single file using the provided context.

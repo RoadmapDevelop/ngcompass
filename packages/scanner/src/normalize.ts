@@ -2,9 +2,24 @@ import path from 'node:path';
 import type { ScanOptions, NormalizedOptions } from './types.js';
 
 /**
- * Default include patterns
+ * Default include patterns.
+ *
+ * Covers all Angular source file types out of the box:
+ *   - TypeScript (component classes, services, modules, …)
+ *   - HTML templates
+ *   - Style sheets (CSS, SCSS, Sass, Less)
+ *
+ * Callers can override this by passing a non-empty `include` array in
+ * `ScanOptions`.
  */
-const DEFAULT_INCLUDE = ['**/*.ts', '**/*.html'] as const;
+const DEFAULT_INCLUDE = [
+    '**/*.ts',
+    '**/*.html',
+    '**/*.scss',
+    '**/*.css',
+    '**/*.sass',
+    '**/*.less',
+] as const;
 
 /**
  * Normalizes scan options by applying defaults and resolving paths.

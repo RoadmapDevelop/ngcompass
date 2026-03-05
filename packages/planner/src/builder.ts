@@ -15,7 +15,7 @@ import type {
     FileType,
 } from "./types.js";
 import { Ok, Err } from "./types.js";
-import { debug, time, timeLog } from "@ngcompass/common";
+import { AnalysisResult, debug, time, timeLog } from "@ngcompass/common";
 import { detectFileType } from "./file-type.js";
 import { filterCachedTasks } from "./incremental.js";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
@@ -90,7 +90,14 @@ export const buildExecutionPlan = async (
             allTasks = cachedPlan.tasks;
         } else {
             debug("planner", "Building tasks...");
-            allTasks = await buildAllTasks(files, rules, context, fileTypeCache);
+            allTasks = await buildAllTasks(
+                files,
+                rules,
+                context,
+                fileTypeCache,
+                options.parallelThreshold,
+                options.workerCount
+            );
             if (options.debug && context.graphStats) {
                 const { hits, misses, fallbacks } = context.graphStats;
                 debug("planner", `Graph stats — hits: ${hits}, misses: ${misses}, fallbacks: ${fallbacks}`);
@@ -115,6 +122,8 @@ export const buildExecutionPlan = async (
         let tasks = allTasks;
         let skippedTasks: ReadonlyArray<Task> = [];
         let cachedResults: ReadonlyMap<string, unknown> | undefined;
+        let changedFiles: ReadonlyArray<string> | undefined;
+        let cachedFiles: ReadonlyArray<string> | undefined;
 
         if (options.cache) {
             debug("planner", "Filtering cached tasks...");
@@ -126,6 +135,14 @@ export const buildExecutionPlan = async (
             tasks = incremental.tasks;
             skippedTasks = incremental.skippedTasks;
             cachedResults = incremental.cachedResults;
+
+            // Derive changed/cached file lists from the incremental split.
+            // A file is "changed" if it has at least one pending task; "cached"
+            // if all its tasks were satisfied from the result cache.
+            changedFiles = [...new Set(tasks.map(t => t.filePath))];
+            cachedFiles = [...new Set(skippedTasks.map(t => t.filePath))].filter(
+                f => !changedFiles!.includes(f)
+            );
         }
 
         debug("planner", "Converting tasks to file-centric plan...");
@@ -140,7 +157,9 @@ export const buildExecutionPlan = async (
             indexes,
             skippedTasks,
             cachedResults,
-            globalHash: context.globalHash
+            globalHash: context.globalHash,
+            changedFiles,
+            cachedFiles,
         };
         // Note: We do NOT save the filtered plan to the main plan cache, as it is state-dependent.
         // The main cache stores the full plan.
@@ -244,26 +263,32 @@ const tryLoadPlanFromCache = async (
             tasks: [],
             plan: {},
             indexes: {
+                filesNeedingTsAst: [],
+                filesNeedingHtmlAst: [],
+                filesNeedingCssAst: [],
+                filesNeedingTypeChecker: [],
+                tasksByFile: {},
+                tasksByRule: {},
+                tasksBySeverityLevel: { off: [], warn: [], error: [] },
+                filesByType: {
+                    component: [], directive: [], pipe: [], service: [],
+                    module: [], guard: [], logic: [], template: [],
+                    style: [], config: [], unknown: [],
+                },
+                tasksBySeverity: { off: 0, warn: 0, error: 0 },
                 stats: {
                     totalFiles: 0,
                     totalTasks: 0,
                     avgTasksPerFile: 0,
                     filesWithTemplates: 0,
                     filesWithStyles: 0,
-                    filesWithSpecs: 0
+                    filesWithSpecs: 0,
                 },
-                tasksBySeverity: {
-                    critical: 0,
-                    high: 0,
-                    moderate: 0,
-                    low: 0,
-                    info: 0
-                }
             },
             skippedTasks: [],
             globalHash,
-            precomputedAnalysis: precomputedAnalysis as any
-        } as unknown as ExecutionPlanOutput;
+            precomputedAnalysis: precomputedAnalysis as AnalysisResult,
+        };
     }
 
     const tCacheStart = performance.now();
@@ -383,13 +408,12 @@ const buildAllTasks = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, any>,
     context?: TaskBuilderContext,
-    fileTypeCache?: Map<string, FileType>
+    fileTypeCache?: Map<string, FileType>,
+    parallelThreshold = 10000,
+    workerCount = 4
 ): Promise<ReadonlyArray<Task>> => {
-    const PARALLEL_THRESHOLD = 10000;
-    const WORKER_COUNT = 4;
-
-    if (files.length >= PARALLEL_THRESHOLD) {
-        const tasks = await tryBuildAllTasksParallel(files, rules, fileTypeCache, WORKER_COUNT);
+    if (files.length >= parallelThreshold) {
+        const tasks = await tryBuildAllTasksParallel(files, rules, fileTypeCache, workerCount);
         if (tasks) return tasks;
     }
 

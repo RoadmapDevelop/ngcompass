@@ -27,7 +27,7 @@
  * ```
  */
 
-import { Locator, RuleContext } from '@ngcompass/common';
+import { Locator, RuleContext, TemplateAst, StyleAst } from '@ngcompass/common';
 import { Program } from 'oxc-parser';
 import { TypeChecker } from 'typescript';
 
@@ -36,8 +36,8 @@ export interface ExecutionContext {
     readonly readFile: (filePath: string) => Promise<string>;
     readonly getProgram: (filePath: string) => Promise<Program>;
     readonly getTypeChecker?: (filePath: string) => Promise<TypeChecker | undefined>;
-    readonly getTemplate: (filePath: string) => Promise<any | undefined>;
-    readonly getStyle: (filePath: string) => Promise<any | undefined>;
+    readonly getTemplate: (filePath: string) => Promise<TemplateAst | undefined>;
+    readonly getStyle: (filePath: string) => Promise<StyleAst | undefined>;
 }
 
 // ============================================
@@ -79,7 +79,7 @@ export class RuleContextFactory {
             typeChecker = await this.context.getTypeChecker(filePath);
         }
 
-        let template: any | undefined;
+        let template: TemplateAst | undefined;
         if (needsTemplate) {
             template = await this.context.getTemplate(filePath);
         }

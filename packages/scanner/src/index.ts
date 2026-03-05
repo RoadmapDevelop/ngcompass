@@ -8,7 +8,9 @@ export type {
     ExpandedPatterns,
     Result,
     Option,
-    GitignoreFilter
+    GitignoreFilter,
+    ScanPhase,
+    OnProgressCallback,
 } from './types.js';
 
 export { Ok, Err } from './types.js';
@@ -16,4 +18,4 @@ export { normalizeOptions, validateOptions } from './normalize.js';
 export { expandPatterns, normalizePattern, isValidPattern, validatePatterns } from './patterns.js';
 export { deduplicateFiles, filterByExtension, filterByPattern } from './filters.js';
 export { groupFilesByExtension, calculateStats, formatExtensionBreakdown, calculateSummary } from './stats.js';
-export { createGitignoreFilter, createPassThroughFilter } from './gitignore.js';
+export { createGitignoreFilter, createPassThroughFilter, loadAllGitignoreFilters } from './gitignore.js';

@@ -57,8 +57,6 @@ const TRAILING_PERIOD_RE = /\.$/;
  */
 function buildIndexedSeparator(index: number, total: number): string {
     const label = `[${index}/${total}]`;
-    // Adapt to the actual terminal width; cap at 120 to avoid sprawl on ultra-wide displays.
-    // Falls back to 80 when stdout is not a TTY (e.g. piped output, CI).
     const width = Math.min(process.stdout.columns ?? 80, 120);
     const dotCount = Math.max(1, width - label.length);
     const content = '·'.repeat(dotCount) + label;
@@ -142,7 +140,6 @@ function computeLocationWidth(failures: RuleFailure[]): number {
 
 function buildSummaryLine(errorCount: number, warningCount: number): string {
     const total = errorCount + warningCount;
-    // Error problem count is red, warning-only is yellow
     const xColor = errorCount > 0 ? pc.red : pc.yellow;
     return (
         `${xColor('×')} ${total} problem${total !== 1 ? 's' : ''} ` +
@@ -297,7 +294,6 @@ export class ConsoleReporter implements Reporter {
         const byFile = groupFailuresByFile(allFailures, this.cwd);
         const sortedFilePaths = Array.from(byFile.keys()).sort();
 
-        // Counts are computed as a pure step before any I/O (CQS).
         const { errorCount, warningCount } = countSeverities(allFailures);
 
         this.out.write('');
@@ -322,16 +318,10 @@ export class ConsoleReporter implements Reporter {
     info(message: string): void { this.out.write(pc.dim(message)); }
 
     /**
-     * Emits a debug message only when `verbose` mode is active.
-     *
-     * Why `this.verbose` and not `process.env.DEBUG`:
-     * routing through the injected option keeps debug output under the caller's
-     * control without introducing a hidden environment-variable side-channel.
+     * No-op: debug logging is not handled by the reporter.
      */
-    debug(message: string): void {
-        if (this.verbose) {
-            this.out.write(pc.gray(`[DEBUG] ${message}`));
-        }
+    debug(_message: string): void {
+        // no-op
     }
 
     /**

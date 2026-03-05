@@ -41,6 +41,16 @@ const main = async (): Promise<void> => {
             ? new Map<string, FileType>(fileTypeCacheEntries)
             : undefined;
 
+        // Validate that structured-clone preserved all rule entries. A size
+        // mismatch indicates prototype-chain loss or data truncation — both of
+        // which would silently produce incorrect task lists.
+        if (rules.size !== rulesEntries.length) {
+            throw new Error(
+                `Map serialization round-trip failed: expected ${rulesEntries.length} rules, ` +
+                `got ${rules.size}. Worker data may have been corrupted by structured-clone.`
+            );
+        }
+
         await initHasher();
 
         const context: TaskBuilderContext = {

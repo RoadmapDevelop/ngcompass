@@ -170,6 +170,7 @@ const createEmptyFilesByTypeIndex = (): Record<FileType, string[]> => {
         template: [],
         style: [],
         config: [],
+        unknown: [],
     };
 };
 

@@ -244,11 +244,19 @@ const buildTaskInputsWithHashes = async (
 /**
  * Determines whether a file type represents a TypeScript-bearing unit.
  *
+ * `'unknown'` files are explicitly excluded — they don't match any recognised
+ * Angular pattern and should never have rules applied to them.
+ *
  * @param fileType - File type
  * @returns true if it is a TS-bearing file type
  */
 const isTypescriptLike = (fileType: FileType): boolean => {
-    return fileType !== "template" && fileType !== "style" && fileType !== "config";
+    return (
+        fileType !== "template" &&
+        fileType !== "style" &&
+        fileType !== "config" &&
+        fileType !== "unknown"
+    );
 };
 
 /**
@@ -276,11 +284,15 @@ const evaluateRuleApplicability = (
 /**
  * Resolves AST requirements for a rule with defaults.
  *
+ * `rule.metadata.requires` is typed as `RuleAstRequirements` (never undefined)
+ * so no fallback is needed. All individual flags are optional booleans, so
+ * we guard each with Boolean() to normalise undefined → false.
+ *
  * @param rule - Resolved rule
  * @returns AST requirement flags
  */
 const resolveAstRequirements = (rule: ResolvedRule) => {
-    const requires = rule.metadata.requires ?? ({} as any);
+    const requires = rule.metadata.requires;
 
     return {
         needsTsAst: Boolean(requires.tsAst),

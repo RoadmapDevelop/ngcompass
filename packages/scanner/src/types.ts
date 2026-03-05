@@ -38,6 +38,21 @@ export interface ScanOptions {
     readonly dot?: boolean;
     readonly debug?: boolean;
     readonly cache?: CacheContext;
+    /**
+     * Optional progress callback invoked at key phases of the scan.
+     * Receives the current phase name and the file count known at that point.
+     */
+    readonly onProgress?: OnProgressCallback;
+    /**
+     * Optional path to a `tsconfig.json` file. When provided, the scanner
+     * narrows discovered files to those the TypeScript compiler would include
+     * by merging the tsconfig's `include` / `exclude` / `files` arrays with
+     * the scan options.
+     *
+     * Relative paths inside the tsconfig are resolved against the tsconfig's
+     * directory, not `rootDir`.
+     */
+    readonly tsConfigPath?: string;
 }
 
 /**
@@ -115,3 +130,32 @@ export interface ScanResult {
  * Gitignore filter function type
  */
 export type GitignoreFilter = (file: string, rootDir: string) => boolean;
+
+// ==============================================================================
+// PROGRESS REPORTING
+// ==============================================================================
+
+/**
+ * Phases of a scan operation, emitted in order via `ScanOptions.onProgress`.
+ *
+ * - `normalizing`       — Options are being validated and defaults applied.
+ * - `discovering`       — Files are being located (git ls-files or glob).
+ * - `filtering`         — Gitignore and dedup filters are being applied.
+ * - `calculating-stats` — File sizes are being accumulated for statistics.
+ * - `complete`          — Scan finished; `count` is the final file count.
+ */
+export type ScanPhase =
+    | 'normalizing'
+    | 'discovering'
+    | 'filtering'
+    | 'calculating-stats'
+    | 'complete';
+
+/**
+ * Callback invoked at each scan phase transition with the current file count.
+ * Useful for driving progress bars or log output in CLI consumers.
+ *
+ * @param phase - The phase that just started (or completed for 'complete').
+ * @param count - Number of files known at this point in the scan.
+ */
+export type OnProgressCallback = (phase: ScanPhase, count: number) => void;

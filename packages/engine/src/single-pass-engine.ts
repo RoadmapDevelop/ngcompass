@@ -29,13 +29,7 @@ import { resetComponentCacheStats, getComponentCacheStats } from '@ngcompass/ast
 import { analyzeTemplate } from '@ngcompass/ast';
 import { buildVisitorMap } from './visitor-registry.js';
 import { InfrastructureErrorCollector, createInfrastructureError } from '@ngcompass/common';
-
-// ============================================
-// PERFORMANCE BUDGETS (Enforced by CI)
-// ============================================
-
-const BUDGET_MS_PER_FILE_WITHOUT_TYPES = 2;  // p95
-const BUDGET_MS_PER_FILE_WITH_TYPES = 5;     // p95
+import { BUDGET_MS_PER_FILE_WITHOUT_TYPES, BUDGET_MS_PER_FILE_WITH_TYPES } from './constants.js';
 
 // ============================================
 // PERFORMANCE INSTRUMENTATION
