@@ -15,7 +15,7 @@ import type {
     Result
 } from './types.js';
 import { Ok, Err } from './types.js';
-import { loadAndCreateGitignoreFilter } from './gitignore.js';
+import { loadAllGitignoreFilters } from './gitignore.js';
 
 /**
  * Deduplicates file paths.
@@ -70,7 +70,10 @@ export const applyFilters = async (
         const startCount = files.length;
 
         if (options.respectGitignore) {
-            const filterResult = await loadAndCreateGitignoreFilter(options.rootDir);
+            // Use the composite multi-directory filter so that per-package
+            // .gitignore files (monorepos, nested packages) are respected,
+            // not just the root-level one.
+            const filterResult = await loadAllGitignoreFilters(options.rootDir, files);
 
             if (!filterResult.ok) {
                 return filterResult;

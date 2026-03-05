@@ -1,6 +1,7 @@
-import { access } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
+import path from 'node:path';
 import { debug, time, timeEnd } from '@ngcompass/common';
-import type { ScanOptions, ScanResult, Result, ScanTimings, NormalizedOptions, ExpandedPatterns } from './types.js';
+import type { ScanOptions, ScanResult, Result, ScanTimings, NormalizedOptions, ExpandedPatterns, OnProgressCallback } from './types.js';
 import { Ok, Err } from './types.js';
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
@@ -20,15 +21,26 @@ import { calculateStats } from './stats.js';
 export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> => {
     time('file-scan');
     const startTime = performance.now();
+    const progress: OnProgressCallback = options.onProgress ?? (() => undefined);
 
     logScanStart(options);
+    progress('normalizing', 0);
 
     const t0 = performance.now();
     const normalized = normalizeOptions(options);
-    const patterns = expandPatterns(normalized);
+    let patterns = expandPatterns(normalized);
     const normalizationTime = performance.now() - t0;
 
     logNormalization(normalized, patterns);
+
+    // Optionally narrow include/exclude patterns using a tsconfig.json.
+    if (options.tsConfigPath) {
+        const tsPatterns = await loadTsConfigPatterns(options.tsConfigPath, normalized.rootDir);
+        if (tsPatterns) {
+            patterns = mergeTsConfigPatterns(patterns, tsPatterns);
+            debug('scanner', `tsconfig patterns merged: +${tsPatterns.include.length} include, +${tsPatterns.exclude.length} exclude`);
+        }
+    }
 
     try {
         await access(normalized.rootDir);
@@ -41,9 +53,11 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     const cacheResult = await tryLoadFromCache(normalized, patterns, isGit, options);
     if (cacheResult) {
+        progress('complete', cacheResult.length);
         return await buildCachedResult(cacheResult, startTime);
     }
 
+    progress('discovering', 0);
     const t1 = performance.now();
     const discoveryResult = await discoverFiles(normalized, patterns, isGit);
 
@@ -54,6 +68,7 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     const rawFiles = discoveryResult.data;
     const discoveryTime = performance.now() - t1;
+    progress('filtering', rawFiles.length);
 
     const t2 = performance.now();
     const filterResult = await applyFilters({ files: rawFiles }, normalized);
@@ -67,6 +82,7 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
     const filteringTime = performance.now() - t2;
 
     logFiltering(finalFiles.length, filterResult.data.filtered);
+    progress('calculating-stats', finalFiles.length);
 
     await saveToCache(normalized, patterns, finalFiles, isGit, options);
 
@@ -74,6 +90,7 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
     const totalTime = timeEnd('file-scan');
 
     logScanEnd(stats, totalTime);
+    progress('complete', finalFiles.length);
 
     const timings: ScanTimings = {
         normalization: normalizationTime,
@@ -267,4 +284,103 @@ function logScanEnd(stats: Awaited<ReturnType<typeof calculateStats>>, scanTime:
 function logAndReturnError(phase: string, error: Error): void {
     const scanTime = timeEnd('file-scan');
     debug('scanner', `${phase} failed after ${scanTime.toFixed(1)}ms: ${error.message}`);
+}
+
+// ==============================================================================
+// TSCONFIG SUPPORT (SCANNER-002)
+// ==============================================================================
+
+/**
+ * Parsed tsconfig patterns — only the fields relevant to file discovery.
+ */
+interface TsConfigPatterns {
+    readonly include: ReadonlyArray<string>;
+    readonly exclude: ReadonlyArray<string>;
+}
+
+/**
+ * Attempts to read a tsconfig.json and extract `include` / `exclude` arrays.
+ *
+ * TypeScript config files allow JSON with comments and trailing commas, so
+ * we strip single-line and block comments before parsing. If the file cannot
+ * be read or parsed, we return null and the scan continues without tsconfig
+ * narrowing (fail-open behaviour).
+ *
+ * @param tsConfigPath - Absolute or relative path to tsconfig.json
+ * @param rootDir      - Scan root, used to convert absolute tsconfig paths to
+ *                       root-relative globs for minimatch compatibility.
+ * @returns Parsed patterns or null on error.
+ */
+async function loadTsConfigPatterns(
+    tsConfigPath: string,
+    rootDir: string
+): Promise<TsConfigPatterns | null> {
+    try {
+        const raw = await readFile(tsConfigPath, 'utf-8');
+
+        // Strip single-line and block comments (TypeScript JSON allows them).
+        const stripped = raw
+            .replace(/\/\/[^\n]*/g, '')
+            .replace(/\/\*[\s\S]*?\*\//g, '');
+
+        const config = JSON.parse(stripped) as {
+            include?: string[];
+            exclude?: string[];
+            files?: string[];
+        };
+
+        const configDir = path.dirname(path.resolve(tsConfigPath));
+
+        // Convert tsconfig-relative globs to rootDir-relative globs.
+        const toRootRelative = (p: string): string => {
+            const abs = path.resolve(configDir, p);
+            const rel = path.relative(rootDir, abs).replace(/\\/g, '/');
+            return rel;
+        };
+
+        const include: string[] = [];
+        const exclude: string[] = [];
+
+        if (Array.isArray(config.include)) {
+            include.push(...config.include.map(toRootRelative));
+        }
+        // tsconfig `files` lists are treated as additional include patterns.
+        if (Array.isArray(config.files)) {
+            include.push(...config.files.map(toRootRelative));
+        }
+        if (Array.isArray(config.exclude)) {
+            exclude.push(...config.exclude.map(toRootRelative));
+        }
+
+        return { include, exclude };
+    } catch (err) {
+        debug('scanner', `Failed to load tsconfig patterns from ${tsConfigPath}: ${err instanceof Error ? err.message : String(err)}`);
+        return null;
+    }
+}
+
+/**
+ * Merges tsconfig-derived include/exclude patterns into the existing
+ * `ExpandedPatterns` object.
+ *
+ * If the tsconfig provides `include` patterns they are added as additional
+ * include globs (union semantics). If it provides `exclude` patterns they
+ * are added to the ignore list.
+ *
+ * @param patterns    - Existing expanded patterns from normalizeOptions.
+ * @param tsPatterns  - Patterns loaded from the tsconfig.
+ * @returns New ExpandedPatterns with tsconfig patterns merged in.
+ */
+function mergeTsConfigPatterns(
+    patterns: ExpandedPatterns,
+    tsPatterns: TsConfigPatterns
+): ExpandedPatterns {
+    return {
+        include: tsPatterns.include.length > 0
+            ? [...patterns.include, ...tsPatterns.include]
+            : patterns.include,
+        ignore: tsPatterns.exclude.length > 0
+            ? [...patterns.ignore, ...tsPatterns.exclude]
+            : patterns.ignore,
+    };
 }

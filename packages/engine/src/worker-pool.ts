@@ -3,14 +3,12 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { Result, AnalysisResult, RuleResult, createInfrastructureError, Ok, debug } from "@ngcompass/common";
+import { Result, AnalysisResult, RuleResult, WorkerTaskError, WorkerMessageResult, createInfrastructureError, Ok, debug } from "@ngcompass/common";
+import { MIN_WORKER_COUNT } from "./constants.js";
 import { createAnalysisContext } from "./analysis-context.js";
 import { calculateStats } from "./analysis-stats.js";
 import { executeBatchedTasks } from "./runner.js";
 import { Task, groupTasksByFile } from "@ngcompass/planner";
-/** Local mirror of ExecutionWorkerResult to avoid a circular @ngcompass/rules import. */
-interface WorkerTaskError { task: { taskId: string }; error: string; }
-interface WorkerMessageResult { results: RuleResult[]; errors: WorkerTaskError[]; }
 import pLimit from "p-limit";
 import { Spinner } from "./spinner.js";
 
@@ -39,8 +37,8 @@ export const runAnalysisParallel = async (
 ): Promise<Result<AnalysisResult>> => {
     const { Worker } = await import("node:worker_threads");
 
-    // Use caller-supplied value (already clamped); fall back to previous default
-    const workerCount = maxWorkers ?? Math.max(2, os.cpus().length);
+    // Use caller-supplied value (already clamped); fall back to MIN_WORKER_COUNT
+    const workerCount = maxWorkers ?? Math.max(MIN_WORKER_COUNT, os.cpus().length);
     const workerPath = await resolveWorkerPath();
 
     if (!workerPath) {

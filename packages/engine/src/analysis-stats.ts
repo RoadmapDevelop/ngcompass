@@ -5,7 +5,7 @@
  * Extracted from orchestrator.ts for reuse.
  */
 
-import { RuleResult, AnalysisResult } from "@ngcompass/common";
+import { RuleFailure, RuleResult, AnalysisResult } from "@ngcompass/common";
 
 
 /**
@@ -15,20 +15,25 @@ import { RuleResult, AnalysisResult } from "@ngcompass/common";
  * @param startTime - Start timestamp
  * @returns Stats object
  */
-export const calculateStats = (results: ReadonlyArray<RuleResult>, startTime: number): AnalysisResult["stats"] => {
+export const calculateStats = (
+    results: ReadonlyArray<RuleResult>,
+    startTime: number,
+    cacheHitRate?: number,
+): AnalysisResult["stats"] => {
     const duration = performance.now() - startTime;
     const failures = results.flatMap((r) => r.failures);
 
-    const uniqueFiles = new Set<string>(failures.map((f: any) => f.filePath));
+    const uniqueFiles = new Set<string>(failures.map((f: RuleFailure) => f.filePath));
 
-    const totalErrors = failures.filter((f: any) => isErrorSeverity(f?.severity)).length;
-    const totalWarnings = failures.filter((f: any) => isWarningSeverity(f?.severity)).length;
+    const totalErrors = failures.filter((f: RuleFailure) => isErrorSeverity(f.severity)).length;
+    const totalWarnings = failures.filter((f: RuleFailure) => isWarningSeverity(f.severity)).length;
 
     return {
         totalFiles: uniqueFiles.size,
         totalErrors,
         totalWarnings,
         duration,
+        cacheHitRate,
     };
 };
 

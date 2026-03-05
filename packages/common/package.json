@@ -42,5 +42,8 @@
         "common"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "dependencies": {
+        "picocolors": "^1.1.1"
+    }
 }

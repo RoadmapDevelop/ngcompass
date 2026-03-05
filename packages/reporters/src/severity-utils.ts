@@ -11,15 +11,9 @@ import type { RuleSeverity } from '@ngcompass/common';
  * Lower number = higher priority.
  */
 const SEVERITY_PRIORITY: Readonly<Record<RuleSeverity, number>> = {
-    critical: 0,
-    high: 1,
-    error: 2,
-    moderate: 3,
-    warning: 4,
-    low: 5,
-    info: 6,
-    hint: 7,
-    off: 8,
+    error: 0,
+    warn: 1,
+    off: 2,
 } as const;
 
 /**
@@ -31,9 +25,7 @@ const SEVERITY_PRIORITY: Readonly<Record<RuleSeverity, number>> = {
  * - Easier to extend without modifying logic.
  */
 const ERROR_SEVERITIES: ReadonlySet<RuleSeverity> = new Set([
-    'critical',
-    'high',
-    'error',
+    'error'
 ]);
 
 /**

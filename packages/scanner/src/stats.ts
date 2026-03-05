@@ -9,6 +9,48 @@ import path from 'node:path';
 import { stat } from 'node:fs/promises';
 import type { ScanStatistics } from './types.js';
 
+// ==============================================================================
+// CONCURRENCY HELPER
+// ==============================================================================
+
+/**
+ * Runs an array of async task factories with a concurrency cap.
+ *
+ * Uses a worker-pool pattern: `concurrency` coroutines each pull from a
+ * shared index until all tasks are consumed. This keeps at most `concurrency`
+ * promises in-flight at any time, preventing file-descriptor exhaustion on
+ * large repos.
+ *
+ * @param tasks - Factory functions that create the promise for each item
+ * @param concurrency - Maximum number of simultaneous promises
+ * @returns PromiseSettledResult array in the same order as `tasks`
+ */
+const runWithLimit = async <T>(
+    tasks: ReadonlyArray<() => Promise<T>>,
+    concurrency: number
+): Promise<PromiseSettledResult<T>[]> => {
+    const results: PromiseSettledResult<T>[] = new Array(tasks.length);
+    let cursor = 0;
+
+    const worker = async (): Promise<void> => {
+        while (cursor < tasks.length) {
+            const i = cursor++;
+            try {
+                results[i] = { status: 'fulfilled', value: await tasks[i]() };
+            } catch (reason) {
+                results[i] = { status: 'rejected', reason };
+            }
+        }
+    };
+
+    // Spawn at most `concurrency` workers (but never more than tasks.length).
+    await Promise.all(
+        Array.from({ length: Math.min(concurrency, tasks.length) }, worker)
+    );
+
+    return results;
+};
+
 /**
  * Groups files by extension.
  *
@@ -30,9 +72,10 @@ export const groupFilesByExtension = (
 /**
  * Calculates the total size of all files in bytes.
  *
- * Runs all fs.stat calls concurrently via Promise.allSettled so that a
- * single unreadable file never blocks the rest. Files that cannot be
- * stat-ed (race-condition deletion, permissions) silently contribute 0.
+ * Runs fs.stat calls with a concurrency cap of 128 so that a single
+ * unreadable file never blocks the rest, while also preventing
+ * file-descriptor exhaustion on large repos.  Files that cannot be
+ * stat-ed (race-condition deletion, permission errors) silently contribute 0.
  *
  * @param files - Absolute file paths
  * @returns Total size in bytes
@@ -40,7 +83,8 @@ export const groupFilesByExtension = (
 export const calculateTotalSize = async (
     files: ReadonlyArray<string>
 ): Promise<number> => {
-    const results = await Promise.allSettled(files.map(f => stat(f)));
+    const tasks = files.map(f => () => stat(f));
+    const results = await runWithLimit(tasks, 128);
     return results.reduce<number>((sum, result) => {
         return sum + (result.status === 'fulfilled' ? result.value.size : 0);
     }, 0);

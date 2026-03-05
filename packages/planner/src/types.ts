@@ -40,6 +40,20 @@ export interface ExecutionPlanOutput {
 
     /** Pre-computed analysis result (if fully cached) */
     readonly precomputedAnalysis?: AnalysisResult;
+
+    /**
+     * Files whose tasks were not found in the result cache and will be
+     * re-analysed. Populated when `options.cache` is provided and incremental
+     * filtering has run. `undefined` when caching is disabled.
+     */
+    readonly changedFiles?: ReadonlyArray<string>;
+
+    /**
+     * Files whose tasks were found in the result cache and skipped.
+     * Populated when `options.cache` is provided and incremental
+     * filtering has run. `undefined` when caching is disabled.
+     */
+    readonly cachedFiles?: ReadonlyArray<string>;
 }
 
 /**
@@ -77,7 +91,11 @@ export interface FileInfo {
 }
 
 /**
- * File type classification
+ * File type classification.
+ *
+ * `'unknown'` is used for files that do not match any recognised Angular or
+ * TypeScript pattern (e.g. stray JSON, Markdown, or binary files that
+ * somehow enter the file list). Rules are never applied to `'unknown'` files.
  */
 export type FileType =
     | 'component'
@@ -89,7 +107,8 @@ export type FileType =
     | 'logic'
     | 'template'
     | 'style'
-    | 'config';
+    | 'config'
+    | 'unknown';
 
 // ==============================================================================
 // RULE TASK
@@ -315,6 +334,21 @@ export interface ExecutionPlanOptions {
      * hits after an upgrade.
      */
     readonly cacheKeyCtx?: CacheKeyContext;
+
+    /**
+     * Number of files at which task-building switches from sequential to
+     * parallel (worker threads). Defaults to 10 000.
+     *
+     * Lower this value to enable parallelism on smaller projects.
+     * Set to `Infinity` to always use the sequential path (useful for debugging).
+     */
+    readonly parallelThreshold?: number;
+
+    /**
+     * Number of worker threads to use when parallel mode is active.
+     * Defaults to 4.
+     */
+    readonly workerCount?: number;
 }
 
 // ==============================================================================

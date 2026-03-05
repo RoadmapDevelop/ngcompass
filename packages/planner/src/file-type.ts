@@ -21,7 +21,8 @@ import type { FileType } from './types.js';
  * - *.html → template
  * - *.css, *.scss, *.sass, *.less → style
  * - *.config.ts, *.json → config
- * - Everything else → logic
+ * - *.ts (other TypeScript) → logic
+ * - Everything else → unknown (rules are never applied to unknown files)
  *
  * @param filePath - Absolute or relative file path
  * @returns FileType classification
@@ -43,8 +44,12 @@ export const detectFileType = (filePath: string): FileType => {
     if (ext === '.css' || ext === '.scss' || ext === '.sass' || ext === '.less') return 'style';
     if (basename.endsWith('.config.ts') || ext === '.json') return 'config';
 
-    // Default to logic
-    return 'logic';
+    // Non-Angular TypeScript files (utilities, helpers, etc.) are still valid
+    // analysis targets for rules with dependencyType 'standalone' or 'imports'.
+    if (ext === '.ts') return 'logic';
+
+    // Files that don't match any known pattern — rules are never applied to these.
+    return 'unknown';
 };
 
 /**
