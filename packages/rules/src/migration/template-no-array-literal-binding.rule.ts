@@ -1,4 +1,4 @@
-﻿import { TemplateExpressionNode } from "@ngcompass/ast";
+import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -55,7 +55,7 @@ export const templateNoArrayLiteralBindingRule = createTemplateExpressionRule(
                 message: 'Avoid array literals in template bindings. Move the array to a component field, a signal/computed value, or a pure pipe.',
                 line,
                 column,
-                severity: 'moderate',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['template-no-array-literal-binding'],
             };
         });

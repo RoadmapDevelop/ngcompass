@@ -1,4 +1,4 @@
-﻿import { AnyAngularClassNode } from "@ngcompass/ast";
+import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -41,7 +41,7 @@ export const signalEffectDestroyScopedRule = createAnyAngularClassRule(
                         `effect() called inside "${methodName}". Create effects in an injection context (constructor/field initializer) or pass { injector } / { manualCleanup: true } for explicit lifecycle ownership.`,
                     line,
                     column,
-                    severity: 'high',
+                    severity: 'error',
                     fix: RECOMMENDATIONS['signal-effect-must-be-destroy-scoped'],
                 });
             }

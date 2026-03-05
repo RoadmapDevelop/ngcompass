@@ -8,32 +8,32 @@ export const recommendedPreset: PresetConfig = {
     description: 'Recommended rules for modern Angular projects',
     rules: {
         // Change Detection
-        'prefer-on-push-component-change-detection': 'high',
-        'component-no-manual-detect-changes': 'high',          // fixed: was 'component-no-manual-detectChanges'
+        'prefer-on-push-component-change-detection': 'error',
+        'component-no-manual-detect-changes': 'error',
 
         // Dependency Injection
-        'prefer-inject-over-constructor-di': 'moderate',
+        'prefer-inject-over-constructor-di': 'warn',
 
         // RxJS → Signals migration
-        'rxjs-no-subscribe-in-component': 'high',
-        'rxjs-require-takeUntilDestroyed': 'high',
-        'rxjs-avoid-behaviorsubject-for-local-state': 'moderate',
-        'rxjs-avoid-subject-as-event-bus': 'moderate',
-        'rxjs-prefer-toSignal-for-template-state': 'low',
-        'toSignal-require-initialValue': 'moderate',
+        'rxjs-no-subscribe-in-component': 'error',
+        'rxjs-require-takeUntilDestroyed': 'error',
+        'rxjs-avoid-behaviorsubject-for-local-state': 'warn',
+        'rxjs-avoid-subject-as-event-bus': 'warn',
+        'rxjs-prefer-toSignal-for-template-state': 'warn',
+        'toSignal-require-initialValue': 'warn',
 
         // Signals correctness
-        'signal-no-side-effects-in-computed': 'high',
-        'signal-prefer-computed-over-sync-effect': 'moderate',
-        'signal-effect-must-be-destroy-scoped': 'high',
-        'signal-no-effect-in-constructor': 'low',
-        'signal-avoid-untracked-overuse': 'low',
+        'signal-no-side-effects-in-computed': 'error',
+        'signal-prefer-computed-over-sync-effect': 'warn',
+        'signal-effect-must-be-destroy-scoped': 'error',
+        'signal-no-effect-in-constructor': 'warn',
+        'signal-avoid-untracked-overuse': 'warn',
 
         // Template performance
-        'template-no-call-expression': 'high',
-        'template-trackby-required-for-ngfor': 'high',
-        'template-no-object-literal-binding': 'moderate',
-        'template-no-array-literal-binding': 'moderate',
-        'template-no-async-pipe-duplication': 'moderate',
+        'template-no-call-expression': 'error',
+        'template-trackby-required-for-ngfor': 'error',
+        'template-no-object-literal-binding': 'warn',
+        'template-no-array-literal-binding': 'warn',
+        'template-no-async-pipe-duplication': 'warn',
     },
 };

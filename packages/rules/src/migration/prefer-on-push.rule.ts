@@ -1,4 +1,4 @@
-﻿import { ChangeDetectionStrategy, type AngularClassNode } from '@ngcompass/ast';
+import { ChangeDetectionStrategy, type AngularClassNode } from '@ngcompass/ast';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../recommendations'; import { createComponentRule } from '@ngcompass/engine';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 
@@ -51,7 +51,7 @@ export const preferOnPushRule = createComponentRule(
             message: `Component '${name}' should use ChangeDetectionStrategy.OnPush.`,
             line,
             column,
-            severity: 'critical',
+            severity: 'error',
             fix: RECOMMENDATIONS['prefer-on-push-component-change-detection'],
             codeExample: CODE_EXAMPLES['prefer-on-push-component-change-detection'],
         };

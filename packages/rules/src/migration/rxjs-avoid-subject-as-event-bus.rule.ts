@@ -1,4 +1,4 @@
-﻿import { AnyAngularClassNode } from "@ngcompass/ast";
+import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../recommendations";
@@ -24,7 +24,7 @@ function lower(s: string): string {
  * Uses collectAllRxjsAliases() so the source text is scanned ONCE for all three
  * Subject types, replacing the previous pattern of three separate regex sweeps.
  *
- * @performance O(S × 2) instead of O(S × 2 × 3) — reduces 6 regex scans to 2.
+ * @performance O(S ? 2) instead of O(S ? 2 ? 3) � reduces 6 regex scans to 2.
  */
 function collectSubjectConstructorNames(sourceText: string | undefined): Map<string, string> {
     const allAliases = collectAllRxjsAliases(sourceText, SUBJECT_TYPES);
@@ -100,7 +100,7 @@ export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
                 message: `Avoid using ${detectedType} for local event streams in components. Prefer Signals or direct handlers for simpler lifecycle management.${detail}`,
                 line,
                 column,
-                severity: 'moderate',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['rxjs-avoid-subject-as-event-bus'],
                 codeExample: CODE_EXAMPLES['rxjs-avoid-subject-as-event-bus'],
             });

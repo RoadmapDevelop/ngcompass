@@ -1,4 +1,4 @@
-﻿import { AnyAngularClassNode } from "@ngcompass/ast";
+import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../recommendations";
@@ -64,7 +64,7 @@ export const rxjsAvoidBehaviorSubjectRule = createAnyAngularClassRule(
                 message: `Avoid using BehaviorSubject for local state. Prefer Signals for better performance and simplicity.${detail}`,
                 line,
                 column,
-                severity: 'moderate',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['rxjs-avoid-behaviorsubject-for-local-state'],
                 codeExample: CODE_EXAMPLES['rxjs-avoid-behaviorsubject-for-local-state'],
             });

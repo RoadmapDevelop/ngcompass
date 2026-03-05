@@ -1,4 +1,4 @@
-ï»¿import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../recommendations";
@@ -39,8 +39,8 @@ function isFireAndForgetSubscription(subscribeNode: AstNode): boolean {
  * Disallows manual RxJS subscriptions in Angular component files.
  *
  * Allows:
- *   - Fire-and-forget streams (take(1) / first()) â€” they auto-complete, no leak risk.
- *   - Subscriptions with a full teardown operator â€” already handled by the
+ *   - Fire-and-forget streams (take(1) / first()) — they auto-complete, no leak risk.
+ *   - Subscriptions with a full teardown operator — already handled by the
  *     rxjs-require-takeUntilDestroyed rule; suppressing here avoids double-flagging
  *     developers who have already addressed lifetime management.
  */
@@ -51,7 +51,7 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
         if (!isSubscribeCall(node as any)) return null;
         if (isFireAndForgetSubscription(node as any)) return null;
 
-        // Suppress when a full teardown operator is already present â€” rxjs-require-takeUntilDestroyed
+        // Suppress when a full teardown operator is already present — rxjs-require-takeUntilDestroyed
         // covers that case and double-flagging creates noise without additional signal.
         const callee = unwrapNode((node as any).callee);
         const receiver = isMemberExpressionLike(callee) ? (callee as AstNode).object : null;
@@ -67,7 +67,7 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
                 'Avoid manual subscriptions in components. Prefer toSignal() or the async pipe for automatic teardown and better performance.',
             line,
             column,
-            severity: 'high',
+            severity: 'error',
             fix: RECOMMENDATIONS['rxjs-no-subscribe-in-component'],
             codeExample: CODE_EXAMPLES['rxjs-no-subscribe-in-component'],
         };

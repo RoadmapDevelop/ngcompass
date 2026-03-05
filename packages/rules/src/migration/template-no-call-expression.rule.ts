@@ -1,4 +1,4 @@
-﻿import { TemplateExpressionNode } from "@ngcompass/ast";
+import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -96,7 +96,7 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
                 message: 'Avoid passing arguments to functions in templates. Use Signals or Pipes instead.',
                 line,
                 column,
-                severity: 'high',
+                severity: 'error',
                 fix: RECOMMENDATIONS['template-no-call-expression'],
             };
         });

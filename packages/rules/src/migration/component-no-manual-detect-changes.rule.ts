@@ -1,4 +1,4 @@
-﻿import type { CallExpression } from '@ngcompass/ast';
+import type { CallExpression } from '@ngcompass/ast';
 
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { AstNode, getNodeStart, getStaticPropertyName, isMemberExpressionLike, unwrapNode } from '../rule-utils';
@@ -40,7 +40,7 @@ function hasChangeDetectorRefSignals(sourceText: string | undefined): boolean {
  *
  * The CallExpression rule fires for every call node in a file. Without caching,
  * hasChangeDetectorRefSignals() would run 3 regex scans on the full source text
- * for every single call expression — potentially dozens of times per component.
+ * for every single call expression � potentially dozens of times per component.
  * Keyed by filePath: stable within a single analysis session.
  */
 const fileCdrPresenceCache = new Map<string, boolean>();
@@ -91,7 +91,7 @@ export const componentNoManualDetectChangesRule = createCallExpressionRule(
             message: `Avoid manual change detection (${methodName}). Prefer Signals/async pipe for reactivity.`,
             line,
             column,
-            severity: 'high',
+            severity: 'error',
             fix: RECOMMENDATIONS['component-no-manual-detect-changes'],
             codeExample: CODE_EXAMPLES['component-no-manual-detect-changes'],
         };

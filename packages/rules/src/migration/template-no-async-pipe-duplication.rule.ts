@@ -1,4 +1,4 @@
-﻿import { TemplateExpressionNode } from "@ngcompass/ast";
+import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -7,7 +7,7 @@ import { RuleContext } from "@ngcompass/common";
 
 
 // ============================================================================
-// Per-context state — scoped to RuleContext via WeakMap so each analysis
+// Per-context state � scoped to RuleContext via WeakMap so each analysis
 // run gets its own isolated tracking table.
 //
 // WHY WeakMap: Module-level Maps (the previous design) are shared across
@@ -19,7 +19,7 @@ import { RuleContext } from "@ngcompass/common";
 const seenByTemplateKey = new WeakMap<RuleContext, Map<string, Set<string>>>();
 
 /**
- * Returns (or creates) the template-key → seen-expressions map for a context.
+ * Returns (or creates) the template-key > seen-expressions map for a context.
  */
 function getContextState(context: RuleContext): Map<string, Set<string>> {
     let state = seenByTemplateKey.get(context);
@@ -144,7 +144,7 @@ export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
                     `Duplicate async pipe subscription for "${observableKey}". Share it with @if (${observableKey} | async; as v) { ... } or *ngIf="${observableKey} | async as v".`,
                 line,
                 column,
-                severity: 'moderate',
+                severity: 'warn',
                 fix: RECOMMENDATIONS['template-no-async-pipe-duplication'],
             };
         }

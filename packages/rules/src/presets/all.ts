@@ -3,14 +3,40 @@ import { PresetConfig } from "@ngcompass/common";
 /**
  * All Rules Preset
  *
- * Includes every available rule in the system.
+ * Includes every available rule. Severity mirrors the recommended preset.
+ * Use this preset when you want full coverage without customising individual rules.
  */
 export const allPreset: PresetConfig = {
     name: 'ngcompass:all',
-    description: 'All available rules enabled',
+    description: 'All available rules enabled at their default severity',
     rules: {
-        'prefer-on-push-component-change-detection': 'high',
-        'template-no-call-expression': 'high',
-        'rxjs-no-subscribe-in-component': 'high',
+        // Change Detection
+        'prefer-on-push-component-change-detection': 'error',
+        'component-no-manual-detect-changes': 'error',
+
+        // Dependency Injection
+        'prefer-inject-over-constructor-di': 'warn',
+
+        // RxJS → Signals migration
+        'rxjs-no-subscribe-in-component': 'error',
+        'rxjs-require-takeUntilDestroyed': 'error',
+        'rxjs-avoid-behaviorsubject-for-local-state': 'warn',
+        'rxjs-avoid-subject-as-event-bus': 'warn',
+        'rxjs-prefer-toSignal-for-template-state': 'warn',
+        'toSignal-require-initialValue': 'warn',
+
+        // Signals correctness
+        'signal-no-side-effects-in-computed': 'error',
+        'signal-prefer-computed-over-sync-effect': 'warn',
+        'signal-effect-must-be-destroy-scoped': 'error',
+        'signal-no-effect-in-constructor': 'warn',
+        'signal-avoid-untracked-overuse': 'warn',
+
+        // Template performance
+        'template-no-call-expression': 'error',
+        'template-trackby-required-for-ngfor': 'error',
+        'template-no-object-literal-binding': 'warn',
+        'template-no-array-literal-binding': 'warn',
+        'template-no-async-pipe-duplication': 'warn',
     },
 };

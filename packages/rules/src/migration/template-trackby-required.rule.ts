@@ -1,4 +1,4 @@
-﻿import { TemplateAttributeNode } from "@ngcompass/ast";
+import { TemplateAttributeNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateAttributeRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -37,7 +37,7 @@ export const templateTrackByRequiredRule = createTemplateAttributeRule(
             message: 'Add a trackBy function to *ngFor to reduce unnecessary DOM updates for dynamic lists.',
             line,
             column,
-            severity: 'high',
+            severity: 'error',
             fix: RECOMMENDATIONS['template-trackby-required-for-ngfor'],
         };
     },

@@ -1,4 +1,4 @@
-﻿import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -154,7 +154,7 @@ export const signalPreferComputedRule = createCallExpressionRule(
                 'Prefer computed() over effect() for synchronous derived state. This effect appears to synchronously read reactive values and write derived state; computed() avoids extra cycles and is easier to reason about.',
             line,
             column,
-            severity: 'moderate',
+            severity: 'warn',
             fix: RECOMMENDATIONS['signal-prefer-computed-over-sync-effect'],
         };
     }

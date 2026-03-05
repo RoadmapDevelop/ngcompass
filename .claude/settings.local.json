@@ -38,7 +38,19 @@
       "Bash(npx turbo run test --filter=@ngcompass/scanner)",
       "Bash(npx turbo run test --filter=@ngcompass/planner)",
       "Bash(npx turbo run typecheck --filter=@ngcompass/planner)",
-      "Bash(npx turbo run build --filter=@ngcompass/planner)"
+      "Bash(npx turbo run build --filter=@ngcompass/planner)",
+      "Bash(powershell -Command \":*)",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:/tmp/fix_severity.ps1\")",
+      "Bash(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\30694\\\\AppData\\\\Local\\\\Temp\\\\fix_severity.ps1\")",
+      "Bash(powershell -Command \"Select-String -Path ''C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\migration\\\\*.rule.ts'' -Pattern \"\"severity: ''\\(critical|high|moderate|low|warning\\)''\"\" \")",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\security.ts\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\accessibility.ts\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\testing.ts\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\architecture.ts\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\best-practice.ts\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\code-smell.ts\" -Force)",
+      "Bash(Remove-Item \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\packages\\\\rules\\\\src\\\\presets\\\\ssr.ts\" -Force)",
+      "Bash(Write-Host \"Deleted\")"
     ]
   }
 }

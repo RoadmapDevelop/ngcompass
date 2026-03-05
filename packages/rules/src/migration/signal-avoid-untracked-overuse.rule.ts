@@ -1,4 +1,4 @@
-ï»¿import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../recommendations";
@@ -70,7 +70,7 @@ function isInsideRenderHookCallback(node: AstNode, context: RuleContext): boolea
     const parentWalkResult = isInsideRenderHookViaParents(node);
     if (parentWalkResult !== null) return parentWalkResult;
 
-    // Parent refs missing â€” fall back to positional heuristic
+    // Parent refs missing — fall back to positional heuristic
     return typeof sourceText === 'string' && isInsideRenderHookByPosition(node, sourceText);
 }
 
@@ -93,10 +93,10 @@ export const signalAvoidUntrackedRule = createCallExpressionRule(
             filePath: context.filePath,
             ruleName: 'signal-avoid-untracked-overuse',
             message:
-                'Review this untracked() call. Each usage intentionally opts out of reactive trackingâ€”ensure it is deliberate and necessary to avoid masking dependency bugs.',
+                'Review this untracked() call. Each usage intentionally opts out of reactive tracking—ensure it is deliberate and necessary to avoid masking dependency bugs.',
             line,
             column,
-            severity: 'low',
+            severity: 'warn',
             fix: RECOMMENDATIONS['signal-avoid-untracked-overuse'],
         };
     }
