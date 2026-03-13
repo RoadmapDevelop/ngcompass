@@ -34,6 +34,9 @@ export const registerNewEngineRule = (handler: RuleHandler<any>): void => {
             category: 'best-practice',
             dependencyType: 'component',
             ...handler.meta,
+            requires: {
+                ...handler.meta?.requires
+            }
         },
     };
 

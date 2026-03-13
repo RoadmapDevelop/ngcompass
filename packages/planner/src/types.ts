@@ -139,6 +139,12 @@ export interface RuleTask {
      * the engine can set up a full TypeScript Program for that file.
      */
     readonly needsTypeChecker?: boolean;
+
+    /**
+     * Whether this task requires a pre-computed `ProjectContext` (CTX-001).
+     * Routed to the type-aware execution path alongside `needsTypeChecker`.
+     */
+    readonly needsProjectContext?: boolean;
 }
 
 /**
@@ -226,6 +232,16 @@ export interface Task {
      * Mirrors `RuleTask.needsTypeChecker` on the task-centric view.
      */
     readonly needsTypeChecker?: boolean;
+
+    /**
+     * Whether this task requires a pre-computed `ProjectContext` (CTX-001).
+     *
+     * When `true` the task is routed to the type-aware execution path on the
+     * main thread (same as `needsTypeChecker`) because `ProjectContext` is
+     * built from the TypeScript `Program` created there.
+     * Rules receive the context via `RuleContext.project`.
+     */
+    readonly needsProjectContext?: boolean;
 }
 
 // ==============================================================================

@@ -20,6 +20,7 @@ import { RuleResult, Result, Ok, Err, AnalysisResult } from "@ngcompass/common";
 import { debug, createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
 
 import { createAnalysisContext } from "./analysis-context.js";
+import { createTypeAwareAnalysisContext } from "./type-aware-context.js";
 import { runAnalysisParallel } from "./worker-pool.js";
 import { calculateStats } from "./analysis-stats.js";
 import { executeBatchedTasks } from "./runner.js";
@@ -106,6 +107,19 @@ export interface AnalysisOptions {
      * silently swallowed.
      */
     readonly errorCollector?: InfrastructureErrorCollector;
+
+    /**
+     * All files discovered by the scanner for this run.
+     *
+     * CTX-001: Forwarded to `createTypeAwareAnalysisContext()` so the
+     * `ProjectContext` import-graph builder can restrict edges to intra-project
+     * imports and correctly populate `ProjectContext.projectFiles`.
+     *
+     * Optional for backward compatibility — when omitted the ProjectContext
+     * will still be built but `projectFiles` may be less complete (derived
+     * solely from the TypeScript Program's source-file list).
+     */
+    readonly files?: ReadonlyArray<string>;
 }
 
 /**
@@ -141,13 +155,20 @@ export const runAnalysis = async (
         const effectiveMaxWorkers = Math.max(1, Math.min(options.maxWorkers ?? cpuCount, cpuCount));
         const parallelThreshold = options.parallelThreshold ?? 150;
 
-        // 1. Execute Pending Tasks
+        // CTX-001: tasks that declare either needsTypeChecker OR needsProjectContext
+        // must run on the type-aware (main-thread) path so they receive a
+        // populated TypeChecker and/or ProjectContext.
+        const typeAwareTasks = tasks.filter(t => !!t.needsTypeChecker || !!t.needsProjectContext);
+        const workerTasks    = tasks.filter(t => !t.needsTypeChecker  && !t.needsProjectContext);
+        debug("engine", `workerTasks: ${workerTasks.length}, typeAwareTasks: ${typeAwareTasks.length}`);
         let executedResults: RuleResult[] = [];
-        if (tasks.length > 0) {
-            if (tasks.length > parallelThreshold) {
+
+        // 1a. Execute Syntax-Only Tasks (Parallel via Workers)
+        if (workerTasks.length > 0) {
+            if (workerTasks.length > parallelThreshold) {
                 // Worker pool for heavy loads
-                debug("engine", `Running analysis on ${tasks.length} tasks using workers (max: ${effectiveMaxWorkers})...`);
-                const result = await runAnalysisParallel(tasks, options.rootDir, startTime, effectiveMaxWorkers);
+                debug("engine", `Running analysis on ${workerTasks.length} syntax-only tasks using workers (max: ${effectiveMaxWorkers})...`);
+                const result = await runAnalysisParallel(workerTasks, options.rootDir, startTime, effectiveMaxWorkers);
                 if (result.ok) {
                     executedResults = result.data.results as RuleResult[];
                 } else {
@@ -155,9 +176,27 @@ export const runAnalysis = async (
                 }
             } else {
                 // Sequential/Local for small loads with batching by file
-                debug("engine", `Running analysis on ${tasks.length} tasks locally with batching (concurrency: ${effectiveMaxWorkers})...`);
-                executedResults = await executeTasksLocally(tasks, options.rootDir, effectiveMaxWorkers, options.errorCollector);
+                debug("engine", `Running analysis on ${workerTasks.length} syntax-only tasks locally with batching (concurrency: ${effectiveMaxWorkers})...`);
+                executedResults = await executeTasksLocally(workerTasks, options.rootDir, effectiveMaxWorkers, false, options.errorCollector);
             }
+        }
+
+        // 1b. Execute Type-Aware Tasks (Sequentially on Main Thread)
+        if (typeAwareTasks.length > 0) {
+            debug("engine", `Running analysis on ${typeAwareTasks.length} type-aware tasks sequentially on the main thread...`);
+            // Type-aware tasks cannot be parallelized easily without instantiating ts.Program per worker.
+            // Run them locally with concurrency 1 to avoid massive memory spikes from ts-morph/TS compiler.
+            // CTX-001: Pass `options.files` so the ProjectContext import-graph builder
+            // knows the full set of scanner-discovered project files.
+            const typeAwareResults = await executeTasksLocally(
+                typeAwareTasks,
+                options.rootDir,
+                1,
+                true,
+                options.errorCollector,
+                options.files,
+            );
+            executedResults = [...executedResults, ...typeAwareResults];
         }
 
         // 2. Retrieve Cached Results for Skipped Tasks
@@ -221,9 +260,18 @@ const executeTasksLocally = async (
     tasks: ReadonlyArray<Task>,
     rootDir: string,
     concurrency: number,
-    errorCollector?: InfrastructureErrorCollector
+    useTypeAwareContext: boolean,
+    errorCollector?: InfrastructureErrorCollector,
+    /** CTX-001: scanner-discovered files forwarded to ProjectContext builder. */
+    files?: ReadonlyArray<string>,
 ): Promise<RuleResult[]> => {
-    const context = createAnalysisContext(rootDir);
+    // Instantiate appropriate context.
+    // CTX-001: pass `files` to the type-aware context so the import-graph
+    // builder can restrict edges to known project files.
+    const context = useTypeAwareContext
+        ? createTypeAwareAnalysisContext(rootDir, files ?? [])
+        : createAnalysisContext(rootDir);
+
     const tasksByFile = groupTasksByFile(tasks);
 
     debug("engine", `Grouped ${tasks.length} tasks into ${tasksByFile.size} file batches`);

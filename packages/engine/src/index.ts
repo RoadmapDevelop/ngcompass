@@ -27,6 +27,13 @@ export * from './orchestrator.js';
 export { createAnalysisContext } from './analysis-context.js';
 export type { AnalysisContext } from './analysis-context.js';
 
+// Project context builder (CTX-001) — builds import graph + component cluster map from ts.Program
+export { buildProjectContext } from './project-context-builder.js';
+
+// Type-aware context — extends AnalysisContext with TypeChecker + ProjectContext
+export { createTypeAwareAnalysisContext } from './type-aware-context.js';
+export type { TypeAwareAnalysisContext } from './type-aware-context.js';
+
 // Runner (batched task execution — used by execution-worker in @ngcompass/rules)
 // Note: ExecutionContext is NOT re-exported here to avoid conflict with rule-context-factory.ts
 export { executeBatchedTasks } from './runner.js';

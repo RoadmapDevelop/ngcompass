@@ -119,7 +119,7 @@ function findPropertyValue(properties: any[], keyName: string): any | null {
 function extractStringValueWithOffset(node: any): ExtractedTemplate {
     if (!node) return { content: '', startOffset: 0 };
 
-    if (node.type === 'StringLiteral') {
+    if (node.type === 'StringLiteral' || node.type === 'Literal') {
         // node.start / node.span.start → position of the opening quote in the file
         const nodeStart: number = node.start ?? node.span?.start ?? 0;
         return {

@@ -96,6 +96,17 @@ export interface RuleAstRequirements {
     readonly cssAst?: boolean;
     readonly specAst?: boolean;
     readonly typeChecker?: boolean;
+    /**
+     * Set to `true` when the rule needs the project-wide import graph,
+     * component → template mapping, or other cross-file metadata provided
+     * by `ProjectContext`.
+     *
+     * Rules declaring this are routed to the type-aware execution path (main
+     * thread) so they always receive a populated `context.project`.
+     * Implies `typeChecker` for routing purposes (the TypeScript Program is
+     * required to build the import graph).
+     */
+    readonly projectContext?: boolean;
 }
 
 /**
@@ -301,6 +312,234 @@ export interface StyleAst {
     readonly error?: unknown;
 }
 
+// ==============================================================================
+// PROJECT CONTEXT  (CTX-001)
+// Shared, read-only, pre-computed project-level metadata passed to rules that
+// declare `requires.projectContext: true`.  Built once per analysis run by
+// `buildProjectContext()` in @ngcompass/engine and threaded into RuleContext
+// via RuleContextFactory.  All entries use absolute, normalised file paths.
+// ==============================================================================
+
+/**
+ * Component file cluster: the TypeScript class file and its associated
+ * template, styles, and spec (mirrors ComponentNode in @ngcompass/planner
+ * without creating a cross-package dependency).
+ */
+export interface ComponentFiles {
+    /** Absolute path to the `.component.ts` file. */
+    readonly tsPath: string;
+    /** Absolute path to the external template file, if any. */
+    readonly templatePath?: string;
+    /** Absolute paths to associated style files. */
+    readonly stylePaths: ReadonlyArray<string>;
+    /** Absolute path to the spec file, if any. */
+    readonly specPath?: string;
+}
+
+/**
+ * Angular module metadata extracted from `@NgModule` or standalone
+ * `@Component` decorators.  Populated by CTX-004; initially empty.
+ */
+export interface NgModuleInfo {
+    /** Absolute path to the module/component file. */
+    readonly filePath: string;
+    /** Class names declared in this module (or standalone imports array). */
+    readonly declarations: ReadonlySet<string>;
+    /** Class names imported by this module/standalone component. */
+    readonly imports: ReadonlySet<string>;
+    /** Class names exported from this module. */
+    readonly exports: ReadonlySet<string>;
+    /** Provider class names registered in this module/component. */
+    readonly providers: ReadonlySet<string>;
+    /** `true` for standalone components; `false` for NgModule-based. */
+    readonly isStandalone: boolean;
+}
+
+/**
+ * Project-wide, read-only context shared across all rules in a single run.
+ *
+ * Computed once by `buildProjectContext()` (@ngcompass/engine) before task
+ * dispatch and injected into every `RuleContext` for rules that opt-in via
+ * `requires.projectContext: true`.
+ *
+ * All file paths are absolute and normalised with `path.resolve()`.
+ */
+export interface ProjectContext {
+    /**
+     * Forward import graph: absolute file path → set of absolute paths it
+     * directly imports (intra-project only; external packages excluded).
+     */
+    readonly importGraph: ReadonlyMap<string, ReadonlySet<string>>;
+
+    /**
+     * Reverse import graph: absolute file path → set of absolute paths that
+     * directly import it.  Enables "who uses this file?" queries in O(1).
+     */
+    readonly reverseImportGraph: ReadonlyMap<string, ReadonlySet<string>>;
+
+    /**
+     * Angular module / standalone component map.  (CTX-004)
+     *
+     * Key:   absolute path to the `@NgModule` or standalone `@Component` file.
+     * Value: `NgModuleInfo` with declarations, imports, exports, providers.
+     *
+     * Populated by scanning all `@NgModule` and `@Component({ standalone: true })`
+     * decorators in the project.  Empty for files that are neither.
+     */
+    readonly ngModuleMap: ReadonlyMap<string, NgModuleInfo>;
+
+    /**
+     * Set of absolute file paths for all standalone Angular entities.  (CTX-004)
+     *
+     * Includes files that contain `@Component({ standalone: true })`,
+     * `@Directive({ standalone: true })`, or `@Pipe({ standalone: true })`.
+     *
+     * Rules can use this to detect module-based components subject to a
+     * standalone-first migration policy, or to validate that standalone
+     * components only reference dependencies in their own `imports` array.
+     */
+    readonly standaloneComponents: ReadonlySet<string>;
+
+    /**
+     * Class name → absolute file path resolver.  (CTX-004)
+     *
+     * Maps the name of every exported class in the project to the absolute
+     * path of the file that declares it.  Enables NgModule rules to resolve
+     * the class names stored in `NgModuleInfo.declarations` / `imports` /
+     * `exports` / `providers` to concrete file paths without a linear scan.
+     *
+     * Only directly-exported class declarations are indexed (`export class Foo`);
+     * re-exports through barrel files are not followed.
+     *
+     * Example:
+     *   `project.classToFile.get('FooComponent')` → `'/src/app/foo/foo.component.ts'`
+     */
+    readonly classToFile: ReadonlyMap<string, string>;
+
+    /**
+     * Component file cluster map.
+     * Key: absolute path to the `.component.ts` file.
+     * Value: associated template, styles, and spec paths.
+     */
+    readonly componentGraph: ReadonlyMap<string, ComponentFiles>;
+
+    /**
+     * Full set of absolute file paths discovered by the scanner for this run.
+     */
+    readonly projectFiles: ReadonlySet<string>;
+
+    /** Root directory of the project (absolute, normalised). */
+    readonly rootDir: string;
+
+    // ── CTX-002 additions ────────────────────────────────────────────────────
+
+    /**
+     * Set of barrel file absolute paths.
+     *
+     * A barrel file is one whose every top-level statement is an
+     * `export … from '…'` re-export declaration (no regular imports,
+     * no class/function/variable declarations).  The canonical example is
+     * an `index.ts` or `public-api.ts` that re-exports sibling modules.
+     *
+     * Rules can use this to skip barrel files (no logic to lint) or to
+     * follow re-export chains when tracing where a symbol is consumed.
+     */
+    readonly barrelFiles: ReadonlySet<string>;
+
+    /**
+     * External dependency map (CTX-002).
+     *
+     * Key:   absolute path of the project source file.
+     * Value: set of npm package names (scope-aware bare specifiers, e.g.
+     *        `'@angular/core'`, `'rxjs'`) imported by that file.
+     *
+     * Sub-path specifiers are normalised to the package name:
+     *   `'rxjs/operators'`      → `'rxjs'`
+     *   `'@angular/core/rxjs-interop'` → `'@angular/core'`
+     *
+     * Relative imports and absolute paths are excluded.
+     * Entries are only present for files that have at least one external dep —
+     * files with no external deps simply have no entry in the map.
+     */
+    readonly externalDeps: ReadonlyMap<string, ReadonlySet<string>>;
+
+    // ── CTX-003 additions ────────────────────────────────────────────────────
+
+    /**
+     * Reverse map: absolute template file path → absolute component `.ts` path.
+     *
+     * Enables template rules to answer "which component owns this template?"
+     * in O(1) without scanning the whole `componentGraph`.
+     *
+     * Built automatically from `componentGraph` by `buildProjectContext()`.
+     * Only files that have an explicit external template appear here; inline
+     * templates are associated via `componentGraph` keyed on the `.ts` path.
+     */
+    readonly templateToComponent: ReadonlyMap<string, string>;
+}
+
+// ==============================================================================
+// COMPONENT ↔ TEMPLATE CROSS-REFERENCE  (CTX-003)
+// Structural and semantic link between a component class file and its
+// associated template, styles, and spec.  Populated by RuleContextFactory
+// when ProjectContext is available and the file under analysis is a component
+// or its template.  Zero cost for all other file types.
+// ==============================================================================
+
+/**
+ * Cross-reference between an Angular component and its associated files.
+ *
+ * Attached to `RuleContext.crossRef` for rules running on:
+ *   - `.component.ts` files — gives access to `templatePath`, `stylePaths`,
+ *     `specPath`, and `templateReferences` (members used in the template).
+ *   - `.component.html` template files — gives access to `componentPath`
+ *     and `publicMembers` (members declared on the component class).
+ *
+ * `undefined` for all other file types and when `project` is unavailable.
+ */
+export interface ComponentCrossRef {
+    /** Absolute path to the `.component.ts` class file. */
+    readonly componentPath: string;
+
+    /**
+     * Absolute path to the external template `.html` file.
+     * `undefined` when the component uses an inline `template: '…'` string.
+     */
+    readonly templatePath?: string;
+
+    /** Absolute paths to associated style files (`.scss`, `.css`, …). */
+    readonly stylePaths: ReadonlyArray<string>;
+
+    /** Absolute path to the spec file, if any. */
+    readonly specPath?: string;
+
+    /**
+     * Names of public members (properties and methods) declared directly in
+     * the component class, extracted from the TypeScript `SourceFile`.
+     *
+     * Available in **template rules** to verify that every bound property /
+     * called method actually exists in the component class.
+     *
+     * Populated only when the type-aware execution path is active
+     * (`ts.Program` exists).  Private, protected, and `#private` members are
+     * excluded.
+     */
+    readonly publicMembers?: ReadonlySet<string>;
+
+    /**
+     * Identifiers from the template that reference the component — property
+     * reads, method calls, and event-handler expressions whose implicit
+     * receiver is the component instance (`this`).
+     *
+     * Available in **component rules** to detect unused public members (a
+     * member not in this set is likely unreferenced in the template).
+     *
+     * Populated when the template AST is already loaded for the current
+     * analysis batch (i.e. the rule or a peer rule declared `htmlAst: true`).
+     */
+    readonly templateReferences?: ReadonlySet<string>;
+}
+
 export interface RuleContext {
     /**
      * Lazily-created TypeScript `SourceFile` for this file.
@@ -330,6 +569,25 @@ export interface RuleContext {
      */
     readonly style?: StyleAst;
     readonly options?: Readonly<Record<string, unknown>>;
+    /**
+     * Project-wide cross-file metadata (import graph, component clusters, …).
+     *
+     * Populated only for rules that declare `requires.projectContext: true`.
+     * `undefined` for all other rules — access is always guarded by an opt-in
+     * flag so there is zero overhead on rules that don't need it.
+     */
+    readonly project?: ProjectContext;
+
+    /**
+     * Component ↔ template cross-reference (CTX-003).
+     *
+     * Non-`undefined` when `project` is available **and** the file under
+     * analysis is either a `.component.ts` file or its associated template.
+     * Provides structural links (paths) and optional semantic sets
+     * (`publicMembers`, `templateReferences`) at zero extra parse cost for
+     * files that don't match either category.
+     */
+    readonly crossRef?: ComponentCrossRef;
 }
 
 /**
