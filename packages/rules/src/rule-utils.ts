@@ -602,6 +602,118 @@ export function getTemplateAbsoluteOffset(
 }
 
 // ============================================
+// HTTP OBSERVABLE SOURCE DETECTION
+// ============================================
+
+/**
+ * HttpClient method names that produce auto-completing observables —
+ * one emission then complete. No takeUntilDestroyed needed.
+ */
+const HTTP_CLIENT_VERBS = new Set([
+    'get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'jsonp', 'request',
+]);
+
+/**
+ * Conventional property names for an injected HttpClient instance.
+ */
+const HTTP_CLIENT_PROP_NAMES = new Set([
+    'http', 'httpClient', '_http', '_httpClient',
+]);
+
+/**
+ * Method name prefixes that conventionally wrap a single HTTP call in an Angular service.
+ *
+ * Only applied when the call has at least one argument to reduce false positives
+ * from no-arg accessors (e.g. getFormValue(), loadAnimations()) that are synchronous.
+ */
+const HTTP_ACTION_PREFIXES: readonly string[] = [
+    'get', 'fetch', 'load', 'save', 'create', 'update', 'delete', 'remove',
+    'submit', 'send', 'post', 'put', 'patch', 'upload', 'download',
+];
+
+/**
+ * Walks a .subscribe() receiver chain past any .pipe() calls to the actual
+ * source observable call expression.
+ *
+ * @example
+ *   this.svc.getUser(id).pipe(map(u => u.name)).subscribe(...)
+ *   receiverExpr = pipe(map(...)) CallExpression
+ *   returns      = this.svc.getUser(id) CallExpression
+ *
+ * Returns null when the chain root is not a recognisable CallExpression.
+ */
+export function findObservableSourceCall(
+    receiverExpr: AstNode | null | undefined,
+): AstNode | null {
+    let current: AstNode | null | undefined = receiverExpr;
+    while (current) {
+        const node = unwrapNode(current);
+        if (!node || node.type !== 'CallExpression') break;
+
+        const callee = unwrapNode(node.callee);
+        if (!isMemberExpressionLike(callee)) break;
+
+        // If this method is not .pipe(), it IS the source observable call
+        if (getStaticPropertyName(callee) !== 'pipe') return node;
+
+        // Step through the .pipe() receiver to continue walking
+        current = callee?.object;
+    }
+    return null;
+}
+
+/**
+ * Returns true if a call expression is a likely auto-completing HTTP observable.
+ *
+ * Detects two unambiguous patterns (conservative — avoids false negatives on
+ * legitimate long-lived streams):
+ *
+ *   1. Direct HttpClient verb call:
+ *        `this.http.get(url)`, `this.httpClient.post(url, body)`
+ *
+ *   2. Service/API method with HTTP-action prefix AND at least one argument:
+ *        `this.userSvc.getUser(id)`, `this.api.postComment(body)`,
+ *        `this.repo.deleteItem(id)`, `this.gateway.fetchReport(params)`
+ *
+ * Both patterns emit once and complete — they do not need takeUntilDestroyed.
+ */
+export function isLikelyHttpObservable(
+    sourceCall: AstNode | null | undefined,
+): boolean {
+    if (!sourceCall) return false;
+
+    const node = unwrapNode(sourceCall);
+    if (!node || node.type !== 'CallExpression') return false;
+
+    const callee = unwrapNode(node.callee);
+    if (!isMemberExpressionLike(callee)) return false;
+
+    const methodName = getStaticPropertyName(callee);
+    if (!methodName) return false;
+
+    const receiverObj = unwrapNode(callee?.object);
+    const args = Array.isArray(node.arguments) ? node.arguments : [];
+
+    // Pattern 1: Direct HttpClient verb — this.http.get(...), this.httpClient.delete(id)
+    if (HTTP_CLIENT_VERBS.has(methodName) && isMemberExpressionLike(receiverObj)) {
+        const httpPropName = getStaticPropertyName(receiverObj);
+        if (HTTP_CLIENT_PROP_NAMES.has(httpPropName)) return true;
+    }
+
+    // Pattern 2: Service method with HTTP action prefix + at least one argument.
+    // Requiring args guards against no-arg synchronous accessors: getFormValue(), loadConfig()
+    if (args.length > 0) {
+        const lower = methodName.toLowerCase();
+        for (const prefix of HTTP_ACTION_PREFIXES) {
+            // Method starts with the prefix and is longer (avoids matching 'get' alone)
+            if (lower.startsWith(prefix) && methodName.length > prefix.length) return true;
+        }
+    }
+
+    return false;
+}
+
+// ============================================
 // PARAMETER HELPERS (for prefer-inject)
 // ============================================
 

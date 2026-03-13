@@ -103,7 +103,9 @@ const buildFilesNeedingTypeChecker = (plan: ExecutionPlan): ReadonlyArray<string
     const files = new Set<string>();
 
     for (const [filePath, unit] of Object.entries(plan)) {
-        if (unit.tasks.some((task) => task.needsTypeChecker === true)) {
+        // CTX-001: include files where any task needs the TypeScript type-checker
+        // OR the project-wide ProjectContext (both require the type-aware path).
+        if (unit.tasks.some((task) => task.needsTypeChecker === true || task.needsProjectContext === true)) {
             files.add(filePath);
         }
     }

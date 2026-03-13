@@ -306,6 +306,7 @@ export class ConsoleReporter implements Reporter {
     }
 
     error(error: Error): void {
+        if (this.verbose) return; // Do not log base errors when debug logs are streaming
         this.out.error(pc.red('× Analysis failed'));
         this.out.error(error.message);
         if (error.stack) {
@@ -314,8 +315,8 @@ export class ConsoleReporter implements Reporter {
         }
     }
 
-    step(message: string): void { this.out.write(pc.bold(message)); }
-    info(message: string): void { this.out.write(pc.dim(message)); }
+    step(message: string): void { if (!this.verbose) this.out.write(pc.bold(message)); }
+    info(message: string): void { if (!this.verbose) this.out.write(pc.dim(message)); }
 
     /**
      * No-op: debug logging is not handled by the reporter.
@@ -473,31 +474,19 @@ export class ConsoleReporter implements Reporter {
      */
     private renderRichCard(card: FailureCard): void {
         this.out.write('');
-        // ── [X/TOTAL]─
         this.out.write(buildIndexedSeparator(card.index, card.total));
         this.out.write('');
-
-        // FAIL  path/to/file.ts
         this.out.write(buildCardHeader(card.failure, card.relFilePath));
-
-        // Error message  rule-name
         this.out.write(buildCardMessageLine(card.failure));
-
-        // > path/to/file.ts:line:col
         this.out.write(buildCardLocationLine(card.failure, card.relFilePath));
         this.out.write('');
-
-        // Syntax-highlighted code frame with left padding
         this.renderCardCodeFrame(card);
         this.out.write('');
-
-
         this.renderCardRecommendation(card.failure);
 
     }
 
     private renderCardCodeFrame({ sourceLines, failure }: FailureCard): void {
-        // Skip silently when the source file could not be read (e.g. temp or deleted file).
         if (sourceLines.length === 0) return;
 
         const frameLines = renderCodeFrame(sourceLines, failure.line, failure.column, failure.filePath);
@@ -508,7 +497,7 @@ export class ConsoleReporter implements Reporter {
 
     private renderCardRecommendation(failure: RuleFailure): void {
         if (!failure.fix) return;
-        this.out.write(`${pc.cyan('❯')} ${pc.cyan(failure.fix)}`);
+        this.out.write(`${pc.cyan('i')} ${pc.cyan(failure.fix)}`);
         this.out.write('');
     }
 }

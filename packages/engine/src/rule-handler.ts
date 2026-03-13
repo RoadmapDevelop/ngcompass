@@ -51,11 +51,13 @@ export interface RuleHandler<TNode> {
  */
 export const createComponentRule = (
     name: string,
-    handler: (node: AngularClassNode, context: RuleContext) => RuleFailure | RuleFailure[] | null
+    handler: (node: AngularClassNode, context: RuleContext) => RuleFailure | RuleFailure[] | null,
+    meta?: Partial<RuleMetadata>
 ): RuleHandler<AngularClassNode> => ({
     name,
     streamType: 'AngularClass',
     handle: handler,
+    meta,
 });
 
 /**
@@ -67,11 +69,13 @@ export const createComponentRule = (
  */
 export const createAnyAngularClassRule = (
     name: string,
-    handler: (node: AnyAngularClassNode, context: RuleContext) => RuleFailure | RuleFailure[] | null
+    handler: (node: AnyAngularClassNode, context: RuleContext) => RuleFailure | RuleFailure[] | null,
+    meta?: Partial<RuleMetadata>
 ): RuleHandler<AnyAngularClassNode> => ({
     name,
     streamType: 'AnyAngularClass',
     handle: handler,
+    meta,
 });
 
 /**

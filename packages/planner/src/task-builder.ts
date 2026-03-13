@@ -71,7 +71,7 @@ export const shouldApplyRule = (rule: ResolvedRule, fileType: FileType): boolean
  */
 export const filterRulesByAstRequirement = (
     rules: ReadonlyMap<string, ResolvedRule>,
-    astType: "tsAst" | "htmlAst" | "cssAst" | "typeChecker"
+    astType: "tsAst" | "htmlAst" | "cssAst" | "typeChecker" | "projectContext"
 ): ReadonlyArray<ResolvedRule> => {
     const filtered: ResolvedRule[] = [];
 
@@ -181,6 +181,7 @@ export const buildTask = async (
         options: rule.options,
         inputs,
         needsTypeChecker: requirements.needsTypeChecker,
+        needsProjectContext: requirements.needsProjectContext || undefined,
     };
 };
 
@@ -301,6 +302,11 @@ const resolveAstRequirements = (rule: ResolvedRule) => {
         needsSpecAst: Boolean(requires.specAst),
         /** True when the rule needs full semantic type information. */
         needsTypeChecker: Boolean(requires.typeChecker),
+        /**
+         * True when the rule needs the project-wide `ProjectContext` (CTX-001).
+         * Routes the task to the type-aware execution path on the main thread.
+         */
+        needsProjectContext: Boolean(requires.projectContext),
     };
 };
 

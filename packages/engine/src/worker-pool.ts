@@ -116,9 +116,9 @@ export const runAnalysisParallel = async (
     let chunkResults: RuleResult[][];
     try {
         chunkResults = await Promise.all(promises);
-        spinner.stop(`✓ Analysis complete (${tasks.length} tasks processed)`);
+        spinner.stop();
     } catch (e) {
-        spinner.stop(`✗ Analysis failed`);
+        spinner.stop();
         throw e;
     }
 

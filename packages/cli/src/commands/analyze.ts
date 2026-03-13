@@ -14,15 +14,11 @@ import { resolveConfig } from '@ngcompass/config';
 
 interface AnalyzeOptions {
     profile?: string;
-    incremental?: boolean;
     force?: boolean;
-    show?: boolean;
     debug?: boolean;
     format?: string;
-    verbose?: boolean;
     compact?: boolean;
     rule?: string;
-    /** Output file path when --format html is used. */
     output?: string;
 }
 
@@ -50,9 +46,6 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 outputPath: options.output,
             });
 
-            // Ensure debug flag is correctly passed to sub-components that might still check it
-            options.debug = isDebug;
-            options.verbose = isVerbose;
             let exitCode = 0;
 
             try {
@@ -75,7 +68,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
-                const analysis = await runAnalysisStep(plan, cache, options, reporter);
+                // CTX-001: pass `files` so ProjectContext knows the full set of project files
+                const analysis = await runAnalysisStep(plan, cache, options, reporter, files);
                 if (!analysis) { exitCode = 1; return; }
 
                 const duration = performance.now() - startTime;
@@ -252,7 +246,9 @@ async function runAnalysisStep(
     plan: ExecutionPlanOutput,
     cache: CacheContext,
     options: AnalyzeOptions,
-    reporter: Reporter
+    reporter: Reporter,
+    /** CTX-001: scanner-discovered files — forwarded to ProjectContext builder. */
+    files?: ReadonlyArray<string>,
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
     reporter.step('Running analysis...');
@@ -262,7 +258,8 @@ async function runAnalysisStep(
     const result = await runAnalysis(plan, {
         rootDir: process.cwd(),
         cache,
-        debug: options.debug
+        debug: options.debug,
+        files,
     });
 
     if (!result.ok) {

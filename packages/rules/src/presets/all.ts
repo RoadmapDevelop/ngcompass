@@ -24,6 +24,7 @@ export const allPreset: PresetConfig = {
         'rxjs-avoid-subject-as-event-bus': 'warn',
         'rxjs-prefer-toSignal-for-template-state': 'warn',
         'toSignal-require-initialValue': 'warn',
+        'rxjs-no-nested-subscribe': 'warn',
 
         // Signals correctness
         'signal-no-side-effects-in-computed': 'error',
@@ -31,12 +32,27 @@ export const allPreset: PresetConfig = {
         'signal-effect-must-be-destroy-scoped': 'error',
         'signal-no-effect-in-constructor': 'warn',
         'signal-avoid-untracked-overuse': 'warn',
+        'signal-prefer-input-signal': 'warn',
+        'signal-prefer-output-function': 'warn',
+        'signal-prefer-model': 'warn',
 
-        // Template performance
+        // Template performance & features
         'template-no-call-expression': 'error',
         'template-trackby-required-for-ngfor': 'error',
         'template-no-object-literal-binding': 'warn',
         'template-no-array-literal-binding': 'warn',
         'template-no-async-pipe-duplication': 'warn',
+        'template-prefer-control-flow': 'warn',
+
+        // Security
+        'no-bypass-sanitization': 'warn',
+        'template-no-unsafe-bindings': 'warn',
+
+        // Best Practices & General
+        'no-document-access': 'warn',
+        'prefer-after-render-over-after-view-init': 'warn',
+
+        // Testing
+        'spec-no-focused-test': 'error',
     },
 };

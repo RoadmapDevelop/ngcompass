@@ -21,7 +21,7 @@ export const loadGitignore = async (rootDir: string): Promise<Option<string>> =>
         const content = await readFile(gitignorePath, 'utf-8');
         return content;
     } catch (error) {
-        debug('scanner', `Failed to load .gitignore from ${rootDir}: ${error instanceof Error ? error.message : String(error)}`);
+        debug('scanner', `Failed to load .gitignore from ${rootDir}`);
         return null;
     }
 };
