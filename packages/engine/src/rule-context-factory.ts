@@ -1,36 +1,20 @@
 /**
- * RuleContextFactory
+ * @fileoverview
+ * Provides the RuleContextFactory for initializing rule execution contexts.
  *
- * Constructs RuleContext objects for rule execution.
- * Extracted from runner.ts so that the context-building logic is:
- *  - Independently testable (inject a mock ExecutionContext)
- *  - Reusable across local executor and worker threads
- *  - Decoupled from I/O concerns
- *
- * Usage:
- * ```ts
- * const factory = new RuleContextFactory(analysisContext);
- * const ruleContext = await factory.build(filePath, options, needsTemplate);
- * ```
- *
- * Testing:
- * ```ts
- * const mockContext: ExecutionContext = {
- *   rootDir: '/test',
- *   readFile: async () => 'export class Foo {}',
- *   getProgram: async (p) => parseTs('export class Foo {}', p).program,
- *   getTemplate: async () => undefined,
- *   getStyle: async () => undefined,
- * };
- * const factory = new RuleContextFactory(mockContext);
- * const ctx = await factory.build('/test/foo.ts', {}, false);
- * ```
+ * This component is responsible for aggregating various analytical artifacts—including
+ * file content, AST structures, type information, and project metadata—into a
+ * unified RuleContext suitable for rule evaluation.
  */
 
 import { Locator, RuleContext, TemplateAst, StyleAst, ProjectContext, ComponentCrossRef } from '@ngcompass/common';
 import { Program } from 'oxc-parser';
 import ts, { TypeChecker } from 'typescript';
 
+/**
+ * Defines the operational boundaries for context construction.
+ * Encapsulates resource access requirements for both main-thread and worker-thread execution.
+ */
 export interface ExecutionContext {
     readonly rootDir: string;
     readonly readFile: (filePath: string) => Promise<string>;
@@ -39,17 +23,11 @@ export interface ExecutionContext {
     readonly getTemplate: (filePath: string) => Promise<TemplateAst | undefined>;
     readonly getStyle: (filePath: string) => Promise<StyleAst | undefined>;
     /**
-     * Returns the pre-built `ProjectContext` for the current analysis run.
-     * Present only on `TypeAwareAnalysisContext` (CTX-001); absent on the
-     * baseline `AnalysisContext` used by worker threads.
+     * Retrieves the project-wide analytical context, if available.
      */
     readonly getProjectContext?: () => ProjectContext | undefined;
     /**
-     * Returns the `ts.SourceFile` for the given absolute path from the
-     * already-created TypeScript Program.  Used by CTX-003 to extract public
-     * member names from a component class without extra I/O or reparsing.
-     *
-     * Present only on `TypeAwareAnalysisContext`; absent on worker threads.
+     * Retrieves the TypeScript SourceFile representation for a given path.
      */
     readonly getTsSourceFile?: (filePath: string) => ts.SourceFile | undefined;
 }
@@ -59,11 +37,10 @@ export interface ExecutionContext {
 // ============================================
 
 /**
- * Builds fully-resolved RuleContext objects.
+ * Orschestrates the assembly of fully-resolved RuleContext objects.
  *
- * The factory takes an ExecutionContext (which owns file I/O and AST caching)
- * and assembles the RuleContext that rules receive. This keeps runner.ts free
- * of context construction boilerplate and makes unit testing straightforward.
+ * Decouples the rule execution logic from the underlying storage and retrieval
+ * mechanisms by utilizing the ExecutionContext abstraction.
  */
 export class RuleContextFactory {
     constructor(private readonly context: ExecutionContext) { }
@@ -98,13 +75,9 @@ export class RuleContextFactory {
             template = await this.context.getTemplate(filePath);
         }
 
-        // CTX-001: Attach the project-wide context when the execution context
-        // provides one (type-aware path only; undefined on worker threads).
         const project: ProjectContext | undefined =
             this.context.getProjectContext?.();
 
-        // CTX-003: Build component ↔ template cross-reference when project
-        // context is available.  O(1) map lookups + optional AST walks.
         const crossRef = project
             ? await this.buildCrossRef(filePath, template, project)
             : undefined;
@@ -137,43 +110,32 @@ export class RuleContextFactory {
     ): Promise<ComponentCrossRef | undefined> {
         const isComponent = filePath.endsWith('.component.ts');
 
-        // Determine the canonical component path
         const componentPath = isComponent
             ? filePath
             : project.templateToComponent.get(filePath);
 
-        if (!componentPath) return undefined; // not a component or its template
+        if (!componentPath) return undefined;
 
         const cluster = project.componentGraph.get(componentPath);
 
-        // Structural fields — always available once we know the component path
         const templatePath = cluster?.templatePath;
         const stylePaths   = cluster?.stylePaths ?? [];
         const specPath     = cluster?.specPath;
 
-        // publicMembers: walk the component's TypeScript SourceFile
         let publicMembers: ReadonlySet<string> | undefined;
         const tsSourceFile = this.context.getTsSourceFile?.(componentPath);
         if (tsSourceFile) {
             try {
                 publicMembers = extractPublicMembers(tsSourceFile);
             } catch {
-                // Non-fatal — publicMembers stays undefined
             }
         }
 
-        // templateReferences: walk the template AST if already loaded.
-        // We use `loadedTemplate` (the current file's template) which covers:
-        //   - Template rules: loadedTemplate IS the template being analysed.
-        //   - Component rules with inline templates + htmlAst:true.
-        // For external templates on component rules without htmlAst:true, the
-        // template is not loaded here to avoid unrelated I/O overhead.
         let templateReferences: ReadonlySet<string> | undefined;
         if (loadedTemplate) {
             try {
                 templateReferences = extractTemplateReferences(loadedTemplate);
             } catch {
-                // Non-fatal — templateReferences stays undefined
             }
         }
 
@@ -204,7 +166,6 @@ function extractPublicMembers(sourceFile: ts.SourceFile): ReadonlySet<string> {
         if (!ts.isClassDeclaration(statement)) continue;
 
         for (const member of statement.members) {
-            // Exclude private / protected modifiers
             const mods = ts.canHaveModifiers(member) ? ts.getModifiers(member) : undefined;
             if (mods) {
                 const isPrivateOrProtected = mods.some(
@@ -218,7 +179,6 @@ function extractPublicMembers(sourceFile: ts.SourceFile): ReadonlySet<string> {
             const name = member.name;
             if (!name) continue;
 
-            // Exclude TypeScript private-identifier (#field)
             if (ts.isPrivateIdentifier(name)) continue;
 
             if (ts.isIdentifier(name)) {
@@ -257,7 +217,6 @@ function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string
         if (!node || typeof node !== 'object') return;
         const n = node as Record<string, unknown>;
 
-        // Bound inputs: [prop]="expr"
         if (Array.isArray(n['inputs'])) {
             for (const input of n['inputs'] as unknown[]) {
                 walkExpression((input as Record<string, unknown>)['value'] ??
@@ -265,14 +224,12 @@ function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string
             }
         }
 
-        // Bound outputs / event handlers: (click)="handler()"
         if (Array.isArray(n['outputs'])) {
             for (const output of n['outputs'] as unknown[]) {
                 walkExpression((output as Record<string, unknown>)['handler']);
             }
         }
 
-        // BoundText / interpolation: {{ expr }}
         const val = n['value'];
         if (val && typeof val === 'object') {
             const v = val as Record<string, unknown>;
@@ -283,12 +240,10 @@ function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string
             }
         }
 
-        // Generic bound expression (e.g. structural directives)
         if (n['expression'] && typeof n['expression'] === 'object') {
             walkExpression(n['expression']);
         }
 
-        // Recurse into child nodes
         if (Array.isArray(n['children'])) {
             for (const child of n['children'] as unknown[]) {
                 walkNode(child);
@@ -300,10 +255,8 @@ function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string
         if (!expr || typeof expr !== 'object') return;
         const e = expr as Record<string, unknown>;
 
-        // PropertyRead / MethodCall / SafePropertyRead: { name, receiver, args? }
         if (typeof e['name'] === 'string' && e['name'].length > 0) {
             const rec = e['receiver'];
-            // ImplicitReceiver has no `.name` and no nested `.receiver`
             if (rec && typeof rec === 'object') {
                 const r = rec as Record<string, unknown>;
                 if (!r['name'] && !r['receiver']) {

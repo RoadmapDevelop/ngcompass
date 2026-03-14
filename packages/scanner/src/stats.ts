@@ -1,8 +1,9 @@
 /**
- * Statistics Calculation
+ * @fileoverview
+ * Provides utilities for calculating and formatting file scan statistics.
  *
- * Mostly pure functions for calculating scan statistics.
- * calculateTotalSize and calculateStats are async due to fs.stat I/O.
+ * Implements high-performance aggregation logic, including asynchronous file size
+ * summation with concurrency control and extension-based grouping.
  */
 
 import path from 'node:path';
@@ -14,16 +15,14 @@ import type { ScanStatistics } from './types.js';
 // ==============================================================================
 
 /**
- * Runs an array of async task factories with a concurrency cap.
+ * Executes a collection of asynchronous tasks with a specified concurrency limit.
  *
- * Uses a worker-pool pattern: `concurrency` coroutines each pull from a
- * shared index until all tasks are consumed. This keeps at most `concurrency`
- * promises in-flight at any time, preventing file-descriptor exhaustion on
- * large repos.
+ * Employs a worker pool pattern to prevent resource exhaustion, such as
+ * file-descriptor limits, while maintaining high throughput.
  *
- * @param tasks - Factory functions that create the promise for each item
- * @param concurrency - Maximum number of simultaneous promises
- * @returns PromiseSettledResult array in the same order as `tasks`
+ * @param tasks - A collection of asynchronous task factories.
+ * @param concurrency - The maximum number of concurrent operations permitted.
+ * @returns A promise resolving to an array of settled result objects.
  */
 const runWithLimit = async <T>(
     tasks: ReadonlyArray<() => Promise<T>>,
@@ -43,7 +42,6 @@ const runWithLimit = async <T>(
         }
     };
 
-    // Spawn at most `concurrency` workers (but never more than tasks.length).
     await Promise.all(
         Array.from({ length: Math.min(concurrency, tasks.length) }, worker)
     );
@@ -52,12 +50,10 @@ const runWithLimit = async <T>(
 };
 
 /**
- * Groups files by extension.
+ * Categorizes a collection of files into groups based on their file extensions.
  *
- * Pure function using reduce pattern.
- *
- * @param files - Array of file paths
- * @returns Map of extension to file count
+ * @param files - The collection of absolute file paths to analyze.
+ * @returns A map associating each discovered extension with its respective count.
  */
 export const groupFilesByExtension = (
     files: ReadonlyArray<string>
@@ -70,15 +66,12 @@ export const groupFilesByExtension = (
     }, new Map<string, number>());
 
 /**
- * Calculates the total size of all files in bytes.
+ * Computes the aggregate size of a collection of files in bytes.
  *
- * Runs fs.stat calls with a concurrency cap of 128 so that a single
- * unreadable file never blocks the rest, while also preventing
- * file-descriptor exhaustion on large repos.  Files that cannot be
- * stat-ed (race-condition deletion, permission errors) silently contribute 0.
+ * Utilizes concurrency control to ensure stability during large-scale operations.
  *
- * @param files - Absolute file paths
- * @returns Total size in bytes
+ * @param files - The collection of absolute file paths to analyze.
+ * @returns A promise resolving to the total aggregate size in bytes.
  */
 export const calculateTotalSize = async (
     files: ReadonlyArray<string>
@@ -91,15 +84,12 @@ export const calculateTotalSize = async (
 };
 
 /**
- * Calculates scan statistics from file list.
+ * Generates comprehensive scan statistics for a collection of discovered files.
  *
- * Async because totalSize requires fs.stat I/O.
- * Timing captures wall-clock time up to the point statistics are finalized.
- *
- * @param files - Array of discovered files
- * @param startTime - Scan start time (from performance.now())
- * @param cacheHit - Whether result came from cache
- * @returns Complete scan statistics
+ * @param files - The collection of discovered file paths.
+ * @param startTime - The high-resolution start time of the scan operation.
+ * @param cacheHit - Indicates whether the results were retrieved from a cache.
+ * @returns A promise resolving to the computed scan statistics.
  */
 export const calculateStats = async (
     files: ReadonlyArray<string>,
@@ -139,12 +129,10 @@ export const formatExtensionBreakdown = (
 };
 
 /**
- * Calculates summary statistics.
+ * Generates a high-level summary from detailed scan statistics.
  *
- * Pure function - derives summary from detailed stats.
- *
- * @param stats - Scan statistics
- * @returns Summary object
+ * @param stats - The detailed statistics to summarize.
+ * @returns A consolidated summary object.
  */
 export const calculateSummary = (stats: ScanStatistics) => ({
     totalFiles: stats.totalFiles,

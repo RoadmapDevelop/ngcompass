@@ -98,16 +98,45 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
         const start = getNodeStart(node as any);
         const { line, column } = context.locator.location(start);
 
+        // CTX-008: When CrossRef data is available, extract the stream property name from the
+        // receiver chain (e.g. `this.users$.subscribe(…)` → `users$`) and check if that
+        // property is actually consumed in the template.  If it IS a template-bound observable,
+        // we surface a targeted "use toSignal()" message instead of the generic advisory.
+        // Falls back to the generic message when CrossRef is unavailable.
+        let message =
+            'Avoid open-ended subscriptions in components. Use toSignal() for reactive state, or scope long-lived streams with takeUntilDestroyed(). HTTP calls that auto-complete are exempt.';
+
+        const templateRefs = context.crossRef?.templateReferences;
+        if (templateRefs !== undefined) {
+            // Dig into `<receiver>.subscribe(…)` to find the immediate property name.
+            // Works for both `this.users$.subscribe(…)` and `this.service.data$.subscribe(…)`.
+            const subscribeCallee = unwrapNode((node as any).callee);
+            if (isMemberExpressionLike(subscribeCallee)) {
+                const receiver = unwrapNode((subscribeCallee as AstNode).object);
+                if (receiver) {
+                    const propName = getStaticPropertyName(receiver);
+                    if (propName) {
+                        const baseName = propName.endsWith('$') ? propName.slice(0, -1) : propName;
+                        if (templateRefs.has(propName) || templateRefs.has(baseName)) {
+                            message =
+                                `'${propName}' is consumed in the template. Replace this subscription with ` +
+                                `toSignal(${propName}) and bind the resulting signal directly — no manual subscription needed.`;
+                        }
+                    }
+                }
+            }
+        }
+
         return {
             filePath: context.filePath,
             ruleName: 'rxjs-no-subscribe-in-component',
-            message:
-                'Avoid open-ended subscriptions in components. Use toSignal() for reactive state, or scope long-lived streams with takeUntilDestroyed(). HTTP calls that auto-complete are exempt.',
+            message,
             line,
             column,
             severity: 'error',
             fix: RECOMMENDATIONS['rxjs-no-subscribe-in-component'],
             codeExample: CODE_EXAMPLES['rxjs-no-subscribe-in-component'],
         };
-    }
+    },
+    { requires: { projectContext: true } }
 );

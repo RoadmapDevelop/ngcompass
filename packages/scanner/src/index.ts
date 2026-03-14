@@ -1,3 +1,11 @@
+/**
+ * @fileoverview
+ * Public entry point for the @ngcompass/scanner package.
+ *
+ * Exposes core scanning capabilities, configuration normalization, and result
+ * analysis utilities. Facilitates efficient file discovery and repository state
+ * fingerprinting.
+ */
 
 export { scan } from './scan.js';
 export type {

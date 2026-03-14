@@ -1,17 +1,18 @@
 /**
- * @ngcompass/engine
+ * @fileoverview
+ * Public entry point for the @ngcompass/engine package.
  *
- * Rule execution engine — types, handlers, single-pass AST walker,
- * orchestrator, worker pool and rule context factory.
+ * Exposes core rule execution infrastructure, orchestrator components,
+ * worker pool management, and analytical utilities.
  */
 
-// Core rule types (RuleFailure, RuleResult, RuleContext, RuleMetadata, …)
+// Core analytical contracts and primitive types.
 export * from './types.js';
 
 // Rule handler definition
 export * from './rule-handler.js';
 
-// Visitor registry (O(1) dispatch map)
+// Visitor registration and O(1) dispatch infrastructure.
 export * from './visitor-registry.js';
 
 // Single-pass AST engine
@@ -23,22 +24,21 @@ export * from './rule-context-factory.js';
 // Orchestrator
 export * from './orchestrator.js';
 
-// Analysis context (memoized file/AST accessors — used by execution-worker in @ngcompass/rules)
+// Memoized file system and AST accessors.
 export { createAnalysisContext } from './analysis-context.js';
 export type { AnalysisContext } from './analysis-context.js';
 
-// Project context builder (CTX-001) — builds import graph + component cluster map from ts.Program
+// Project context construction: import graph and component mapping utilities.
 export { buildProjectContext } from './project-context-builder.js';
 
-// Type-aware context — extends AnalysisContext with TypeChecker + ProjectContext
+// Context extension for type-checker and project-aware analysis.
 export { createTypeAwareAnalysisContext } from './type-aware-context.js';
 export type { TypeAwareAnalysisContext } from './type-aware-context.js';
 
-// Runner (batched task execution — used by execution-worker in @ngcompass/rules)
-// Note: ExecutionContext is NOT re-exported here to avoid conflict with rule-context-factory.ts
+// Batched task execution engine.
 export { executeBatchedTasks } from './runner.js';
 
-// Rule executor DI boundary — breaks the engine ↔ rules circular dependency
+// Rule executor abstraction: facilitates decoupling of engine and rules packages.
 export { configureRuleExecutor } from './rule-executor.js';
 export type { BatchRuleExecutorFn, RuleCheckerFn } from './rule-executor.js';
 

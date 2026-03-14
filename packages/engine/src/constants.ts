@@ -1,35 +1,49 @@
 /**
- * Engine-level constants — single source of truth for all magic literals
- * scattered across orchestrator.ts, worker-pool.ts, runner.ts and single-pass-engine.ts.
+ * @fileoverview
+ * Defines engine-level constants and performance benchmarks for ngcompass.
+ *
+ * This module serves as the centralized source of truth for architectural
+ * thresholds, concurrency limits, and performance budgets used across the
+ * orchestration and execution layers.
  */
 
-/** Minimum task count at which routing through the worker-thread pool pays off. */
+/**
+ * The minimum number of tasks required to trigger parallel execution via the
+ * worker thread pool. Below this threshold, local serial execution is preferred
+ * to avoid orchestration overhead.
+ */
 export const WORKER_POOL_TASK_THRESHOLD = 150;
 
-/** p-limit concurrency cap for local (non-worker-thread) file execution. */
+/**
+ * The concurrency limit for local (non-worker) execution paths.
+ */
 export const LOCAL_CONCURRENCY_LIMIT = 4;
 
-/** Minimum number of worker threads to spawn, regardless of CPU count. */
+/**
+ * The minimum number of worker threads to maintain in the execution pool,
+ * ensuring availability regardless of the host system's CPU topology.
+ */
 export const MIN_WORKER_COUNT = 2;
 
-/** Refresh interval for the terminal spinner animation in milliseconds. */
+/**
+ * The refresh interval for the command-line interface progress visualization.
+ */
 export const SPINNER_FRAME_INTERVAL_MS = 80;
 
-// ============================================
-// PERFORMANCE BUDGETS  (ENGINE-006)
-// Previously duplicated as local consts inside single-pass-engine.ts.
-// Centralised here so any tuning is made in exactly one place.
-// ============================================
+/**
+ * Performance Budgets:
+ * Thresholds used to monitor and report execution efficiency.
+ */
 
 /**
- * p95 per-file time budget (ms) for rules that do NOT require the TypeChecker.
- * Violations are recorded in `PerformanceReport.budgetViolations` and can be
- * asserted in CI (ENGINE-011).
+ * The target execution time (p95) per file for rules that do not utilize
+ * type-checking services.
  */
 export const BUDGET_MS_PER_FILE_WITHOUT_TYPES = 2;
 
 /**
- * p95 per-file time budget (ms) for rules that DO require the TypeChecker.
+ * The target execution time (p95) per file for rules requiring full
+ * type-checking capabilities.
  */
 export const BUDGET_MS_PER_FILE_WITH_TYPES = 5;
 

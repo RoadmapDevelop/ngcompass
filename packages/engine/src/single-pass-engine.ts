@@ -1,24 +1,15 @@
 /**
- * Single-Pass Engine (Performance-Critical)
+ * @fileoverview
+ * Implements the performance-optimized single-pass analytical engine.
  *
- * RESPONSIBILITIES:
- * 1. Traverse AST exactly once
- * 2. Dispatch nodes via O(1) VisitorMap (no if/else chain)
- * 3. Dispatch pre-filtered template nodes after main walk
- * 4. Track per-rule timing
- * 5. Enforce performance budgets
+ * This component is designed for maximum throughput, performing exactly one
+ * traversal of the Abstract Syntax Tree (AST) while dispatching nodes to
+ * passive observers via an O(1) visitor infrastructure.
  *
- * PERFORMANCE GUARANTEE:
- * - O(N) traversal where N = AST nodes
- * - O(1) stream dispatch per node (Map lookup)
- * - <2ms/file p95 (syntax-only rules)
- * - <5ms/file p95 (type-aware rules)
- *
- * EXTENSIBILITY:
- * Adding a new StreamType requires only:
- *  1. A new entry in STREAM_TO_NODE_TYPE (visitor-registry.ts)
- *  2. A stream filter function passed to buildVisitorMap()
- * This file does NOT change when new stream types are added.
+ * Key Performance Characteristics:
+ * - Linear Complexity: O(N) traversal in relation to the number of AST nodes.
+ * - Optimized Dispatch: Leverages a high-speed visitor map for node-type routing.
+ * - Resource Efficiency: Maintains strict execution budgets for individual rules.
  */
 
 import type { RuleContext, RuleResult, RuleFailure } from './types.js';
@@ -60,11 +51,10 @@ export interface PerformanceReport {
 type AnyTemplateNode = TemplateExpressionNode | TemplateAttributeNode;
 
 /**
- * Dispatches pre-filtered template nodes to handlers that opted into a
- * template stream (TemplateExpression or TemplateAttribute).
+ * Coordinates the distribution of template-specific nodes to registered handlers.
  *
- * Called after the main AST walk because template nodes come from a
- * different parser (angular-html-parser) not the Oxc AST.
+ * Invoked post-AST traversal to process artifacts derived from the secondary
+ * template parsing phase.
  */
 const dispatchTemplateHandlers = (
     nodes: ReadonlyArray<AnyTemplateNode>,
@@ -113,12 +103,12 @@ const dispatchTemplateHandlers = (
 // ============================================
 
 /**
- * Executes all rules in a single AST traversal.
+ * Executes a comprehensive analytical pass over a provided AST program.
  *
- * COMPLEXITY: O(N + R) where N = nodes, R = rule registration
- * DISPATCH:   O(1) per node via VisitorMap (Map.get)
- *
- * @returns Results + performance report
+ * @param rules A collection of rule handlers to evaluate during the pass.
+ * @param context The analytical context containing the program and metadata.
+ * @param options Operational configuration, including error collection.
+ * @returns A consolidated result set and performance diagnostic report.
  */
 export const runSinglePassAnalysis = (
     rules: ReadonlyArray<RuleHandler<any>>,
@@ -143,7 +133,6 @@ export const runSinglePassAnalysis = (
 
     const startTime = performance.now();
 
-    // Phase 1: Build O(1) dispatch map and separate template handlers (O(R))
     const visitorMap = buildVisitorMap(rules, {
         AngularClass: toAngularClassStream,
         AnyAngularClass: toAnyAngularClassStream,
@@ -152,11 +141,9 @@ export const runSinglePassAnalysis = (
         NewExpression: toNewExpressionStream,
     });
 
-    // Separate template-stream handlers (post-walk dispatch)
     const templateExpressionHandlers = rules.filter(r => r.streamType === 'TemplateExpression');
     const templateAttributeHandlers = rules.filter(r => r.streamType === 'TemplateAttribute');
 
-    // Phase 2: Initialize tracking
     const failuresByRule = new Map<string, RuleFailure[]>();
     const ruleTimings = new Map<string, RuleTiming>();
     let nodesVisited = 0;
@@ -167,13 +154,11 @@ export const runSinglePassAnalysis = (
 
     resetComponentCacheStats();
 
-    // Phase 3: Single traversal — O(N) with O(1) dispatch per node
     walkProgram(program, (node) => {
         if (!node?.type) return;
 
         nodesVisited++;
 
-        // O(1) lookup — no if/else chain
         const visitors = visitorMap.get(node.type);
         if (visitors) {
             for (let i = 0; i < visitors.length; i++) {
@@ -181,7 +166,6 @@ export const runSinglePassAnalysis = (
                 const ruleStart = performance.now();
 
                 try {
-                    // filter() converts raw Oxc node → typed stream node (or null)
                     const streamNode = entry.filter(node);
                     if (streamNode !== null) {
                         const failure = entry.handle(streamNode, context);
@@ -214,14 +198,12 @@ export const runSinglePassAnalysis = (
         }
     });
 
-    // Phase 4: Dispatch to template streams (post-walk, different parser)
     if (context.template && (templateExpressionHandlers.length > 0 || templateAttributeHandlers.length > 0)) {
         const templateAnalysis = analyzeTemplate(context.template);
         dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
         dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
     }
 
-    // Phase 5: Collect results
     const results: RuleResult[] = [];
     for (const rule of rules) {
         results.push({
@@ -232,7 +214,6 @@ export const runSinglePassAnalysis = (
 
     const traversalMs = performance.now() - startTime;
 
-    // Phase 6: Check budgets
     const budgetViolations: string[] = [];
     const budget = context.typeChecker ? BUDGET_MS_PER_FILE_WITH_TYPES : BUDGET_MS_PER_FILE_WITHOUT_TYPES;
 
@@ -245,7 +226,7 @@ export const runSinglePassAnalysis = (
     for (const timing of ruleTimings.values()) {
         if (timing.invocations === 0) continue;
         const avgMs = timing.totalMs / timing.invocations;
-        if (avgMs > 1) {  // 1ms per invocation threshold
+        if (avgMs > 1) {
             budgetViolations.push(
                 `Rule ${timing.ruleName} averages ${avgMs.toFixed(2)}ms per invocation (threshold: 1ms)`
             );

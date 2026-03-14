@@ -1,14 +1,18 @@
 /**
- * Terminal Spinner
+ * @fileoverview
+ * Provides a terminal-based progress visualization utility.
  *
- * Simple braille-frame spinner for showing progress during long operations.
- * Extracted from worker-pool.ts so the engine module stays free of UI code.
+ * Implements a high-efficiency visual indicator (spinner) for long-running
+ * command-line operations, isolated from core analytical logic.
  */
 
 import { SPINNER_FRAME_INTERVAL_MS } from './constants.js';
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
+/**
+ * Manages the state and rendering of a terminal-based progress indicator.
+ */
 export class Spinner {
     private frameIndex = 0;
     private interval: NodeJS.Timeout | null = null;

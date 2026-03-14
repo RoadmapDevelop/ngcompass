@@ -1,11 +1,10 @@
 /**
- * Shared Execution Runner
+ * @fileoverview
+ * Provides the core execution runner for ngcompass.
  *
- * Consolidates rule execution logic shared between the orchestrator (local/sequential)
- * and the execution worker (parallel).
- *
- * Context construction is delegated to RuleContextFactory — runner.ts is now
- * responsible only for batching by options and mapping results back to task IDs.
+ * This module consolidates the rule execution logic utilized by both local
+ * sequential processes and worker-based parallel execution. It manages task
+ * batching, result mapping, and operational error handling.
  */
 
 
@@ -19,15 +18,16 @@ import { getConfiguredExecutor, getConfiguredChecker } from "./rule-executor.js"
 
 
 /**
- * Executes a batch of tasks for a single file using the provided context.
+ * Executes a collection of analysis tasks for a specific file.
  *
- * Context construction (file read, AST parse, Locator creation) is handled by
- * RuleContextFactory — this function focuses on grouping tasks by options and
- * mapping engine results back to their task IDs.
+ * Processes tasks by grouping them into optimized execution batches. Utilizes
+ * the RuleContextFactory for resource initialization and coordinates with
+ * the configured rule executor for evaluation.
  *
- * @param tasks   - Tasks to execute (MUST all be for the same file)
- * @param context - Execution context (provides file access, parsing)
- * @returns Array of RuleResults
+ * @param tasks A collection of tasks to execute against a single file path.
+ * @param context The operational context providing resource access.
+ * @param errorCollector An optional sink for operational error reporting.
+ * @returns A promise resolving to a collection of rule execution results.
  */
 export const executeBatchedTasks = async (
     tasks: ReadonlyArray<Task>,
@@ -38,7 +38,6 @@ export const executeBatchedTasks = async (
 
     const factory = new RuleContextFactory(context);
 
-    // 1. Group tasks by options key and filter for known engine rules
     const batches = new Map<string, {
         options: Record<string, unknown>,
         ruleNames: string[],
@@ -54,15 +53,10 @@ export const executeBatchedTasks = async (
             continue;
         }
 
-        // RFC §7.2: Use stableSerialize instead of JSON.stringify so that object
-        // key insertion order does not affect batch grouping. Two tasks with the
-        // same options but different key orderings now correctly share a batch.
         let optionsKey: string;
         try {
             optionsKey = stableSerialize(task.options || {});
         } catch (serErr) {
-            // SerializationError means the rule's options contain something
-            // illegal (circular ref, function, etc.). Skip gracefully.
             const msg = serErr instanceof SerializationError ? serErr.message : String(serErr);
             debug("engine", `Skipping task ${task.taskId}: failed to serialize options — ${msg}`);
             errorCollector?.record(createInfrastructureError('SerializationError', {
@@ -85,28 +79,21 @@ export const executeBatchedTasks = async (
         batches.set(optionsKey, batch);
     }
 
-    // 2. Execute each batch — all tasks in a batch share the same file + options
     for (const batch of batches.values()) {
         try {
-            // Pre-build a Set for O(1) membership checks — avoids the O(n×k)
-            // quadratic scan that Array.includes() would cause inside .some().
             const batchTaskIdSet = new Set(batch.taskIds);
-            // Determine if any task in this batch requires the template
             const needsTemplate = tasks.some(
                 t => batchTaskIdSet.has(t.taskId) && t.inputs.template?.needsAst
             );
 
-            // RuleContextFactory handles all I/O: read, parse, Locator, template
             const ruleContext = await factory.build(
                 tasks[0].filePath,
                 batch.options,
                 needsTemplate,
             );
 
-            // Single-pass execution across all rules in this batch
             const batchResults = getConfiguredExecutor()(batch.ruleNames, ruleContext);
 
-            // 3. Map results back to task IDs and apply configured severity
             const taskIdMap = new Map<string, string[]>();
             for (let i = 0; i < batch.ruleNames.length; i++) {
                 const name = batch.ruleNames[i];
@@ -120,7 +107,6 @@ export const executeBatchedTasks = async (
                 const ids = taskIdMap.get(result.ruleName);
                 const configuredSeverity = batch.severities.get(result.ruleName);
 
-                // Override per-failure severity from the config (user-specified level)
                 const finalResult = configuredSeverity
                     ? {
                         ...result,
@@ -144,7 +130,6 @@ export const executeBatchedTasks = async (
                 phase: 'engine',
                 recoverable: true,
             }));
-            // Produce empty results for all tasks in the failed batch
             for (let i = 0; i < batch.ruleNames.length; i++) {
                 results.push({
                     ruleName: batch.ruleNames[i],

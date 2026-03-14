@@ -1,13 +1,15 @@
 /**
- * Scanner Type Definitions
+ * @fileoverview
+ * Definitional contracts and primitive types for the @ngcompass/scanner package.
  *
- * All types are immutable (readonly) following FP principles.
+ * Adheres to functional programming principles by ensuring type immutability
+ * and providing explicit structures for configuration, results, and progress reporting.
  */
 
 import { Result, Ok, Err } from '@ngcompass/common';
 
 /**
- * Helper constructors for Result type
+ * Utility constructors for the Result type.
  */
 // Result type imported from @ngcompass/common
 export type { Result };
@@ -16,12 +18,12 @@ export { Ok, Err };
 import type { CacheContext } from '@ngcompass/cache';
 
 /**
- * Option type for nullable values
+ * Represents a value that may be present, null, or undefined.
  */
 export type Option<T> = T | null | undefined;
 
 /**
- * Scanner configuration options (input)
+ * Defines the input configuration options for a scanner operation.
  */
 export interface ScanOptions {
     readonly rootDir: string;
@@ -56,7 +58,7 @@ export interface ScanOptions {
 }
 
 /**
- * Normalized scanner options (after applying defaults)
+ * Represents scanner configuration options after the application of project defaults.
  */
 export interface NormalizedOptions {
     readonly rootDir: string;
@@ -65,12 +67,12 @@ export interface NormalizedOptions {
     readonly ignorePatterns: ReadonlyArray<string>;
     readonly respectGitignore: boolean;
     readonly followSymlinks: boolean;
-    /** Resolved value of ScanOptions.dot — always a boolean after normalization. */
+    /** Resolved value of ScanOptions.dot β€” always a boolean after normalization. */
     readonly dot: boolean;
 }
 
 /**
- * Expanded glob patterns (ready for fast-glob)
+ * Represents a set of inclusion and exclusion glob patterns.
  */
 export interface ExpandedPatterns {
     readonly include: ReadonlyArray<string>;
@@ -78,14 +80,14 @@ export interface ExpandedPatterns {
 }
 
 /**
- * Raw file list from glob execution
+ * Represents the initial collection of file paths discovered by the scanner.
  */
 export interface RawFileList {
     readonly files: ReadonlyArray<string>;
 }
 
 /**
- * Filtered file list after applying all filters
+ * Represents a file collection after the application of ignore and deduplication filters.
  */
 export interface FilteredFileList {
     readonly files: ReadonlyArray<string>;
@@ -93,7 +95,7 @@ export interface FilteredFileList {
 }
 
 /**
- * Scan statistics
+ * Encapsulates statistical metadata for a completed scan operation.
  */
 export interface ScanStatistics {
     readonly totalFiles: number;
@@ -104,10 +106,7 @@ export interface ScanStatistics {
 }
 
 /**
- * Complete scan result
- */
-/**
- * Scan timing breakdown (for debugging)
+ * Encapsulates high-resolution timing data for various scan phases.
  */
 export interface ScanTimings {
     readonly normalization: number;
@@ -117,7 +116,7 @@ export interface ScanTimings {
 }
 
 /**
- * Complete scan result
+ * Encapsulates the consolidated results and metadata of a scan operation.
  */
 export interface ScanResult {
     readonly files: ReadonlyArray<string>;
@@ -136,13 +135,7 @@ export type GitignoreFilter = (file: string, rootDir: string) => boolean;
 // ==============================================================================
 
 /**
- * Phases of a scan operation, emitted in order via `ScanOptions.onProgress`.
- *
- * - `normalizing`       — Options are being validated and defaults applied.
- * - `discovering`       — Files are being located (git ls-files or glob).
- * - `filtering`         — Gitignore and dedup filters are being applied.
- * - `calculating-stats` — File sizes are being accumulated for statistics.
- * - `complete`          — Scan finished; `count` is the final file count.
+ * Represents the distinct phases of an active scan operation.
  */
 export type ScanPhase =
     | 'normalizing'

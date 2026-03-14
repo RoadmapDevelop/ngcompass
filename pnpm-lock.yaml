@@ -241,6 +241,9 @@ importers:
       '@ngcompass/planner':
         specifier: workspace:*
         version: link:../planner
+      lru-cache:
+        specifier: ^11.2.5
+        version: 11.2.5
       oxc-parser:
         specifier: ^0.112.0
         version: 0.112.0

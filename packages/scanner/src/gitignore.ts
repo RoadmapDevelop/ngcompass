@@ -1,3 +1,11 @@
+/**
+ * @fileoverview
+ * Facilitates the resolution and evaluation of .gitignore configurations.
+ *
+ * Provides utilities for loading ignore patterns from the file system and
+ * constructing composite filters that adhere to Git's hierarchical ignore
+ * semantics.
+ */
 import ignore, { type Ignore } from 'ignore';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -6,13 +14,10 @@ import { Ok, Err } from './types.js';
 import { debug } from '@ngcompass/common';
 
 /**
- * Loads .gitignore content from a directory.
+ * Retrieves the raw content of a .gitignore file from a specified directory.
  *
- * Side effect: File system I/O
- * Returns Option type (null if not found)
- *
- * @param rootDir - Directory to search for .gitignore
- * @returns Gitignore content or null
+ * @param rootDir - The directory in which to search for the .gitignore file.
+ * @returns A promise resolving to the file content, or null if not found.
  */
 export const loadGitignore = async (rootDir: string): Promise<Option<string>> => {
     const gitignorePath = path.join(rootDir, '.gitignore');
@@ -27,13 +32,10 @@ export const loadGitignore = async (rootDir: string): Promise<Option<string>> =>
 };
 
 /**
- * Creates a gitignore filter function from gitignore content.
+ * Constructs a gitignore evaluator function from raw ignore patterns.
  *
- * Higher-order function: Returns a filter function.
- * Pure (except for the returned function's use of 'ignore' library).
- *
- * @param gitignoreContent - Content of .gitignore file
- * @returns Filter function that checks if file should be ignored
+ * @param gitignoreContent - The raw content of a .gitignore configuration.
+ * @returns An evaluator function that determines if a file path is ignored.
  */
 export const createGitignoreFilter = (gitignoreContent: string): GitignoreFilter => {
     const ig: Ignore = ignore().add(gitignoreContent);
@@ -45,22 +47,17 @@ export const createGitignoreFilter = (gitignoreContent: string): GitignoreFilter
 };
 
 /**
- * Creates a no-op filter (accepts all files).
+ * Constructs a pass-through filter that accepts all file paths.
  *
- * Pure function - returns a filter that always returns true.
- *
- * @returns Filter function that accepts all files
+ * @returns An evaluator function that invariably returns true.
  */
 export const createPassThroughFilter = (): GitignoreFilter => () => true;
 
 /**
- * Loads gitignore and creates filter in one step.
+ * Loads a .gitignore configuration and constructs an evaluator function.
  *
- * Combines I/O and filter creation.
- * Returns Result type for error handling.
- *
- * @param rootDir - Directory to load .gitignore from
- * @returns Result containing filter function or error
+ * @param rootDir - The directory from which to load the configuration.
+ * @returns A promise resolving to a Result containing the evaluator function.
  */
 export const loadAndCreateGitignoreFilter = async (
     rootDir: string
@@ -83,8 +80,8 @@ export const loadAndCreateGitignoreFilter = async (
  * Builds a composite gitignore filter by collecting every `.gitignore` file
  * that lies between `rootDir` and the directories of the supplied file paths.
  *
- * Each `.gitignore` file is applied relative to its own directory — exactly
- * as Git itself does — so a pattern `dist/` inside `src/.gitignore` only
+ * Each `.gitignore` file is applied relative to its own directory β€” exactly
+ * as Git itself does β€” so a pattern `dist/` inside `src/.gitignore` only
  * ignores `src/dist/`, not the repo root `dist/`.
  *
  * This is more correct than loading only the root `.gitignore` for projects
@@ -99,14 +96,11 @@ export const loadAllGitignoreFilters = async (
     filePaths: ReadonlyArray<string>
 ): Promise<Result<GitignoreFilter>> => {
     try {
-        // Collect every ancestor directory from rootDir down to each file.
-        // We deduplicate via a Set so each directory is only stat-ed once.
         const dirsToCheck = new Set<string>();
         dirsToCheck.add(rootDir);
 
         for (const filePath of filePaths) {
             let current = path.dirname(filePath);
-            // Walk up toward rootDir, stopping when we leave its subtree.
             while (current.startsWith(rootDir) && current !== path.dirname(rootDir)) {
                 dirsToCheck.add(current);
                 if (current === rootDir) break;
@@ -114,8 +108,6 @@ export const loadAllGitignoreFilters = async (
             }
         }
 
-        // Load each directory's .gitignore (if present) and build a per-dir
-        // `ignore` instance so patterns are relative to that directory.
         type DirIgnore = { readonly dir: string; readonly ig: Ignore };
         const dirFilters: DirIgnore[] = [];
 
@@ -130,11 +122,8 @@ export const loadAllGitignoreFilters = async (
             return Ok(createPassThroughFilter());
         }
 
-        // Composite filter: a file is excluded if ANY directory-level rules
-        // (where the file lives inside that directory) match it.
         const compositeFilter: GitignoreFilter = (filePath: string): boolean => {
             for (const { dir, ig } of dirFilters) {
-                // Only apply this dir's rules if the file lives inside it.
                 const rel = path.relative(dir, filePath).replace(/\\/g, '/');
                 if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
                     if (ig.ignores(rel)) return false;

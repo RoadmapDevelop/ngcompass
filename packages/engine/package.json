@@ -31,6 +31,7 @@
         "@ngcompass/ast": "workspace:*",
         "@ngcompass/cache": "workspace:*",
         "@ngcompass/planner": "workspace:*",
+        "lru-cache": "^11.2.5",
         "oxc-parser": "^0.112.0",
         "p-limit": "^6.1.0"
     },

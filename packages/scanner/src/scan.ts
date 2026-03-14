@@ -1,3 +1,11 @@
+/**
+ * @fileoverview
+ * Orchestrates the file scanning process for @ngcompass projects.
+ *
+ * Implements a multi-stage pipeline: normalization, discovery (Git-optimized),
+ * filtering (respecting .gitignore), and result aggregation. Supports caching
+ * and progress reporting for large-scale projects.
+ */
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { debug, time, timeEnd } from '@ngcompass/common';
@@ -6,17 +14,18 @@ import { Ok, Err } from './types.js';
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
 import { executeGlob } from './glob.js';
-import { isGitRepo, executeGitDiscovery, getRepoFingerprint, getDirectoryFingerprint } from './git.js';
 import { applyFilters, filterByGlob } from './filters.js';
 import { calculateStats } from './stats.js';
+import { isGitRepo, executeGitDiscovery, getRepoFingerprint, getDirectoryFingerprint } from './git.js';
 
 /**
- * Scans directories to find files based on provided glob patterns, applying
- * filters (including .gitignore overrides) and optimizations for Git repositories.
- * The operation can also be optionally sped up by using a file caching layer. 
+ * Executes a comprehensive file scan based on the provided configuration.
  *
- * @param options - Configuration settings indicating directories, patterns, and behaviors.
- * @returns Promise yielding a Result containing the discovered file paths and scan execution statistics.
+ * Discovers files using optimized Git utilities or standard globbing, applies
+ * hierarchical ignore filters, and computes project-level statistics.
+ *
+ * @param options - The configuration settings for the scan operation.
+ * @returns A promise resolving to a Result containing the discovered files and scan metadata.
  */
 export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> => {
     time('file-scan');
@@ -33,7 +42,6 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     logNormalization(normalized, patterns);
 
-    // Optionally narrow include/exclude patterns using a tsconfig.json.
     if (options.tsConfigPath) {
         const tsPatterns = await loadTsConfigPatterns(options.tsConfigPath, normalized.rootDir);
         if (tsPatterns) {
@@ -108,13 +116,12 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 };
 
 /**
- * Discovers the raw set of files using Git-optimized utilities or standard filesystem globbing.
+ * Discovers the raw set of files using Git-optimized utilities or filesystem globbing.
  *
- * @param normalized - The normalized subset of user configurations.
- * @param patterns - Include and ignore patterns processed from raw glob expressions.
- * @param isGit - True if the root system directory is verified to be a Git repository.
- * @param isDebug - Controls debugging output emission.
- * @returns A Result array of string paths corresponding to matching patterns before any deep filtering.
+ * @param normalized - The normalized scanner options.
+ * @param patterns - The expanded inclusion and exclusion patterns.
+ * @param isGit - Indicates if the root directory is a verified Git repository.
+ * @returns A promise resolving to a Result containing the initial collection of file paths.
  */
 async function discoverFiles(
     normalized: NormalizedOptions,
@@ -150,13 +157,13 @@ async function discoverFiles(
 }
 
 /**
- * Resolves an active string key targeting internal cache mappings, relying on a robust system fingerprint.
+ * Computes a robust cache key for the current scan configuration and repository state.
  *
- * @param normalized - Contains the root directory config used in fingerprint verification.
- * @param patterns - Current pattern strings impacting final cache validity.
- * @param isGit - Informs how the directory fingerprint computes.
- * @param options - The full operation configuration, providing access to the injected cache engine. 
- * @returns Nullable resolved cache key string.
+ * @param normalized - The normalized scanner options.
+ * @param patterns - The current pattern strings.
+ * @param isGit - Indicates if the repository is Git-managed.
+ * @param options - The full scan configuration options.
+ * @returns A promise resolving to a unique cache key string, or null if caching is disabled.
  */
 async function getCacheKey(
     normalized: NormalizedOptions,
@@ -166,9 +173,6 @@ async function getCacheKey(
 ): Promise<string | null> {
     if (!options.cache) return null;
 
-    // Use the git fingerprint for repos (precise: HEAD + index mtime).
-    // Fall back to a directory mtime fingerprint for non-git projects so
-    // that even plain directories benefit from caching.
     const fingerprint = isGit
         ? await getRepoFingerprint(normalized.rootDir)
         : await getDirectoryFingerprint(normalized.rootDir);
@@ -184,13 +188,13 @@ async function getCacheKey(
 }
 
 /**
- * Checks to see if an identical scan has completed before by retrieving paths from the configured cache context.
+ * Attempts to retrieve a previous scan result from the cache.
  *
- * @param normalized - Operation configuration settings.
- * @param patterns - Expanded pattern sets mapping matched inputs.
- * @param isGit - Dictates fingerprint resolution paths for verification check.
- * @param options - Full base configurations giving cache instances.
- * @returns The resulting cached file paths as an Array, or strictly null on a cache miss.
+ * @param normalized - The normalized scanner options.
+ * @param patterns - The expanded pattern collection.
+ * @param isGit - Indicates if the repository is Git-managed.
+ * @param options - The full scan configuration options.
+ * @returns A promise resolving to the cached file paths, or null on a cache miss.
  */
 async function tryLoadFromCache(
     normalized: NormalizedOptions,
@@ -211,13 +215,13 @@ async function tryLoadFromCache(
 }
 
 /**
- * Persists successfully discovered and verified pathways to cache for future invocations bypassing tree search.
+ * Persists the results of a file scan to the configured cache.
  *
- * @param normalized - Operation configuration settings.
- * @param patterns - Relevant expanded string patterns utilized during discovery.
- * @param files - Computed list of file paths needing persistence.
- * @param isGit - Assures Git directory resolution paths match load counterparts.
- * @param options - Scan config options controlling the target caching interface properties.
+ * @param normalized - The normalized scanner options.
+ * @param patterns - The expanded pattern collection.
+ * @param files - The collection of discovered file paths.
+ * @param isGit - Indicates if the repository is Git-managed.
+ * @param options - The full scan configuration options.
  */
 async function saveToCache(
     normalized: NormalizedOptions,
@@ -291,7 +295,7 @@ function logAndReturnError(phase: string, error: Error): void {
 // ==============================================================================
 
 /**
- * Parsed tsconfig patterns — only the fields relevant to file discovery.
+ * Parsed tsconfig patterns β€” only the fields relevant to file discovery.
  */
 interface TsConfigPatterns {
     readonly include: ReadonlyArray<string>;
@@ -299,17 +303,11 @@ interface TsConfigPatterns {
 }
 
 /**
- * Attempts to read a tsconfig.json and extract `include` / `exclude` arrays.
+ * Extracts inclusion and exclusion patterns from a TypeScript configuration file.
  *
- * TypeScript config files allow JSON with comments and trailing commas, so
- * we strip single-line and block comments before parsing. If the file cannot
- * be read or parsed, we return null and the scan continues without tsconfig
- * narrowing (fail-open behaviour).
- *
- * @param tsConfigPath - Absolute or relative path to tsconfig.json
- * @param rootDir      - Scan root, used to convert absolute tsconfig paths to
- *                       root-relative globs for minimatch compatibility.
- * @returns Parsed patterns or null on error.
+ * @param tsConfigPath - The path to the tsconfig.json file.
+ * @param rootDir - The base directory for relative path resolution.
+ * @returns A promise resolving to the parsed patterns, or null if loading fails.
  */
 async function loadTsConfigPatterns(
     tsConfigPath: string,
@@ -318,7 +316,6 @@ async function loadTsConfigPatterns(
     try {
         const raw = await readFile(tsConfigPath, 'utf-8');
 
-        // Strip single-line and block comments (TypeScript JSON allows them).
         const stripped = raw
             .replace(/\/\/[^\n]*/g, '')
             .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -344,7 +341,6 @@ async function loadTsConfigPatterns(
         if (Array.isArray(config.include)) {
             include.push(...config.include.map(toRootRelative));
         }
-        // tsconfig `files` lists are treated as additional include patterns.
         if (Array.isArray(config.files)) {
             include.push(...config.files.map(toRootRelative));
         }
@@ -360,16 +356,11 @@ async function loadTsConfigPatterns(
 }
 
 /**
- * Merges tsconfig-derived include/exclude patterns into the existing
- * `ExpandedPatterns` object.
+ * Merges patterns derived from a tsconfig into an existing pattern collection.
  *
- * If the tsconfig provides `include` patterns they are added as additional
- * include globs (union semantics). If it provides `exclude` patterns they
- * are added to the ignore list.
- *
- * @param patterns    - Existing expanded patterns from normalizeOptions.
- * @param tsPatterns  - Patterns loaded from the tsconfig.
- * @returns New ExpandedPatterns with tsconfig patterns merged in.
+ * @param patterns - The existing expanded patterns.
+ * @param tsPatterns - The patterns extracted from the tsconfig.
+ * @returns A new object containing the consolidated patterns.
  */
 function mergeTsConfigPatterns(
     patterns: ExpandedPatterns,

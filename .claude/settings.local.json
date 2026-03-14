@@ -78,7 +78,10 @@
       "Bash(__NEW_LINE_7aefa2356ff5f2e9__ find:*)",
       "Bash(xargs grep:*)",
       "Bash(find /c/Users/30694/Desktop/ngcompass_/packages/testing -name vitest* -o -name *.config.*)",
-      "Bash(pnpm vitest:*)"
+      "Bash(pnpm vitest:*)",
+      "Bash(find C:Users30694Desktopngcompass_packagesrulessrcrules -name *.rule.ts)",
+      "Bash(npm run:*)",
+      "Bash(pnpm --filter @ngcompass/rules test)"
     ]
   }
 }

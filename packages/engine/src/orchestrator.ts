@@ -1,14 +1,10 @@
 /**
- * Analysis Orchestrator
+ * @fileoverview
+ * Implements the high-level analysis orchestration pipeline.
  *
- * Executes tasks against rule executors with memoized parsing and I/O.
- * Produces aggregated RuleResult outputs and summary statistics.
- *
- * This module orchestrates the analysis pipeline by delegating to:
- * - analysis-context.ts  (memoized file reads and parsing)
- * - worker-pool.ts       (parallel worker thread execution)
- * - analysis-stats.ts    (aggregate statistics)
- * - runner.ts            (batched single-pass rule execution)
+ * The orchestrator manages the lifecycle of an analysis run, coordinating
+ * task distribution across local threads and worker pools, while managing
+ * analytical state, result aggregation, and caching strategies.
  */
 
 import os from "node:os";
@@ -31,10 +27,8 @@ export type { AnalysisContext } from "./analysis-context.js";
 export { createAnalysisContext } from "./analysis-context.js";
 
 /**
- * Runtime type-guard for cached rule results. (ENGINE-005)
- *
- * Validates every field so a corrupted or schema-mismatched cache entry
- * (e.g. `{ ruleName: 42, failures: "oops" }`) cannot silently pass through.
+ * Structural validator for rule execution results.
+ * Ensures data integrity when processing artifacts from external or cached sources.
  */
 function isRuleResult(value: unknown): value is RuleResult {
     if (!value || typeof value !== 'object') return false;
@@ -53,11 +47,8 @@ function isRuleResult(value: unknown): value is RuleResult {
 }
 
 /**
- * Runtime type-guard for a full AnalysisResult. (ENGINE-010)
- *
- * Used to validate precomputed (globally-cached) results before returning them.
- * A schema version mismatch after a tool upgrade would otherwise silently
- * return corrupted data with no error surfaced.
+ * Structural validator for comprehensive analytical results.
+ * Specifically used to verify current schema compatibility for cached global results.
  */
 function isValidAnalysisResult(value: unknown): value is AnalysisResult {
     if (!value || typeof value !== 'object') return false;
@@ -74,7 +65,7 @@ function isValidAnalysisResult(value: unknown): value is AnalysisResult {
 }
 
 /**
- * Options for running the analysis.
+ * Configuration parameters for the analysis orchestration process.
  */
 export interface AnalysisOptions {
     /** Root directory for resolving file paths */
@@ -102,9 +93,9 @@ export interface AnalysisOptions {
 
 
     /**
-     * Accumulator for infrastructure errors encountered during analysis.
-     * If provided, structured errors are recorded here instead of being
-     * silently swallowed.
+     * Integrates an optional infrastructure error sink.
+     * When provided, operational errors are encapsulated and reported through
+     * this collector instead of triggering terminal exceptions.
      */
     readonly errorCollector?: InfrastructureErrorCollector;
 
@@ -123,24 +114,23 @@ export interface AnalysisOptions {
 }
 
 /**
- * Runs analysis executing a plan.
+ * Primary entry point for executing an analysis plan.
  *
- * Handles both pending tasks (executed via engine) and skipped tasks (retrieved from cache).
+ * Coordinates task execution strategies, manages result caching, and
+ * synthesizes the final analytical report.
  *
- * @param plan - The execution plan to run
- * @param options - Analysis options
- * @returns Aggregated analysis result
+ * @param plan The execution plan containing tasks and cached metadata.
+ * @param options Configuration options for the orchestrator.
+ * @returns A promise resolving to an AnalysisResult encapsulation.
  */
 export const runAnalysis = async (
     plan: ExecutionPlanOutput,
     options: AnalysisOptions
 ): Promise<Result<AnalysisResult>> => {
     try {
-        // 0. Short-circuit: Return cached analysis if available (ENGINE-010: validate schema first)
         if (plan.precomputedAnalysis) {
             if (!isValidAnalysisResult(plan.precomputedAnalysis)) {
                 debug("engine", "Precomputed analysis failed schema validation — discarding stale cache entry and re-running analysis");
-                // Fall through to fresh execution below
             } else {
                 debug("engine", "Returning precomputed analysis from cache (global hash match)");
                 return Ok(plan.precomputedAnalysis);
@@ -150,23 +140,17 @@ export const runAnalysis = async (
         const startTime = performance.now();
         const { tasks, skippedTasks, cachedResults } = plan;
 
-        // RFC §7.3: Resolve effective concurrency — single source of truth
         const cpuCount = os.cpus().length;
         const effectiveMaxWorkers = Math.max(1, Math.min(options.maxWorkers ?? cpuCount, cpuCount));
         const parallelThreshold = options.parallelThreshold ?? 150;
 
-        // CTX-001: tasks that declare either needsTypeChecker OR needsProjectContext
-        // must run on the type-aware (main-thread) path so they receive a
-        // populated TypeChecker and/or ProjectContext.
         const typeAwareTasks = tasks.filter(t => !!t.needsTypeChecker || !!t.needsProjectContext);
         const workerTasks    = tasks.filter(t => !t.needsTypeChecker  && !t.needsProjectContext);
         debug("engine", `workerTasks: ${workerTasks.length}, typeAwareTasks: ${typeAwareTasks.length}`);
         let executedResults: RuleResult[] = [];
 
-        // 1a. Execute Syntax-Only Tasks (Parallel via Workers)
         if (workerTasks.length > 0) {
             if (workerTasks.length > parallelThreshold) {
-                // Worker pool for heavy loads
                 debug("engine", `Running analysis on ${workerTasks.length} syntax-only tasks using workers (max: ${effectiveMaxWorkers})...`);
                 const result = await runAnalysisParallel(workerTasks, options.rootDir, startTime, effectiveMaxWorkers);
                 if (result.ok) {
@@ -175,23 +159,17 @@ export const runAnalysis = async (
                     return result;
                 }
             } else {
-                // Sequential/Local for small loads with batching by file
                 debug("engine", `Running analysis on ${workerTasks.length} syntax-only tasks locally with batching (concurrency: ${effectiveMaxWorkers})...`);
                 executedResults = await executeTasksLocally(workerTasks, options.rootDir, effectiveMaxWorkers, false, options.errorCollector);
             }
         }
 
-        // 1b. Execute Type-Aware Tasks (Sequentially on Main Thread)
         if (typeAwareTasks.length > 0) {
-            debug("engine", `Running analysis on ${typeAwareTasks.length} type-aware tasks sequentially on the main thread...`);
-            // Type-aware tasks cannot be parallelized easily without instantiating ts.Program per worker.
-            // Run them locally with concurrency 1 to avoid massive memory spikes from ts-morph/TS compiler.
-            // CTX-001: Pass `options.files` so the ProjectContext import-graph builder
-            // knows the full set of scanner-discovered project files.
+            debug("engine", `Running analysis on ${typeAwareTasks.length} type-aware tasks on the main thread (concurrency: ${effectiveMaxWorkers})...`);
             const typeAwareResults = await executeTasksLocally(
                 typeAwareTasks,
                 options.rootDir,
-                1,
+                effectiveMaxWorkers,
                 true,
                 options.errorCollector,
                 options.files,
@@ -199,13 +177,10 @@ export const runAnalysis = async (
             executedResults = [...executedResults, ...typeAwareResults];
         }
 
-        // 2. Retrieve Cached Results for Skipped Tasks
         const skippedResults = await retrieveSkippedResults(skippedTasks, cachedResults, options.cache);
 
-        // 3. Aggregate Results
         const successful = [...executedResults, ...skippedResults];
 
-        // ENGINE-012: Compute cache hit rate so CLI consumers can report it.
         const totalTasks = tasks.length + skippedTasks.length;
         const cacheHitRate = totalTasks > 0 ? skippedResults.length / totalTasks : undefined;
 
@@ -215,7 +190,6 @@ export const runAnalysis = async (
             stats: calculateStats(successful, startTime, cacheHitRate),
         };
 
-        // 4. Cache the full analysis result if global hash is present
         if (options.cache && plan.globalHash) {
             debug("engine", "Caching full analysis result for global hash...");
 
@@ -251,10 +225,11 @@ export const runAnalysis = async (
 // ============================================================
 
 /**
- * Executes tasks locally using batched single-pass analysis.
+ * Facilitates local task execution using batched, single-pass analytical patterns.
  *
- * RFC §7.3: concurrency is driven by effectiveMaxWorkers (= clamp(1, config.maxWorkers, CPUs))
- * instead of the previous hardcoded pLimit(4).
+ * Supports a two-phase execution lifecycle:
+ * 1. Warm-up Phase: Initializes shared resources (e.g., TypeScript Programs).
+ * 2. Execution Phase: Processes file batches concurrently against shared artifacts.
  */
 const executeTasksLocally = async (
     tasks: ReadonlyArray<Task>,
@@ -265,12 +240,14 @@ const executeTasksLocally = async (
     /** CTX-001: scanner-discovered files forwarded to ProjectContext builder. */
     files?: ReadonlyArray<string>,
 ): Promise<RuleResult[]> => {
-    // Instantiate appropriate context.
-    // CTX-001: pass `files` to the type-aware context so the import-graph
-    // builder can restrict edges to known project files.
     const context = useTypeAwareContext
         ? createTypeAwareAnalysisContext(rootDir, files ?? [])
         : createAnalysisContext(rootDir);
+
+    if (useTypeAwareContext) {
+        await (context as ReturnType<typeof createTypeAwareAnalysisContext>).warmup();
+        debug("engine", `Phase 1 complete — TypeScript Program ready. Starting Phase 2: ${concurrency} concurrent file batches.`);
+    }
 
     const tasksByFile = groupTasksByFile(tasks);
 
@@ -280,12 +257,16 @@ const executeTasksLocally = async (
     const results = await Promise.all(
         Array.from(tasksByFile.values()).map(fileTasks =>
             limit(async () => {
+                const filePath = fileTasks[0]?.filePath;
                 try {
-                    return await executeBatchedTasks(fileTasks, context);
+                    const batchResults = await executeBatchedTasks(fileTasks, context);
+                    context.evict(filePath);
+                    return batchResults;
                 } catch (e) {
                     const msg = e instanceof Error ? e.message : String(e);
+                    context.evict(filePath);
                     errorCollector?.record(createInfrastructureError('IOError', {
-                        filePath: fileTasks[0]?.filePath,
+                        filePath,
                         cause: `Batch execution failed: ${msg}`,
                         phase: 'engine',
                         recoverable: true,
@@ -300,7 +281,8 @@ const executeTasksLocally = async (
 };
 
 /**
- * Retrieves cached results for skipped tasks.
+ * Retrieves and validates results for tasks identified as skip-candidates.
+ * Leverages both memory-resident and persistent cache providers.
  */
 const retrieveSkippedResults = async (
     skippedTasks: ReadonlyArray<Task>,
@@ -314,7 +296,6 @@ const retrieveSkippedResults = async (
     const skippedResults: RuleResult[] = [];
     const tasksToFetch: Task[] = [];
 
-    // Try pre-loaded cachedResults first
     if (cachedResults) {
         for (const task of skippedTasks) {
             const result = cachedResults.get(task.taskId);
@@ -328,7 +309,6 @@ const retrieveSkippedResults = async (
         tasksToFetch.push(...skippedTasks);
     }
 
-    // Fetch remaining from cache service
     if (tasksToFetch.length > 0 && cache) {
         debug("engine", `Fetching ${tasksToFetch.length} results from cache service...`);
         const taskIds = tasksToFetch.map(t => t.taskId);

@@ -1,8 +1,9 @@
 /**
- * Glob Execution
+ * @fileoverview
+ * Facilitates asynchronous file discovery using glob pattern evaluation.
  *
- * Isolated side effect: File system I/O
- * Uses Result type for error handling (no exceptions)
+ * Implements a result-oriented execution wrapper around the underlying glob
+ * engine, ensuring consistent error handling and absolute path resolution.
  */
 
 import { glob } from 'tinyglobby';
@@ -10,15 +11,12 @@ import type { ExpandedPatterns, RawFileList, Result } from './types.js';
 import { Ok, Err } from './types.js';
 
 /**
- * Executes glob to discover files matching patterns.
+ * Executes a glob operation to discover files satisfying the specified patterns.
  *
- * Side effect: File system I/O
- * Error handling: Returns Result type (no exceptions thrown)
- *
- * @param patterns - Expanded glob patterns
- * @param rootDir - Root directory for scanning
- * @param options - Glob execution options
- * @returns Result containing file list or error
+ * @param patterns - A collection of inclusion and exclusion glob patterns.
+ * @param rootDir - The base directory for the scan operation.
+ * @param options - Configuration parameters for glob execution.
+ * @returns A promise resolving to a Result containing the discovered file paths.
  */
 export const executeGlob = async (
     patterns: ExpandedPatterns,
@@ -42,12 +40,13 @@ export const executeGlob = async (
 };
 
 /**
- * Checks if glob patterns will likely match files.
+ * Determines if a collection of glob patterns is likely to produce matches.
  *
- * Pure function - analyzes patterns without executing glob.
+ * Performs a static analysis of the provided patterns to identify configurations
+ * that are inherently empty or exclusively exclusionary.
  *
- * @param patterns - Patterns to analyze
- * @returns True if patterns look reasonable
+ * @param patterns - The pattern collection to analyze.
+ * @returns True if the patterns are structurally valid for matching.
  */
 export const patternsLikelyHaveMatches = (patterns: ExpandedPatterns): boolean => {
     if (patterns.include.length === 0) return false;
