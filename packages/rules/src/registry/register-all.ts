@@ -69,7 +69,6 @@ export function registerAllBuiltinRules() {
 
     // Reactivity — RxJS patterns, signal reactivity, observable lifecycle
     registerNewEngineRule(rxjsNoSubscribeInComponentRule);
-    registerNewEngineRule(rxjsNoNestedSubscribeRule);
     registerNewEngineRule(rxjsRequireTakeUntilDestroyedRule);
     registerNewEngineRule(rxjsAvoidBehaviorSubjectRule);
     registerNewEngineRule(rxjsAvoidSubjectRule);

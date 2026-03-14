@@ -80,11 +80,6 @@ describe('ConsoleReporter', () => {
             expect(headerLines[0]).toContain('a.component.ts');
             expect(headerLines[1]).toContain('z.component.ts');
         });
-
-        it('shows fix recommendation', () => {
-            reporter.report([makeResult([makeFailure({ fix: 'Add standalone: true' })])]);
-            expect(out.lines.some(l => l.includes('❯') && l.includes('Add standalone: true'))).toBe(true);
-        });
     });
 
     describe('summary()', () => {

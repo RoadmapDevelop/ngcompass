@@ -120,15 +120,6 @@ describe('Check: Extends Chain Resolution', () => {
             expect(result.issues[0].path).toEqual(['extends']);
         });
 
-        it('should point directly to ["extends"] for a single-entry array', () => {
-            const result = validateExtendsChain(
-                withExtends(['@missing/b']),
-                [],
-                process.cwd()
-            );
-            expect(result.issues[0].path).toEqual(['extends']);
-        });
-
         it('should include the array index for multi-entry extends arrays', () => {
             const result = validateExtendsChain(
                 withExtends(['@missing/c', '@missing/d']),

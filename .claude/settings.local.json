@@ -76,7 +76,9 @@
       "Bash(find /c/Users/30694/Desktop/ngcompass_/packages/rules/src/rules -name \"*.ts\" -exec sed -i \"s|from ''''\\\\.\\\\./recommendations''''|from ''''../../recommendations''''|g\" {})",
       "Bash(-exec sed:*)",
       "Bash(__NEW_LINE_7aefa2356ff5f2e9__ find:*)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(find /c/Users/30694/Desktop/ngcompass_/packages/testing -name vitest* -o -name *.config.*)",
+      "Bash(pnpm vitest:*)"
     ]
   }
 }

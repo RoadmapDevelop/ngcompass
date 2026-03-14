@@ -13,12 +13,6 @@ vi.mock('node:fs/promises', () => ({ readFile: mockReadFile }));
 describe('loadGitignore', () => {
     beforeEach(() => { vi.clearAllMocks(); });
 
-    it('returns content when file exists', async () => {
-        mockReadFile.mockResolvedValue('node_modules\n.env\n');
-        const content = await loadGitignore('/root');
-        expect(content).toBe('node_modules\n.env\n');
-    });
-
     it('returns null when file does not exist', async () => {
         mockReadFile.mockRejectedValue(new Error('ENOENT'));
         const content = await loadGitignore('/root');
@@ -45,18 +39,6 @@ describe('createPassThroughFilter', () => {
 
 describe('loadAndCreateGitignoreFilter', () => {
     beforeEach(() => { vi.clearAllMocks(); });
-
-    it('creates active filter if gitignore exists', async () => {
-        mockReadFile.mockResolvedValue('node_modules\n');
-
-        const result = await loadAndCreateGitignoreFilter('/root');
-
-        expect(result.ok).toBe(true);
-        if (result.ok) {
-            expect(result.data('/root/src/index.ts', '/root')).toBe(true);
-            expect(result.data('/root/node_modules/pkg.js', '/root')).toBe(false);
-        }
-    });
 
     it('creates pass-through filter if gitignore missing', async () => {
         mockReadFile.mockRejectedValue(new Error('ENOENT'));

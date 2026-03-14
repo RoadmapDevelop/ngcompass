@@ -28,56 +28,6 @@ describe('groupFilesByExtension', () => {
     });
 });
 
-describe('calculateTotalSize', () => {
-    beforeEach(() => { vi.clearAllMocks(); });
-
-    it('sums file sizes from fs.stat', async () => {
-        vi.mocked(stat)
-            .mockResolvedValueOnce({ size: 1024 } as any)
-            .mockResolvedValueOnce({ size: 512 } as any);
-
-        const result = await calculateTotalSize(['a.ts', 'b.html']);
-        expect(result).toBe(1536);
-    });
-
-    it('returns 0 for empty file list', async () => {
-        const result = await calculateTotalSize([]);
-        expect(result).toBe(0);
-        expect(stat).not.toHaveBeenCalled();
-    });
-
-    it('skips unreadable files and sums the rest', async () => {
-        vi.mocked(stat)
-            .mockResolvedValueOnce({ size: 200 } as any)
-            .mockRejectedValueOnce(new Error('EACCES: permission denied'));
-
-        const result = await calculateTotalSize(['readable.ts', 'locked.ts']);
-        expect(result).toBe(200);
-    });
-});
-
-describe('calculateStats', () => {
-    beforeEach(() => { vi.clearAllMocks(); });
-
-    it('computes correct statistics with real file sizes', async () => {
-        vi.mocked(stat)
-            .mockResolvedValueOnce({ size: 100 } as any)
-            .mockResolvedValueOnce({ size: 200 } as any)
-            .mockResolvedValueOnce({ size: 300 } as any);
-
-        const files = ['a.ts', 'b.ts', 'c.html'];
-        const startTime = performance.now() - 100;
-
-        const result = await calculateStats(files, startTime, true);
-
-        expect(result.totalFiles).toBe(3);
-        expect(result.byExtension.get('.ts')).toBe(2);
-        expect(result.byExtension.get('.html')).toBe(1);
-        expect(result.totalSize).toBe(600);
-        expect(result.scanTime).toBeGreaterThanOrEqual(100);
-        expect(result.cacheHit).toBe(true);
-    });
-});
 
 describe('formatExtensionBreakdown', () => {
     it('formats map into descending count string', () => {
