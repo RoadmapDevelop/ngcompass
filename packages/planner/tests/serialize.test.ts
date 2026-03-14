@@ -8,7 +8,7 @@ import type { ExecutionPlanOutput, Task, RuleTask, FileAnalysisUnit } from '../s
 
 const makeRuleTask = (ruleName: string, overrides: Partial<RuleTask> = {}): RuleTask => ({
     ruleName,
-    severity: 'moderate',
+    severity: 'error',
     options: { maxDepth: 3 },
     cacheKey: `cache-${ruleName}`,
     inputs: {
@@ -22,7 +22,7 @@ const makeTask = (ruleName: string, overrides: Partial<Task> = {}): Task => ({
     taskId: `cache-${ruleName}`,
     ruleName,
     filePath: '/src/app.component.ts',
-    severity: 'moderate',
+    severity: 'error',
     options: { maxDepth: 3 },
     inputs: {
         typescript: { path: '/src/app.component.ts', hash: 'ts-hash', needsAst: true },
@@ -41,9 +41,9 @@ const makeOutput = (tasks: Task[], units: Record<string, FileAnalysisUnit>): Exe
         filesNeedingTypeChecker: [],
         tasksByFile: {},
         tasksByRule: {},
-        tasksBySeverityLevel: { off: [], low: [], moderate: [], high: [], critical: [], info: [], warning: [], error: [], hint: [] },
-        filesByType: { component: [], directive: [], pipe: [], service: [], module: [], guard: [], logic: [], template: [], style: [], config: [] },
-        tasksBySeverity: { off: 0, low: 0, moderate: 0, high: 0, critical: 0, info: 0, warning: 0, error: 0, hint: 0 },
+        tasksBySeverityLevel: { off: [], warn: [], error: [] },
+        filesByType: { component: [], directive: [], pipe: [], service: [], module: [], guard: [], logic: [], template: [], style: [], config: [], unknown: [] },
+        tasksBySeverity: { off: 0, warn: 0, error: 0 },
         stats: { totalFiles: 1, totalTasks: 1, avgTasksPerFile: 1, filesWithTemplates: 0, filesWithStyles: 0, filesWithSpecs: 0 },
     },
     skippedTasks: [],

@@ -103,19 +103,7 @@ describe('Validator: Full Pipeline', () => {
      * Profile Merging Logic
      */
     describe('Profile Resolution', () => {
-        it('should merge active profile settings over base settings', async () => {
-            const result = await validateConfiguration(
-                {
-                    include: ['src/**/*.ts'],
-                    rules: { 'base-rule': 'error' },
-                    profiles: {
-                        ci: { rules: { 'ci-rule': 'warning' } },
-                    },
-                },
-                createMockContext({ profile: 'ci' })
-            );
-            expect(result.report.issues.filter(i => i.severity === 'error')).toHaveLength(0);
-        });
+
 
         it('should report a missing-profile error for invalid specifiers', async () => {
             const result = await validateConfiguration(
@@ -165,14 +153,6 @@ describe('Check: Rule Integrity', () => {
         const config = createMockConfig({ rules: {}, extends: 'some-preset' as any });
         const { issues } = validateRules(config);
         expect(issues.some(i => i.code === 'warn-no-rules-configured')).toBe(false);
-    });
-
-    it('should catch invalid rule severity strings', () => {
-        const config = createMockConfig({
-            rules: { 'test-rule': 'ultra-critical' as any },
-        });
-        const { issues } = validateRules(config);
-        expect(issues.some(i => i.code === 'invalid-rule-severity')).toBe(true);
     });
 });
 

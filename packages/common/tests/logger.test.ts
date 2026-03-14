@@ -16,7 +16,7 @@ describe('Logger Module', () => {
     beforeEach(() => {
         // Reset logger state
         disableDebug();
-        consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => { });
+        consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => { });
     });
 
     afterEach(() => {
@@ -84,7 +84,7 @@ describe('Logger Module', () => {
 
             expect(consoleSpy).toHaveBeenCalled();
             const call = consoleSpy.mock.calls[0];
-            expect(call[0]).toContain('[scanner]');
+            expect(call[0]).toContain('[ngcompass:scanner]');
             expect(call[0]).toContain('Test message');
         });
 
@@ -134,7 +134,7 @@ describe('Logger Module', () => {
             debug('scanner', 'Finding files');
 
             const call = consoleSpy.mock.calls[0][0];
-            expect(call).toMatch(/\[scanner\]/);
+            expect(call).toMatch(/\[ngcompass:scanner\]/);
             expect(call).toContain('Finding files');
         });
     });

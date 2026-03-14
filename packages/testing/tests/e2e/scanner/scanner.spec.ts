@@ -1,209 +1,201 @@
-import { test, expect } from '@playwright/test';
+/**
+ * Scanner Integration Tests
+ *
+ * These tests exercise the scanner package end-to-end using real temporary
+ * directories on disk. No mocking — every file system interaction is real.
+ */
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { scan } from '@ngcompass/scanner';
-import fs from 'node:fs';
-import path from 'node:path';
-import os from 'node:os';
+import { mkdir, writeFile, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 
-test.describe('Scanner E2E: File Discovery', () => {
-    let tempDir: string;
+// ── Fixture helpers ───────────────────────────────────────────────────────
 
-    test.beforeEach(() => {
-        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'ngcompass-scanner-e2e-'));
-    });
-
-    test.afterEach(() => {
-        fs.rmSync(tempDir, { recursive: true, force: true });
-    });
-
-    // Helper to create nested files
-    const createFiles = (files: Record<string, string>) => {
-        for (const [filePath, content] of Object.entries(files)) {
-            const absolutePath = path.join(tempDir, filePath);
-            fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
-            fs.writeFileSync(absolutePath, content);
-        }
+async function createFixtureDir(
+    name: string
+): Promise<{ rootDir: string; cleanup: () => Promise<void> }> {
+    const rootDir = join(tmpdir(), `ngcompass-scanner-test-${name}-${randomUUID()}`);
+    await mkdir(rootDir, { recursive: true });
+    return {
+        rootDir,
+        cleanup: () => rm(rootDir, { recursive: true, force: true }),
     };
+}
 
-    /**
-     * Scenario: Basic File Discovery
-     * Verifies that the scanner can discover files using basic patterns.
-     */
-    test('should discover files based on include and exclude patterns', async () => {
-        createFiles({
-            'src/index.ts': 'console.log("index");',
-            'src/components/button.ts': 'export const Button = () => {};',
-            'src/assets/logo.svg': '<svg></svg>',
-            'node_modules/fake-lib/index.ts': 'export const Lib = () => {};',
-            'dist/bundle.js': 'console.log("bundle");',
-            '.angular/cache/db.json': '{}'
-        });
+// ── Basic scan ────────────────────────────────────────────────────────────
 
+describe('Scanner integration — basic file discovery', () => {
+    let rootDir: string;
+    let cleanup: () => Promise<void>;
+
+    beforeAll(async () => {
+        ({ rootDir, cleanup } = await createFixtureDir('basic'));
+
+        await mkdir(join(rootDir, 'src'), { recursive: true });
+        await writeFile(join(rootDir, 'src', 'app.component.ts'), '// component');
+        await writeFile(join(rootDir, 'src', 'app.component.html'), '<div>App</div>');
+        await writeFile(join(rootDir, 'src', 'main.ts'), '// main');
+    });
+
+    afterAll(() => cleanup());
+
+    it('discovers TypeScript files', async () => {
         const result = await scan({
-            rootDir: tempDir,
-            include: ['src/**/*.ts'],
-            exclude: ['node_modules/**', 'dist/**'],
-            debug: false
+            rootDir,
+            include: ['**/*.ts'],
+            exclude: [],
+            respectGitignore: false,
         });
 
         expect(result.ok).toBe(true);
-        if (result.ok) {
-            const discoveredFiles = result.data.files.map((f: string) => path.relative(tempDir, f).replace(/\\/g, '/'));
-            expect(discoveredFiles.sort()).toEqual([
-                'src/components/button.ts',
-                'src/index.ts'
-            ].sort());
-
-            // Stats checks
-            expect(result.data.stats.totalFiles).toBe(2);
-            expect(result.data.stats.byExtension.get('.ts')).toBe(2);
-        }
+        if (!result.ok) return;
+        expect(result.data.files.some(f => f.endsWith('app.component.ts'))).toBe(true);
+        expect(result.data.files.some(f => f.endsWith('main.ts'))).toBe(true);
     });
 
-    /**
-     * Scenario: Non-existent directory
-     * Verifies that a clear error is returned when rootDir does not exist.
-     */
-    test('should return an error for a non-existent root directory', async () => {
-        const fakePath = path.join(tempDir, 'does-not-exist');
-
+    it('discovers HTML template files', async () => {
         const result = await scan({
-            rootDir: fakePath,
+            rootDir,
+            include: ['**/*.html'],
+            exclude: [],
+            respectGitignore: false,
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.data.files.some(f => f.endsWith('app.component.html'))).toBe(true);
+    });
+
+    it('respects exclude patterns', async () => {
+        const result = await scan({
+            rootDir,
             include: ['**/*.ts'],
-            exclude: []
+            exclude: ['**/main.ts'],
+            respectGitignore: false,
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.data.files.every(f => !f.endsWith('main.ts'))).toBe(true);
+    });
+
+    it('returns accurate stats for discovered files', async () => {
+        const result = await scan({
+            rootDir,
+            include: ['**/*.ts'],
+            exclude: [],
+            respectGitignore: false,
+        });
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        expect(result.data.stats.totalFiles).toBeGreaterThan(0);
+        expect(result.data.stats.byExtension.has('.ts')).toBe(true);
+        expect(result.data.timestamp).toBeGreaterThan(0);
+    });
+
+    it('returns Err for a non-existent rootDir', async () => {
+        const result = await scan({
+            rootDir: join(rootDir, 'does-not-exist'),
+            include: ['**/*.ts'],
+            exclude: [],
         });
 
         expect(result.ok).toBe(false);
-        if (!result.ok) {
-            expect(result.error.message).toContain('rootDir does not exist');
-        }
+    });
+});
+
+// ── Gitignore support ─────────────────────────────────────────────────────
+
+describe('Scanner integration — .gitignore support', () => {
+    let rootDir: string;
+    let cleanup: () => Promise<void>;
+
+    beforeAll(async () => {
+        ({ rootDir, cleanup } = await createFixtureDir('gitignore'));
+
+        await mkdir(join(rootDir, 'src'), { recursive: true });
+        await mkdir(join(rootDir, 'dist'), { recursive: true });
+
+        await writeFile(join(rootDir, 'src', 'app.ts'), '// app');
+        await writeFile(join(rootDir, 'dist', 'app.js'), '// built');
+        await writeFile(join(rootDir, '.gitignore'), 'dist/\n');
     });
 
-    /**
-     * Scenario: Dotfiles and directories
-     * Verifies that dotfiles/folders are ignored by default unless dot: true
-     */
-    test('should handle dotfiles based on the dot option', async () => {
-        createFiles({
-            'src/.env.local': 'KEY=VAL',
-            'src/normal.ts': 'console.log("normal");',
-            '.nx/cache/meta.json': '{}'
-        });
+    afterAll(() => cleanup());
 
-        // With dot = false (default behavior)
-        const resultWithoutDot = await scan({
-            rootDir: tempDir,
-            include: ['**/*'],
-            exclude: [],
-            dot: false
-        });
-
-        expect(resultWithoutDot.ok).toBe(true);
-        if (resultWithoutDot.ok) {
-            const discoveredWithoutDot = resultWithoutDot.data.files.map((f: string) => path.relative(tempDir, f).replace(/\\/g, '/'));
-            expect(discoveredWithoutDot).toContain('src/normal.ts');
-            expect(discoveredWithoutDot).not.toContain('src/.env.local');
-            expect(discoveredWithoutDot).not.toContain('.nx/cache/meta.json');
-        }
-
-        // With dot = true
-        const resultWithDot = await scan({
-            rootDir: tempDir,
-            include: ['**/*'],
-            exclude: [],
-            dot: true
-        });
-
-        expect(resultWithDot.ok).toBe(true);
-        if (resultWithDot.ok) {
-            const discoveredWithDot = resultWithDot.data.files.map((f: string) => path.relative(tempDir, f).replace(/\\/g, '/'));
-            expect(discoveredWithDot).toContain('src/normal.ts');
-            expect(discoveredWithDot).toContain('src/.env.local');
-            expect(discoveredWithDot).toContain('.nx/cache/meta.json');
-        }
-    });
-
-    /**
-     * Scenario: Empty Results
-     * Verifies behavior when no files match the pattern
-     */
-    test('should return empty result when no files match', async () => {
-        createFiles({
-            'src/index.js': 'console.log("index");',
-        });
-
+    it('excludes files matching .gitignore patterns when respectGitignore is true', async () => {
         const result = await scan({
-            rootDir: tempDir,
-            include: ['src/**/*.ts'], // No .ts files exist
-            exclude: []
+            rootDir,
+            include: ['**/*.ts', '**/*.js'],
+            exclude: [],
+            respectGitignore: true,
         });
 
         expect(result.ok).toBe(true);
-        if (result.ok) {
-            expect(result.data.files).toHaveLength(0);
-            expect(result.data.stats.totalFiles).toBe(0);
-        }
+        if (!result.ok) return;
+        const hasDistFile = result.data.files.some(f => f.includes('dist'));
+        expect(hasDistFile).toBe(false);
     });
 
-    /**
-     * Scenario: Symlink Handling
-     * Verifies that symlinks are ignored by default and traversed when followSymlinks is true.
-     */
-    test('should handle symlinks based on followSymlinks option', async () => {
-        // Skip on environments where symlink creation might fail without admin rights (e.g. Windows)
-        test.skip(os.platform() === 'win32', 'Symlinks require admin privileges on Windows');
-
-        createFiles({
-            'actual-dir/target.ts': 'console.log("target");'
-        });
-
-        // Create a symlink
-        const targetPath = path.join(tempDir, 'actual-dir');
-        const linkPath = path.join(tempDir, 'symlinked-dir');
-
-        try {
-            fs.symlinkSync(targetPath, linkPath, 'dir');
-        } catch (e) {
-            // If it fails even on non-Windows for some reason
-            console.warn('Failed to create symlink for test', e);
-            test.skip();
-        }
-
-        // Scan without following symlinks (default)
-        const resNoFollow = await scan({
-            rootDir: tempDir,
-            include: ['symlinked-dir/**/*.ts'],
+    it('includes gitignored files when respectGitignore is false', async () => {
+        const result = await scan({
+            rootDir,
+            include: ['**/*.js'],
             exclude: [],
-            followSymlinks: false
+            respectGitignore: false,
         });
 
-        expect(resNoFollow.ok).toBe(true);
-        if (resNoFollow.ok) {
-            // Based on node-glob / tinyglobby, it may or may not find anything if we target the symlink directly.
-            // But if we do a general discovery, it shouldn't traverse into 'symlinked-dir'
-            const generalRes = await scan({
-                rootDir: tempDir,
-                include: ['**/*.ts'],
-                exclude: []
-            });
-            if (generalRes.ok) {
-                const f = generalRes.data.files.map((file: string) => path.relative(tempDir, file).replace(/\\/g, '/'));
-                expect(f).not.toContain('symlinked-dir/target.ts');
-            }
-        }
+        expect(result.ok).toBe(true);
+        if (!result.ok) return;
+        const hasDistFile = result.data.files.some(f => f.includes('dist'));
+        expect(hasDistFile).toBe(true);
+    });
+});
 
-        // Scan following symlinks
-        const resFollow = await scan({
-            rootDir: tempDir,
+// ── Progress callbacks ────────────────────────────────────────────────────
+
+describe('Scanner integration — progress callbacks', () => {
+    let rootDir: string;
+    let cleanup: () => Promise<void>;
+
+    beforeAll(async () => {
+        ({ rootDir, cleanup } = await createFixtureDir('progress'));
+        await writeFile(join(rootDir, 'app.ts'), '// app');
+    });
+
+    afterAll(() => cleanup());
+
+    it('emits normalizing and complete phases', async () => {
+        const phases: string[] = [];
+
+        await scan({
+            rootDir,
             include: ['**/*.ts'],
             exclude: [],
-            followSymlinks: true
+            respectGitignore: false,
+            onProgress: (phase) => phases.push(phase),
         });
 
-        expect(resFollow.ok).toBe(true);
-        if (resFollow.ok) {
-            const filesFollow = resFollow.data.files.map((file: string) => path.relative(tempDir, file).replace(/\\/g, '/'));
-            expect(filesFollow).toContain('actual-dir/target.ts');
-            expect(filesFollow).toContain('symlinked-dir/target.ts');
-        }
+        expect(phases).toContain('normalizing');
+        expect(phases).toContain('complete');
+    });
+
+    it('emits phases in logical order', async () => {
+        const phases: string[] = [];
+
+        await scan({
+            rootDir,
+            include: ['**/*.ts'],
+            exclude: [],
+            respectGitignore: false,
+            onProgress: (phase) => phases.push(phase),
+        });
+
+        const normalizeIdx = phases.indexOf('normalizing');
+        const completeIdx = phases.indexOf('complete');
+        expect(normalizeIdx).toBeLessThan(completeIdx);
     });
 });

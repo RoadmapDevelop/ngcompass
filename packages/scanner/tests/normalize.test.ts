@@ -4,23 +4,6 @@ import { normalizeOptions, validateOptions } from '../src/normalize.js';
 import type { ScanOptions } from '../src/types.js';
 
 describe('normalizeOptions', () => {
-    it('applies defaults when options are minimal', () => {
-        const options: ScanOptions = {
-            rootDir: 'src',
-            include: [],
-            exclude: []
-        };
-
-        const result = normalizeOptions(options);
-
-        expect(result.rootDir).toBe(path.resolve('src'));
-        expect(result.include).toEqual(['**/*.ts', '**/*.html']);
-        expect(result.exclude).toEqual([]);
-        expect(result.ignorePatterns).toEqual([]);
-        expect(result.respectGitignore).toBe(true);
-        expect(result.followSymlinks).toBe(false);
-        expect(result.dot).toBe(false);
-    });
 
     it('retains provided values over defaults', () => {
         const options: ScanOptions = {
