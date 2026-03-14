@@ -1,22 +1,38 @@
 /**
- * Analysis Context
+ * @fileoverview
+ * Provides the AnalysisContext abstraction for ngcompass.
  *
- * Memoized, deterministic accessors for file content and parser artifacts.
- * Extracted from orchestrator.ts for reuse by both the main thread and worker threads.
+ * This module facilitates deterministic, memoized access to file system resources
+ * and abstract syntax tree (AST) artifacts, ensuring peak performance during
+ * analysis by minimizing redundant I/O and parsing operations.
+ *
+ * Implementation Strategy:
+ * - Memoization: Caches raw file content, TypeScript Programs, Template ASTs, and Style ASTs.
+ * - Resource Management: Implements an explicit eviction mechanism to control heap usage.
+ * - Determinism: Ensures the same file path always yields consistent artifacts across a run.
  */
 
 import { readFile } from "node:fs/promises";
 import * as path from "node:path";
+import { LRUCache } from "lru-cache";
 import { parseTs, parseHtml, parseCss, extractTemplateFromProgram } from "@ngcompass/ast";
 import type { TemplateAst, StyleAst } from "@ngcompass/common";
 import type { Program } from "oxc-parser";
 
-/** CSS / SCSS file extensions that `parseCss` can handle via Lightning CSS. */
+/**
+ * Supported style sheet extensions for CSS/SCSS analysis.
+ */
 const CSS_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.less']);
 
+/**
+ * The maximum capacity for the Least Recently Used (LRU) file cache.
+ * Configured to balance memory footprint and I/O efficiency.
+ */
+const FILE_CACHE_MAX = 128;
 
 /**
- * Memoized, deterministic accessors for file and parser artifacts.
+ * Encapsulates the state and logic required for analyzing a set of source files.
+ * Provides unified access to file content and parsed metadata with internal memoization.
  */
 export interface AnalysisContext {
     readonly rootDir: string;
@@ -24,22 +40,30 @@ export interface AnalysisContext {
     readonly getProgram: (filePath: string) => Promise<Program>;
     readonly getTemplate: (filePath: string) => Promise<TemplateAst | undefined>;
     readonly getStyle: (filePath: string) => Promise<StyleAst | undefined>;
+    /**
+     * Purges all cached artifacts associated with the specified file path.
+     *
+     * This method is critical for memory governance in large-scale repositories.
+     * It should be invoked immediately upon completion of a file's analysis tasks
+     * to release references to raw strings and AST structures, enabling garbage
+     * collection.
+     *
+     * @param filePath The path of the file to evict from internal caches.
+     */
+    readonly evict: (filePath: string) => void;
 }
 
 /**
- * Creates an analysis context with memoized file reads and parsing.
+ * Instantiates an AnalysisContext provider with integrated memoization logic.
  *
- * Each cache key is the file path; once a file is read or parsed, the result
- * is reused for all subsequent requests within the same analysis run.
- *
- * @param rootDir - Root directory for resolving file paths
- * @returns AnalysisContext
+ * @param rootDir The base directory used to resolve relative file transitions.
+ * @returns A stateful AnalysisContext instance.
  */
 export const createAnalysisContext = (rootDir: string): AnalysisContext => {
-    const fileCache = new Map<string, Promise<string>>();
-    const programCache = new Map<string, Promise<Program>>();
+    const fileCache = new LRUCache<string, Promise<string>>({ max: FILE_CACHE_MAX });
+    const programCache  = new Map<string, Promise<Program>>();
     const templateCache = new Map<string, Promise<TemplateAst | undefined>>();
-    const styleCache = new Map<string, Promise<StyleAst | undefined>>();
+    const styleCache    = new Map<string, Promise<StyleAst | undefined>>();
 
     const readFileCached = (filePath: string): Promise<string> => {
         const cached = fileCache.get(filePath);
@@ -70,8 +94,6 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
         const promise = (async () => {
             const extracted = await resolveTemplateContent(filePath, readFileCached, getProgram);
             if (!extracted || !extracted.content) return undefined;
-            // Pass templateStartOffset so rules can convert template-relative
-            // offsets to file-absolute offsets for correct line/column reporting.
             return parseHtml(extracted.content, extracted.startOffset);
         })();
 
@@ -85,18 +107,14 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
 
         const ext = path.extname(filePath).toLowerCase();
         if (!CSS_EXTENSIONS.has(ext)) {
-            // Non-CSS file (e.g. a .ts component with inline styles):
-            // style analysis is not yet supported for inline extraction.
             const promise = Promise.resolve<StyleAst | undefined>(undefined);
             styleCache.set(filePath, promise);
             return promise;
         }
 
-        // ENGINE-003: Wire @ngcompass/ast's parseCss for real style analysis.
         const promise = (async (): Promise<StyleAst | undefined> => {
             const content = await readFileCached(filePath);
             const result = parseCss(content, filePath);
-            // CssResult already matches the StyleAst interface shape.
             return result as StyleAst;
         })();
 
@@ -104,20 +122,26 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
         return promise;
     };
 
-    return { rootDir, readFile: readFileCached, getProgram, getTemplate, getStyle };
+    const evict = (filePath: string): void => {
+        fileCache.delete(filePath);
+        programCache.delete(filePath);
+        templateCache.delete(filePath);
+        styleCache.delete(filePath);
+    };
+
+    return { rootDir, readFile: readFileCached, getProgram, getTemplate, getStyle, evict };
 };
 
 /**
- * Reads a file relative to rootDir, throwing on any I/O failure.
+ * Performs a sanitized file system read operation.
  *
- * ENGINE-004: Previously swallowed errors and returned `''`, causing rules
- * to silently analyse an empty string (false negative). Now re-throws so the
- * `InfrastructureErrorCollector` in the batch runner can surface the error.
+ * Handles relative-to-root path resolution and provides structured error
+ * reporting in the event of I/O failures.
  *
- * @param rootDir  - Root directory
- * @param filePath - File path (relative or absolute)
- * @returns File contents
- * @throws Error if the file cannot be read (e.g. permissions, deleted mid-scan)
+ * @param rootDir The project root directory.
+ * @param filePath The path of the target file.
+ * @returns A promise resolving to the file contents in UTF-8.
+ * @throws Error signaling I/O failure or accessibility issues.
  */
 const readFileSafe = async (rootDir: string, filePath: string): Promise<string> => {
     try {
@@ -136,22 +160,16 @@ interface ResolvedTemplate {
 }
 
 /**
- * Resolves template content and its position from either an HTML file or an
- * inline template in a TypeScript file.
+ * Disambiguates and retrieves template content from various source formats.
  *
- * For external `.html` files `startOffset` is always `0` — the HTML file IS
- * the template, so its parser offsets are already file-absolute.
+ * Supports both external HTML templates and inline templates embedded within
+ * TypeScript decorators. Correctly identifies the start offset for accurate
+ * positional mapping of findings.
  *
- * For inline templates inside `.ts` files `startOffset` is the byte position
- * of the first content character in the TypeScript source (after the opening
- * quote or backtick). This value is forwarded into `parseHtml()` so the
- * resulting `HtmlParserResult.templateStartOffset` can be used by template
- * rules to report accurate line/column numbers.
- *
- * @param filePath       - Template path or TS path
- * @param readFileCached - Memoized file read
- * @param getProgram     - Memoized program parse
- * @returns Resolved template or null if not applicable
+ * @param filePath The file path containing the template reference.
+ * @param readFileCached Memoized file loading provider.
+ * @param getProgram Memoized AST program provider.
+ * @returns A ResolvedTemplate structure or null if no template is identified.
  */
 const resolveTemplateContent = async (
     filePath: string,
@@ -161,7 +179,6 @@ const resolveTemplateContent = async (
     const ext = path.extname(filePath);
 
     if (ext === ".html") {
-        // External template — offsets are file-absolute, startOffset = 0
         const content = await readFileCached(filePath);
         return { content, startOffset: 0 };
     }
@@ -169,8 +186,6 @@ const resolveTemplateContent = async (
     if (ext === ".ts") {
         const program = await getProgram(filePath);
         const extracted = extractTemplateFromProgram(program);
-        // extractTemplateFromProgram returns { content, startOffset } where
-        // startOffset is the byte position in the .ts file after the opening quote.
         return extracted.content ? extracted : null;
     }
 

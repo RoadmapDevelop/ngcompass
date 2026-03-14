@@ -13,20 +13,12 @@ import pLimit from "p-limit";
 import { Spinner } from "./spinner.js";
 
 /**
- * Runs analysis in parallel across worker threads.
+ * @fileoverview
+ * Manages parallel analysis execution utilizing worker thread pools.
  *
- * Falls back to local concurrent execution if the worker script is not found.
- *
- * @param tasks - Tasks to execute
- * @param rootDir - Root directory for resolving paths
- * @param startTime - Start timestamp for stats
- * @param maxWorkers - RFC §7.3: Caller-supplied effective worker count.
- *   Already clamped to [1, CPUs] by the orchestrator.
- *   Defaults to max(2, CPUs) for backward compatibility when called directly.
- * @param concurrency - Concurrency limit for the local fallback path.
- *   Defaults to 4 when not supplied; callers should pass maxWorkers so the
- *   fallback respects the configured worker limit.
- * @returns Aggregated analysis result
+ * Coordinates the distribution of analytical tasks across multiple workers to
+ * maximize CPU utilization. Provides a resilient fallback to local concurrent
+ * execution if worker resources are unavailable.
  */
 export const runAnalysisParallel = async (
     tasks: ReadonlyArray<Task>,
@@ -37,7 +29,6 @@ export const runAnalysisParallel = async (
 ): Promise<Result<AnalysisResult>> => {
     const { Worker } = await import("node:worker_threads");
 
-    // Use caller-supplied value (already clamped); fall back to MIN_WORKER_COUNT
     const workerCount = maxWorkers ?? Math.max(MIN_WORKER_COUNT, os.cpus().length);
     const workerPath = await resolveWorkerPath();
 
@@ -46,15 +37,11 @@ export const runAnalysisParallel = async (
         return runLocalFallback(tasks, rootDir, startTime, concurrency ?? workerCount);
     }
 
-    // Distribute tasks to workers (grouping by file)
     const chunks = distributeTasks(tasks, workerCount);
 
-    // Start spinner
     const spinner = new Spinner();
     spinner.start(`Analyzing ${tasks.length} tasks across ${workerCount} workers...`);
 
-    // `completedWorkers` is mutated only from Promise microtask callbacks which are
-    // serialized on the JS event loop — no concurrent mutation is possible.
     let completedWorkers = 0;
     const updateSpinner = () => {
         completedWorkers++;
@@ -62,11 +49,8 @@ export const runAnalysisParallel = async (
         spinner.start(`Analyzing ${tasks.length} tasks across ${workerCount} workers... (${completedWorkers}/${workerCount} complete)`);
     };
 
-    // Dispatch to workers
     const promises = chunks.map((chunk) => {
         return new Promise<RuleResult[]>((resolve, reject) => {
-            // `settled` prevents both "message" and "exit" from resolving/rejecting
-            // the same promise after it has already settled.
             let settled = false;
 
             const worker = new Worker(workerPath, {
@@ -96,11 +80,8 @@ export const runAnalysisParallel = async (
             });
 
             worker.on("exit", (code) => {
-                // Only act on non-zero exit AND only if we haven't already settled
-                // via the "message" or "error" event.
                 if (settled || code === 0) return;
                 settled = true;
-                // Record a structured WorkerCrash error (RFC §7.5)
                 const infraErr = createInfrastructureError('WorkerCrash', {
                     cause: `Worker exited with code ${code}`,
                     phase: 'engine',
@@ -179,21 +160,16 @@ const resolveWorkerPath = async (): Promise<string | null> => {
     const __filename = fileURLToPath(import.meta.url);
     const __dirname = dirname(__filename);
 
-    // 1. Resolve via package registry (canonical — worker lives in @ngcompass/rules)
     try {
         const req = createRequire(import.meta.url);
         const workerFromRules = req.resolve('@ngcompass/rules/execution-worker');
         if (existsSync(workerFromRules)) return workerFromRules;
     } catch {
-        // @ngcompass/rules not resolvable from current location — fall through
     }
 
-    // 2. Filesystem probes for monorepo dev/test (sibling dist directories)
     const candidates = [
-        // Monorepo sibling: engine dist → rules dist
         join(__dirname, "..", "..", "rules", "dist", "execution-worker.js"),
         join(__dirname, "..", "..", "rules", "dist", "execution-worker.cjs"),
-        // Raw TS source (requires ts-node / tsx in dev)
         join(__dirname, "..", "..", "rules", "src", "execution-worker.ts"),
     ];
 
@@ -213,14 +189,11 @@ const resolveWorkerPath = async (): Promise<string | null> => {
 const distributeTasks = (tasks: ReadonlyArray<Task>, workerCount: number): Task[][] => {
     const tasksByFile = groupTasksByFile(tasks);
 
-    // Sort files by task count (descending) for better packing
     const sortedFiles = Array.from(tasksByFile.values()).sort((a, b) => b.length - a.length);
 
-    // Initialize worker buckets
     const buckets: Task[][] = Array.from({ length: workerCount }, () => []);
     const bucketLoads = new Array(workerCount).fill(0);
 
-    // Distribute files to the least loaded bucket
     for (const fileTasks of sortedFiles) {
         let minLoadIndex = 0;
         let minLoad = bucketLoads[0];

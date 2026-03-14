@@ -1,16 +1,15 @@
+/**
+ * @fileoverview
+ * Provides utilities for the normalization and validation of scanner configurations.
+ *
+ * Ensures that scan options are consistent, paths are resolved, and default
+ * behaviors are applied according to the project's architectural standards.
+ */
 import path from 'node:path';
 import type { ScanOptions, NormalizedOptions } from './types.js';
 
 /**
- * Default include patterns.
- *
- * Covers all Angular source file types out of the box:
- *   - TypeScript (component classes, services, modules, …)
- *   - HTML templates
- *   - Style sheets (CSS, SCSS, Sass, Less)
- *
- * Callers can override this by passing a non-empty `include` array in
- * `ScanOptions`.
+ * Default patterns used for file inclusion when none are explicitly provided.
  */
 const DEFAULT_INCLUDE = [
     '**/*.ts',
@@ -22,15 +21,10 @@ const DEFAULT_INCLUDE = [
 ] as const;
 
 /**
- * Normalizes scan options by applying defaults and resolving paths.
+ * Normalizes scanner options by applying defaults and resolving paths.
  *
- * Pure function:
- * - No side effects
- * - Deterministic (same input = same output)
- * - Returns new object
- *
- * @param options - Raw scan options
- * @returns Normalized options with defaults applied
+ * @param options - The raw configuration options provided by the caller.
+ * @returns A new object containing fully normalized scanner options.
  */
 export const normalizeOptions = (options: ScanOptions): NormalizedOptions => ({
     rootDir: path.resolve(options.rootDir),
@@ -43,12 +37,10 @@ export const normalizeOptions = (options: ScanOptions): NormalizedOptions => ({
 });
 
 /**
- * Validates that options are reasonable.
+ * Validates the structural integrity of the provided scanner options.
  *
- * Pure function - returns errors as data, not exceptions.
- *
- * @param options - Options to validate
- * @returns Array of validation errors (empty if valid)
+ * @param options - The options to evaluate.
+ * @returns A read-only collection of validation error messages, if any.
  */
 export const validateOptions = (options: ScanOptions): ReadonlyArray<string> => {
     const errors: string[] = [];

@@ -1,32 +1,27 @@
 /**
- * Pattern Expansion
+ * @fileoverview
+ * Provides utilities for the expansion and normalization of glob patterns.
  *
- * Pure functions for expanding and normalizing glob patterns.
+ * Implements deterministic transformations to ensure cross-platform compatibility
+ * and validates pattern syntax before scanner execution.
  */
 
 import type { NormalizedOptions, ExpandedPatterns } from './types.js';
 
 /**
- * Normalizes a single pattern to use forward slashes.
+ * Normalizes a glob pattern by ensuring the use of forward slashes.
  *
- * Pure function - deterministic transformation.
- *
- * @param pattern - Pattern to normalize
- * @returns Normalized pattern with forward slashes
+ * @param pattern - The pattern to normalize.
+ * @returns The normalized pattern string.
  */
 export const normalizePattern = (pattern: string): string =>
     pattern.replace(/\\/g, '/');
 
 /**
- * Expands options into glob-compatible patterns.
+ * Expands configuration options into normalized inclusion and exclusion patterns.
  *
- * Pure function:
- * - No side effects
- * - Deterministic
- * - Returns new object with normalized patterns
- *
- * @param options - Normalized scan options
- * @returns Expanded patterns ready for glob execution
+ * @param options - The normalized scanner options.
+ * @returns An object containing expanded include and ignore pattern collections.
  */
 export const expandPatterns = (options: NormalizedOptions): ExpandedPatterns => ({
     include: options.include.map(normalizePattern),
@@ -37,26 +32,22 @@ export const expandPatterns = (options: NormalizedOptions): ExpandedPatterns => 
 });
 
 /**
- * Checks if a pattern is valid glob syntax.
+ * Evaluates whether a glob pattern adheres to supported syntax rules.
  *
- * Pure function - no side effects.
- *
- * @param pattern - Pattern to validate
- * @returns True if pattern appears valid
+ * @param pattern - The pattern to validate.
+ * @returns True if the pattern is structurally valid.
  */
 export const isValidPattern = (pattern: string): boolean => {
     if (pattern.trim() === '') return false;
-    if (pattern.includes('***')) return false; // Invalid triple-star
+    if (pattern.includes('***')) return false;
     return true;
 };
 
 /**
- * Filters out invalid patterns and returns validation errors.
+ * Validates a collection of patterns, segregating them into valid and erroneous sets.
  *
- * Pure function - returns both valid patterns and errors.
- *
- * @param patterns - Array of patterns to validate
- * @returns Tuple of [valid patterns, error messages]
+ * @param patterns - The patterns to evaluate.
+ * @returns A tuple containing the valid patterns and a collection of error messages.
  */
 export const validatePatterns = (
     patterns: ReadonlyArray<string>

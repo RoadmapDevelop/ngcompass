@@ -1,19 +1,16 @@
 /**
- * Project Context Builder  (CTX-001 · CTX-002)
+ * @fileoverview
+ * Facilitates the construction of the ProjectContext for ngcompass.
  *
- * Constructs the shared, read-only `ProjectContext` once per analysis run by
- * walking the TypeScript `Program` that already exists for type-aware rules.
- * No extra file I/O or parsing is needed — the import graph is derived purely
- * from the compiler's already-resolved module graph.
+ * This module performs a traversal of the TypeScript module graph to assemble
+ * a comprehensive, read-only representation of the project structure. This
+ * includes import relationships, component clusters, and Angular-specific
+ * metadata (e.g., NgModule declarations).
  *
- * Algorithm: O(F + E) where F = project files, E = import edges.
- *
- * CTX-001 — forward/reverse import graph, component graph, projectFiles, rootDir.
- * CTX-002 — dynamic import() handling, barrel file detection, external deps map.
- *
- * Called by `createTypeAwareAnalysisContext()` immediately after the
- * `ts.Program` is created and stored on the context so that every subsequent
- * `RuleContextFactory.build()` call can attach it to `RuleContext.project`.
+ * Implementation Strategy:
+ * - Efficient Traversal: Analyzes the resolved module graph in O(F + E) time.
+ * - Structural Disambiguation: Detects barrel files and component clusters.
+ * - Angular Awareness: Integrates decorator metadata for standalone and NgModule discovery.
  */
 
 import ts from 'typescript';
@@ -26,20 +23,13 @@ import type { ProjectContext, ComponentFiles, NgModuleInfo } from '@ngcompass/co
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Builds a `ProjectContext` from the TypeScript compiler program.
+ * Constructs a ProjectContext immutable structure from a TypeScript Program.
  *
- * @param program        - The `ts.Program` created for type-aware analysis.
- * @param files          - All files discovered by the scanner (absolute or
- *                         relative to `rootDir`).  Used to seed `projectFiles`
- *                         and to restrict import-graph edges to intra-project
- *                         imports only (external packages are tracked separately
- *                         in `externalDeps`).
- * @param rootDir        - Absolute path to the project root.
- * @param componentFiles - Optional component → template/style/spec cluster map
- *                         (populated by CTX-003 from ComponentDependencyGraph).
- *                         Defaults to an empty map when not provided.
- * @returns              An immutable `ProjectContext` ready to be injected into
- *                       `RuleContext.project`.
+ * @param program The ts.Program instance used for type-aware analysis.
+ * @param files A collection of file paths identified during the scanning phase.
+ * @param rootDir The absolute path to the project root directory.
+ * @param componentFiles An optional mapping of component-related file clusters.
+ * @returns A fully initialized ProjectContext instance.
  */
 export function buildProjectContext(
     program: ts.Program,
@@ -49,25 +39,18 @@ export function buildProjectContext(
 ): ProjectContext {
     const start = performance.now();
 
-    // ── 1. Normalise all known project files to absolute paths ───────────────
     const projectFileSet = buildProjectFileSet(files, rootDir, program);
 
-    // ── 2. Build forward/reverse import graphs + external dep map ────────────
     const { importGraph, reverseImportGraph, externalDeps } = buildImportGraphs(
         program,
         projectFileSet,
     );
 
-    // ── 3. Detect barrel files ───────────────────────────────────────────────
     const barrelFiles = detectBarrelFiles(program, projectFileSet);
 
-    // ── 4. CTX-003: Build component ↔ template/style/spec cluster maps ───────
-    //    Use the caller-supplied map when provided (e.g. from the planner's
-    //    ComponentDependencyGraph); otherwise auto-detect from file names.
     const componentGraph = componentFiles ?? buildComponentGraph(projectFileSet);
     const templateToComponent = buildTemplateToComponentMap(componentGraph);
 
-    // ── 5. CTX-004: Scan Angular decorators for NgModule / standalone info ───
     const { ngModuleMap, standaloneComponents, classToFile } =
         buildNgModuleMap(program, projectFileSet);
 
@@ -120,13 +103,10 @@ function buildProjectFileSet(
 ): Set<string> {
     const set = new Set<string>();
 
-    // Scanner-discovered files
     for (const f of files) {
         set.add(path.resolve(rootDir, f));
     }
 
-    // TypeScript Program source files within the project root
-    // (excludes node_modules declaration files)
     const normRoot = normaliseDir(rootDir);
     for (const sf of program.getSourceFiles()) {
         if (!sf.isDeclarationFile && sf.fileName.startsWith(normRoot)) {
@@ -162,8 +142,6 @@ function buildImportGraphs(
     const reverseImportGraph = new Map<string, Set<string>>();
     const externalDeps       = new Map<string, Set<string>>();
 
-    // Pre-seed every project file so rules can safely do:
-    //   `importGraph.get(filePath) ?? emptySet`
     for (const file of projectFileSet) {
         importGraph.set(file, new Set());
         reverseImportGraph.set(file, new Set());
@@ -192,21 +170,16 @@ function buildImportGraphs(
             const toFile = resolved.resolvedModule?.resolvedFileName;
 
             if (toFile && projectFileSet.has(toFile)) {
-                // ── Intra-project edge ────────────────────────────────────────
                 importGraph.get(fromFile)!.add(toFile);
 
-                // Reverse edge: toFile ← fromFile
                 let reverseSet = reverseImportGraph.get(toFile);
                 if (!reverseSet) {
-                    // File pulled in by the TS program but not the scanner;
-                    // add it defensively.
                     reverseSet = new Set();
                     reverseImportGraph.set(toFile, reverseSet);
                 }
                 reverseSet.add(fromFile);
 
             } else {
-                // ── External or unresolved specifier ─────────────────────────
                 const pkgName = extractPackageName(specifier);
                 if (pkgName) {
                     let extSet = externalDeps.get(fromFile);
@@ -252,10 +225,8 @@ function detectBarrelFiles(
 
         const { statements } = sourceFile;
 
-        // Must have at least one statement to be a meaningful barrel
         if (statements.length === 0) continue;
 
-        // Every statement must be an export-from declaration (re-export)
         const isBarrel = statements.every(
             (stmt) =>
                 ts.isExportDeclaration(stmt) &&
@@ -294,25 +265,20 @@ function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
     const specifiers: string[] = [];
 
     function visit(node: ts.Node): void {
-        // ── Static: import … from 'specifier' ────────────────────────────────
         if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
             specifiers.push(node.moduleSpecifier.text);
-            return; // no meaningful children to recurse into
+            return;
         }
 
-        // ── Static: export { X } from 'specifier'  /  export * from '…' ─────
         if (
             ts.isExportDeclaration(node) &&
             node.moduleSpecifier &&
             ts.isStringLiteral(node.moduleSpecifier)
         ) {
             specifiers.push(node.moduleSpecifier.text);
-            return; // no meaningful children to recurse into
+            return;
         }
 
-        // ── Dynamic: import('specifier') ──────────────────────────────────────
-        // TypeScript represents dynamic import as a CallExpression whose
-        // callee is the `import` keyword token.
         if (
             ts.isCallExpression(node) &&
             node.expression.kind === ts.SyntaxKind.ImportKeyword &&
@@ -320,8 +286,6 @@ function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
             ts.isStringLiteralLike(node.arguments[0])
         ) {
             specifiers.push((node.arguments[0] as ts.StringLiteralLike).text);
-            // Continue recursing — the rest of the call args may contain
-            // further nested dynamic imports (edge case but possible).
         }
 
         ts.forEachChild(node, visit);
@@ -354,16 +318,13 @@ function extractPackageName(specifier: string): string | null {
     if (specifier.startsWith('.') || path.isAbsolute(specifier)) return null;
 
     if (specifier.startsWith('@')) {
-        // Scoped package: @scope/name[/subpath]
-        // Find the slash after the scope (skip the leading '@')
         const scopeSlash = specifier.indexOf('/', 1);
-        if (scopeSlash === -1) return null; // malformed scoped specifier
+        if (scopeSlash === -1) return null;
 
-        // Find the next slash after the package name, if any
         const nameSlash = specifier.indexOf('/', scopeSlash + 1);
         return nameSlash === -1
-            ? specifier                        // '@scope/name'
-            : specifier.slice(0, nameSlash);  // '@scope/name' from '@scope/name/subpath'
+            ? specifier
+            : specifier.slice(0, nameSlash);
     }
 
     // Unscoped package: name[/subpath]
@@ -424,18 +385,15 @@ function buildComponentGraph(projectFileSet: Set<string>): Map<string, Component
         // e.g. 'foo.component' (strips the trailing '.ts')
         const base = path.basename(file, '.ts');
 
-        // External template: foo.component.html
         const htmlPath = path.join(dir, base + '.html');
         const templatePath = projectFileSet.has(htmlPath) ? htmlPath : undefined;
 
-        // Style files: foo.component.{scss,sass,css,less}
         const stylePaths: string[] = [];
         for (const ext of styleExts) {
             const stylePath = path.join(dir, base + ext);
             if (projectFileSet.has(stylePath)) stylePaths.push(stylePath);
         }
 
-        // Spec: foo.component.spec.ts
         const specCandidate = path.join(dir, base + '.spec.ts');
         const specPath = projectFileSet.has(specCandidate) ? specCandidate : undefined;
 
@@ -528,7 +486,7 @@ function buildNgModuleMap(
                             isStandalone: false,
                         });
                     }
-                    break; // only one @NgModule per file expected
+                    break;
                 }
 
                 if (name === 'Component') {

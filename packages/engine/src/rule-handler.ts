@@ -1,18 +1,10 @@
 /**
- * Rule Handler Interface (Passive Observers)
+ * @fileoverview
+ * Facilitates the definition of analytical rules as passive observers.
  *
- * RULES MUST:
- * - Receive pre-filtered nodes from streams
- * - Return RuleFailure or null (no mutation)
- * - Allocate ZERO structures in handler
- * - Use cached analyzers (never parse)
- *
- * RULES MUST NOT:
- * - Traverse AST
- * - Parse decorators
- * - Resolve imports
- * - Allocate arrays/maps/sets
- * - Call getSourceText()
+ * Rules implemented via this interface are designed for maximum performance,
+ * operating on pre-filtered node streams without performing independent
+ * AST traversals or resource allocations.
  */
 
 import type { RuleFailure, RuleContext } from './types.js';
@@ -32,15 +24,14 @@ export interface RuleHandler<TNode> {
     readonly streamType: StreamType;
 
     /**
-     * Handles a pre-filtered node.
+     * Evaluates a node from a pre-filtered analytical stream.
      *
-     * @returns RuleFailure | RuleFailure[] if violation(s) found, null otherwise
+     * Implementation must adhere to strict performance constraints, ensuring
+     * O(1) or near-constant time complexity and zero memory allocation.
      *
-     * PERFORMANCE:
-     * - Must be O(1) or O(k) where k = small constant
-     * - No loops over collections
-     * - No allocation
-     * - No expensive string operations
+     * @param node The pre-analyzed AST node to evaluate.
+     * @param context The analytical context for the current file.
+     * @returns A rule failure, a collection of failures, or null if compliant.
      */
     handle(node: TNode, context: RuleContext): RuleFailure | RuleFailure[] | null;
     readonly meta?: Partial<RuleMetadata>;

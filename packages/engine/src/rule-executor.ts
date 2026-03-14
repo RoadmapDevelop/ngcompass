@@ -1,14 +1,9 @@
 /**
- * Rule Executor — Dependency Injection Boundary
+ * @fileoverview
+ * Establishes a dependency injection boundary for rule execution.
  *
- * Decouples the engine's runner from the concrete rule registry in
- * @ngcompass/rules, breaking the engine ↔ rules circular dependency.
- *
- * Usage:
- *  - Call configureRuleExecutor() once at process start (CLI main thread)
- *    or at worker start (execution-worker.ts in @ngcompass/rules) before
- *    any call to executeBatchedTasks().
- *  - The engine's runner.ts reads the injected callbacks at execution time.
+ * This module facilitates the decoupling of the engine's core orchestration layer
+ * from the concrete rule implementations, mitigating circular dependency risks.
  */
 
 import type { RuleContext, RuleResult } from '@ngcompass/common';
@@ -51,14 +46,13 @@ let _checker: RuleCheckerFn = () => false;
 // ============================================================
 
 /**
- * Registers the concrete rule executor and rule checker.
+ * Configures the analytical engine with specific rule execution and validation logic.
  *
- * Must be called once before analysis runs:
- *  - In the main thread: call from the CLI entry point after loading rules.
- *  - In worker threads: call from execution-worker.ts after registerAllBuiltinRules().
+ * This method must be invoked during the initialization phase of the process
+ * to register the underlying rule processing capabilities.
  *
- * @param executor - Runs a batch of rules in a single AST pass
- * @param checker  - Returns true if a rule name is registered
+ * @param executor The implementation responsible for batched rule evaluation.
+ * @param checker The implementation responsible for rule presence verification.
  */
 export const configureRuleExecutor = (
     executor: BatchRuleExecutorFn,

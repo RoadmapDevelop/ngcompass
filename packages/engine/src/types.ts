@@ -1,8 +1,9 @@
 /**
- * Rule Resolution Types
+ * @fileoverview
+ * Definitional contracts for rule resolution and engine operations.
  *
- * Types for Phase 1.5: Rule Discovery & Resolution
- * Handles loading, merging, and resolving rules from config + presets
+ * Includes configurations, metadata structures, and the core analytical contexts
+ * required for rule evaluation and result reporting.
  */
 
 import { Severity, Result, Ok, Err, Locator, TemplateAst, StyleAst } from "@ngcompass/common";
@@ -203,16 +204,17 @@ export interface RuleResult {
     readonly taskId?: string;
 }
 
+/**
+ * Represents the context provided to an individual rule during evaluation.
+ */
 export interface RuleContext {
     readonly sourceFile?: import('typescript').SourceFile; // Deprecated
-    readonly filePath: string; // The file being analyzed
-    readonly fileContent: string; // Raw content for line/col mapping
-    readonly locator: Locator; // Line/column mapping helper
+    readonly filePath: string;
+    readonly fileContent: string;
+    readonly locator: Locator;
     readonly program?: import('oxc-parser').Program;
-    readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
-    /** Parsed template AST — access `rootNodes` to traverse the Angular HTML tree. */
+    readonly typeChecker?: import('typescript').TypeChecker;
     readonly template?: TemplateAst;
-    /** Parsed style AST — check `ok` before accessing `code`. */
     readonly style?: StyleAst;
     readonly options?: Readonly<Record<string, unknown>>;
 }

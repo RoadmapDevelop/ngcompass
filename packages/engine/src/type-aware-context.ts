@@ -1,13 +1,11 @@
 /**
- * Type-Aware Analysis Context
+ * @fileoverview
+ * Provides the TypeAwareAnalysisContext for advanced analytical operations.
  *
- * Instantiates a TypeScript Program across the entire project for type-aware rules.
- * This is an expensive operation and should only be used on the main thread for
- * rules that explicitly declare `needsTypeChecker: true` or `projectContext: true`.
- *
- * CTX-001: Also builds the `ProjectContext` (import graph, component cluster map,
- * project file set) as a zero-cost by-product of the already-created ts.Program.
- * The context is computed once and served to every rule via `getProjectContext()`.
+ * This module coordinates the initialization of the TypeScript Program and
+ * the ProjectContext, enabling semantic analysis and project-wide metadata
+ * access. These operations are resource-intensive and are performed once
+ * per analysis run on the primary execution thread.
  */
 
 import ts from "typescript";
@@ -17,63 +15,48 @@ import { debug } from "@ngcompass/common";
 import type { ProjectContext } from "@ngcompass/common";
 
 /**
- * Extends the baseline AnalysisContext to include:
- *  - Full TypeScript semantic analysis via `getTypeChecker`
- *  - Project-wide cross-file metadata via `getProjectContext`  (CTX-001)
- *  - Direct TypeScript SourceFile access via `getTsSourceFile` (CTX-003)
+ * Enhances the baseline AnalysisContext with semantic and project-wide data.
  */
 export interface TypeAwareAnalysisContext extends AnalysisContext {
+    /**
+     * Retrieves the TypeScript TypeChecker for semantic analysis.
+     */
     readonly getTypeChecker: (filePath: string) => Promise<ts.TypeChecker | undefined>;
     /**
-     * Returns the pre-built `ProjectContext` for the current analysis run.
-     *
-     * The same object is returned on every call — it is computed once when the
-     * context is created and never mutated.  Returns `undefined` when no
-     * `tsconfig.json` was found and the TypeScript Program could not be created.
+     * Retrieves the pre-built, immutable ProjectContext for the current run.
      */
     readonly getProjectContext: () => ProjectContext | undefined;
     /**
-     * Returns the `ts.SourceFile` for the given absolute file path from the
-     * already-created `ts.Program`, or `undefined` if the file is not part of
-     * the program (e.g. a non-TypeScript resource file).
-     *
-     * Used by `RuleContextFactory` (CTX-003) to extract `publicMembers` from a
-     * component class without reparsing.  Zero extra I/O — the SourceFile is
-     * already held in memory by the Program.
+     * Retrieves the TypeScript SourceFile representation for a given path.
      */
     readonly getTsSourceFile: (filePath: string) => ts.SourceFile | undefined;
+    /**
+     * Performs an explicit initialization phase for type-aware resources.
+     */
+    readonly warmup: () => Promise<void>;
 }
 
 /**
- * Creates an AnalysisContext that also includes a global TypeScript program
- * and the project-wide `ProjectContext`.
+ * Initializes a TypeAwareAnalysisContext for the specified root directory.
  *
- * NOTE: `ts.createProgram` is synchronous and can be very heavy on large
- * codebases.  This should be invoked exactly once per run.
- *
- * @param rootDir - Absolute path to the project root.
- * @param files   - All files discovered by the scanner (used to seed
- *                  `ProjectContext.projectFiles` and restrict import-graph
- *                  edges to intra-project imports).  Defaults to `[]` for
- *                  backward compatibility with existing call sites.
+ * @param rootDir The absolute path to the project root.
+ * @param files A collection of file paths identified during the scanning phase.
+ * @returns A fully initialized TypeAwareAnalysisContext instance.
  */
 export const createTypeAwareAnalysisContext = (
     rootDir: string,
     files: ReadonlyArray<string> = [],
 ): TypeAwareAnalysisContext => {
-    // 1. Setup baseline context (Oxc AST, templates, styles, memoized file reads)
     const baseContext = createAnalysisContext(rootDir);
 
     debug('engine', 'Initializing Type-Aware Context (ts.createProgram)...');
     const tsStart = performance.now();
 
-    // 2. Discover tsconfig.json
     const configPath = ts.findConfigFile(rootDir, ts.sys.fileExists, "tsconfig.json");
 
     let program: ts.Program | undefined;
 
     if (configPath) {
-        // Parse the config file
         const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
         const parsedCommandLine = ts.parseJsonConfigFileContent(
             configFile.config,
@@ -81,7 +64,6 @@ export const createTypeAwareAnalysisContext = (
             rootDir
         );
 
-        // 3. Create the global TypeScript Program
         program = ts.createProgram({
             rootNames: parsedCommandLine.fileNames,
             options: parsedCommandLine.options,
@@ -98,9 +80,6 @@ export const createTypeAwareAnalysisContext = (
 
     const typeChecker = program?.getTypeChecker();
 
-    // 4. Build ProjectContext (CTX-001) — free by-product of the existing Program.
-    //    Uses the scanner-discovered `files` list to restrict the graph to
-    //    intra-project imports; external packages are excluded automatically.
     let projectContext: ProjectContext | undefined;
     if (program) {
         try {
@@ -108,24 +87,24 @@ export const createTypeAwareAnalysisContext = (
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             debug('engine', `ProjectContext build failed (non-fatal): ${msg}`);
-            // Non-fatal: rules that need project context receive `undefined`
-            // and must degrade gracefully (see RuleAstRequirements.projectContext).
         }
     }
 
-    // 5. Return the augmented context
     return {
         ...baseContext,
+
         getTypeChecker: async (_filePath: string): Promise<ts.TypeChecker | undefined> => {
             return typeChecker;
         },
         getProjectContext: (): ProjectContext | undefined => {
             return projectContext;
         },
-        // CTX-003: Expose the ts.SourceFile so RuleContextFactory can extract
-        // public members from a component class without extra I/O.
         getTsSourceFile: (filePath: string): ts.SourceFile | undefined => {
             return program?.getSourceFile(filePath);
+        },
+
+        warmup: async (): Promise<void> => {
+            debug('engine', `Type-aware context ready: ${program ? `ts.Program with ${program.getSourceFiles().length} source files` : 'no tsconfig found, TypeChecker unavailable'}`);
         },
     };
 };

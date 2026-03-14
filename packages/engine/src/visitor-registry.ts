@@ -1,15 +1,10 @@
 /**
- * Visitor Registry — O(1) Node Dispatch
+ * @fileoverview
+ * Implements a high-performance visitor registry for O(1) node dispatch.
  *
- * Replaces the `if/else` chain in the single-pass engine with a Map-keyed
- * dispatch table. Each Oxc node.type string maps directly to an array of
- * pre-built visitor functions, giving O(1) lookup per node.
- *
- * Adding a new StreamType requires:
- *  1. Adding the entry to STREAM_TO_NODE_TYPE (compile-time exhaustiveness enforced)
- *  2. Adding the stream filter to the streamFilters argument of buildVisitorMap()
- *
- * The engine itself (single-pass-engine.ts) never needs to change.
+ * This module facilitates the routing of AST nodes to their respective rule
+ * handlers by utilizing a static dispatch table, significantly optimizing the
+ * throughput of the single-pass engine.
  */
 
 import type { RuleHandler, StreamType } from './rule-handler.js';
@@ -71,14 +66,11 @@ export type VisitorMap = ReadonlyMap<string, ReadonlyArray<VisitorEntry>>;
 // ============================================
 
 /**
- * Builds an O(1) dispatch map from an array of rule handlers.
+ * Constructs a high-speed dispatch map from a collection of rule handlers.
  *
- * @param handlers - All rule handlers for this analysis run
- * @param streamFilters - Maps StreamType → filter function (raw node → stream node | null)
- * @returns Immutable VisitorMap keyed by Oxc node.type strings
- *
- * Template-stream handlers (TemplateExpression, TemplateAttribute) are intentionally
- * excluded — they are dispatched via analyzeTemplate() after the main walk.
+ * @param handlers A collection of rule handlers to include in the registry.
+ * @param streamFilters A mapping of stream types to their respective node filters.
+ * @returns A read-only VisitorMap optimized for O(1) lookup.
  */
 export function buildVisitorMap(
     handlers: ReadonlyArray<RuleHandler<any>>,
@@ -89,11 +81,10 @@ export function buildVisitorMap(
     for (const handler of handlers) {
         const nodeType = STREAM_TO_NODE_TYPE[handler.streamType];
 
-        // Skip template-stream handlers — sentinel prefix '__' means post-walk dispatch
         if (!nodeType || nodeType.startsWith('__')) continue;
 
         const filter = streamFilters[handler.streamType];
-        if (!filter) continue; // No filter registered for this stream type → skip
+        if (!filter) continue;
 
         const entry: VisitorEntry = {
             ruleName: handler.name,

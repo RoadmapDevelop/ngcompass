@@ -1,19 +1,21 @@
 /**
- * Analysis Statistics
+ * @fileoverview
+ * Facilitates the calculation of aggregate analytical metrics.
  *
- * Calculates aggregate statistics from analysis rule results.
- * Extracted from orchestrator.ts for reuse.
+ * This module provides utilities to derive summary statistics from rule execution
+ * results, including file counts, severity distributions, and execution durations.
  */
 
 import { RuleFailure, RuleResult, AnalysisResult } from "@ngcompass/common";
 
 
 /**
- * Calculates aggregate statistics for analysis.
+ * Computes comprehensive analytical statistics based on raw rule results.
  *
- * @param results - Rule results
- * @param startTime - Start timestamp
- * @returns Stats object
+ * @param results A collection of rule execution results.
+ * @param startTime The high-resolution timestamp indicating the start of execution.
+ * @param cacheHitRate An optional precalculated cache hit ratio [0, 1].
+ * @returns An object encapsulating the aggregated statistical data.
  */
 export const calculateStats = (
     results: ReadonlyArray<RuleResult>,
@@ -38,20 +40,20 @@ export const calculateStats = (
 };
 
 /**
- * Determines whether a severity represents an error.
+ * Predicate to identify if a given severity level denotes a terminal error.
  *
- * @param severity - Severity value
- * @returns true if severity counts as error
+ * @param severity The severity metadata to evaluate.
+ * @returns True if the severity is classified as an error.
  */
 export const isErrorSeverity = (severity: unknown): boolean => {
     return severity === "error";
 };
 
 /**
- * Determines whether a severity represents a warning.
+ * Predicate to identify if a given severity level denotes a non-terminal warning.
  *
- * @param severity - Severity value
- * @returns true if severity counts as warning
+ * @param severity The severity metadata to evaluate.
+ * @returns True if the severity is classified as a warning.
  */
 export const isWarningSeverity = (severity: unknown): boolean => {
     return severity === "warn";

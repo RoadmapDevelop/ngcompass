@@ -1,8 +1,10 @@
 /**
- * File Filtering
+ * @fileoverview
+ * Provides high-performance file filtering utilities for the scanner.
  *
- * Pure functions for filtering file lists.
- * Uses functional composition and immutability.
+ * Implements functional primitives for deduplication, gitignore evaluation,
+ * extension filtering, and glob-based inclusion/exclusion logic. All operations
+ * prioritize immutability and predictable outcomes.
  */
 
 import path from 'node:path';
@@ -18,15 +20,10 @@ import { Ok, Err } from './types.js';
 import { loadAllGitignoreFilters } from './gitignore.js';
 
 /**
- * Deduplicates file paths.
+ * Deduplicates a collection of file paths.
  *
- * Pure function:
- * - No mutations
- * - Deterministic
- * - Returns new array
- *
- * @param files - Array of file paths (may contain duplicates)
- * @returns Array with duplicates removed
+ * @param files - A collection of file paths, potentially containing duplicates.
+ * @returns A new read-only collection with duplicate entries removed.
  */
 export const deduplicateFiles = (
     files: ReadonlyArray<string>
@@ -34,14 +31,12 @@ export const deduplicateFiles = (
     Array.from(new Set(files));
 
 /**
- * Applies a gitignore filter to a file list.
+ * Evaluates a collection of file paths against a gitignore filter.
  *
- * Pure function (assuming filter function is pure).
- *
- * @param files - Files to filter
- * @param rootDir - Root directory for relative path calculation
- * @param filter - Gitignore filter function
- * @returns Filtered file list
+ * @param files - The file paths to evaluate.
+ * @param rootDir - The project root directory for relative path resolution.
+ * @param filter - The gitignore evaluator function.
+ * @returns A filtered collection of file paths.
  */
 export const applyGitignoreFilter = (
     files: ReadonlyArray<string>,
@@ -51,15 +46,14 @@ export const applyGitignoreFilter = (
     files.filter(file => filter(file, rootDir));
 
 /**
- * Applies all filters to a file list.
+ * Orchestrates the application of configured filters to a raw file collection.
  *
- * Composes multiple filtering operations:
- * 1. Apply gitignore (if enabled)
- * 2. Deduplicate
+ * Aggregates multiple filtering stages, including gitignore evaluation and
+ * deduplication, returning a consolidated result set.
  *
- * @param rawFiles - Raw file list from glob
- * @param options - Normalized scanner options
- * @returns Result containing filtered files or error
+ * @param rawFiles - The initial collection of file paths discovered by the scanner.
+ * @param options - The normalized configuration options for the scan operation.
+ * @returns A promise resolving to the filtered results or an operational error.
  */
 export const applyFilters = async (
     rawFiles: RawFileList,
@@ -70,9 +64,6 @@ export const applyFilters = async (
         const startCount = files.length;
 
         if (options.respectGitignore) {
-            // Use the composite multi-directory filter so that per-package
-            // .gitignore files (monorepos, nested packages) are respected,
-            // not just the root-level one.
             const filterResult = await loadAllGitignoreFilters(options.rootDir, files);
 
             if (!filterResult.ok) {
@@ -94,13 +85,11 @@ export const applyFilters = async (
 };
 
 /**
- * Filters files by extension.
+ * Filters a collection of files based on their file extensions.
  *
- * Pure function - returns new array.
- *
- * @param files - Files to filter
- * @param extensions - Allowed extensions (e.g., ['.ts', '.html'])
- * @returns Files matching the extensions
+ * @param files - The files to evaluate.
+ * @param extensions - A collection of allowed file extensions (e.g., ['.ts', '.html']).
+ * @returns A collection of files matching the specified extensions.
  */
 export const filterByExtension = (
     files: ReadonlyArray<string>,
@@ -114,13 +103,11 @@ export const filterByExtension = (
 };
 
 /**
- * Filters files by pattern matching.
+ * Filters a collection of files using regular expression pattern matching.
  *
- * Pure function - uses regex for pattern matching.
- *
- * @param files - Files to filter
- * @param pattern - Regex pattern to match
- * @returns Files matching the pattern
+ * @param files - The files to evaluate.
+ * @param pattern - The regular expression pattern to apply.
+ * @returns A collection of files that satisfy the pattern.
  */
 export const filterByPattern = (
     files: ReadonlyArray<string>,
@@ -129,13 +116,13 @@ export const filterByPattern = (
     files.filter(file => pattern.test(file));
 
 /**
- * Filters files using glob patterns.
+ * Filters a collection of files using glob pattern matching.
  *
- * @param files - Files to filter
- * @param includes - Include glob patterns
- * @param ignores - Ignore glob patterns
- * @param rootDir - Root directory for relative matching
- * @returns Filtered files
+ * @param files - The files to evaluate.
+ * @param includes - A collection of inclusion glob patterns.
+ * @param ignores - A collection of exclusion glob patterns.
+ * @param rootDir - The root directory for relative path matching.
+ * @returns A filtered collection of file paths.
  */
 export const filterByGlob = (
     files: ReadonlyArray<string>,
