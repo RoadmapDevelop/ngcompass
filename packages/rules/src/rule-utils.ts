@@ -55,6 +55,8 @@ export interface AstNode {
     [key: string]: unknown;
 }
 
+export type MaybeAstNode = AstNode | null | undefined;
+
 // ============================================
 // NODE UNWRAPPING
 // ============================================
@@ -594,8 +596,7 @@ export function getTemplateAbsoluteOffset(
     context: { template?: { templateStartOffset?: number } },
     nodeStart: number
 ): number {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const templateStartOffset = ((context as Record<string, unknown>).template as Record<string, unknown>)?.templateStartOffset;
+    const templateStartOffset = context.template?.templateStartOffset;
     if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
         return nodeStart + templateStartOffset;
     }

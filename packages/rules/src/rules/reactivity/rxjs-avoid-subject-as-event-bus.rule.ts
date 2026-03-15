@@ -2,7 +2,7 @@ import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { collectAllRxjsAliases, AstNode, unwrapNode, getStaticPropertyName, getClassBody, getNodeStart, isMemberExpressionLike, isMethodDefinition, getMethodBody, childNodes } from "../../rule-utils";
+import { collectAllRxjsAliases, AstNode, MaybeAstNode, unwrapNode, getStaticPropertyName, getClassBody, getNodeStart, isMemberExpressionLike, isMethodDefinition, getMethodBody, childNodes } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 const SUBJECT_TYPES = new Set(['Subject', 'ReplaySubject', 'AsyncSubject']);
@@ -39,7 +39,7 @@ function collectSubjectConstructorNames(sourceText: string | undefined): Map<str
     return nameToCanonicalType;
 }
 
-function detectConstructedSubjectType(calleeRaw: AstNode | null | undefined, ctorNames: Map<string, string>): string | null {
+function detectConstructedSubjectType(calleeRaw: MaybeAstNode, ctorNames: Map<string, string>): string | null {
     const callee = unwrapNode(calleeRaw);
     if (!callee) return null;
     if (callee.type === 'Identifier') {

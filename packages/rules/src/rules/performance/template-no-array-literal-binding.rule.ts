@@ -2,7 +2,7 @@ import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { AstNode, unwrapNode, childNodes } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, childNodes } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateExpressionNode): number {
@@ -17,7 +17,7 @@ function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateExpressio
 /**
  * Finds all ArrayExpressions anywhere in the expression tree (nested detection).
  */
-function findAllArrayLiterals(root: AstNode | null | undefined): AstNode[] {
+function findAllArrayLiterals(root: MaybeAstNode): AstNode[] {
     const hits: AstNode[] = [];
     const stack: AstNode[] = root ? [root] : [];
 

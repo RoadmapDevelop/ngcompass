@@ -15,7 +15,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
         .option('--type <type>', 'Cache type: ast|config|results|all', 'all')
         .action(async (options: { type: string }) => {
             const reporter = getCacheReporter();
-            console.log('Clearing cache...');
+            console.log('Clearing cache...'); // eslint-disable-line no-console
 
             const type = options.type as 'ast' | 'config' | 'results' | 'all';
 
@@ -56,6 +56,6 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
         .command('path')
         .description('Show cache directory location')
         .action(() => {
-            console.log(cache.getCachePath());
+            console.log(cache.getCachePath()); // eslint-disable-line no-console
         });
 }

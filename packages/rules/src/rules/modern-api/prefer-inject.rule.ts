@@ -1,7 +1,7 @@
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { AnyAngularClassNode } from '@ngcompass/ast';
-import { AstNode, unwrapNode, getTsSymbolAtNode, isLikelyAngularInjectableSymbol, getParamIdentifierName, getParamTypeName, getClassBody, getConstructorMember, getParamsArray, getNodeStart } from '../../rule-utils';
+import { AstNode, MaybeAstNode, unwrapNode, getTsSymbolAtNode, isLikelyAngularInjectableSymbol, getParamIdentifierName, getParamTypeName, getClassBody, getConstructorMember, getParamsArray, getNodeStart } from '../../rule-utils';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 
 const DIISH_PARAM_NAMES = new Set([
@@ -112,7 +112,7 @@ function paramDisplayName(param: AstNode): string {
     return name || typeName || '<param>';
 }
 
-function getFunctionValueFromConstructor(ctor: AstNode): AstNode | null {
+function getFunctionValueFromConstructor(ctor: MaybeAstNode): MaybeAstNode {
     if (!ctor) return null;
     return (ctor.value ?? ctor) as AstNode;
 }
@@ -137,8 +137,7 @@ export const preferInjectRule = createAnyAngularClassRule(
         const params = getParamsArray(funcNode);
         if (params.length === 0) return null;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const diParams = params.filter((p: any) => isLikelyDIParam(p, context));
+        const diParams = params.filter((p: AstNode) => isLikelyDIParam(p, context));
         if (diParams.length === 0) return null;
 
         const start = getNodeStart(ctor);

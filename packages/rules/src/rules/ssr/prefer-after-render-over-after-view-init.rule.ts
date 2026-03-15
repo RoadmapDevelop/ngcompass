@@ -2,7 +2,7 @@ import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { AstNode, unwrapNode, getClassBody, getNodeStart, childNodes } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, getClassBody, getNodeStart, childNodes } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 function shouldAnalyzeFile(filePath: string): boolean {
@@ -37,7 +37,8 @@ const DOM_ACCESS_PATTERNS = [
 /**
  * Returns true if any node in the subtree accesses a DOM property.
  */
-function bodyAccessesDom(body: AstNode): boolean {
+function bodyAccessesDom(body: MaybeAstNode): boolean {
+    if (!body) return false;
     const stack: AstNode[] = [body];
 
     while (stack.length) {
@@ -73,7 +74,7 @@ function bodyAccessesDom(body: AstNode): boolean {
 /**
  * Finds the class method node named `ngAfterViewInit` in the class body.
  */
-function findAfterViewInitMethod(classBody: AstNode[]): AstNode | null {
+function findAfterViewInitMethod(classBody: AstNode[]): MaybeAstNode {
     for (const member of classBody) {
         const m = unwrapNode(member);
         if (!m) continue;
@@ -88,7 +89,8 @@ function findAfterViewInitMethod(classBody: AstNode[]): AstNode | null {
 /**
  * Gets the function body of a method definition.
  */
-function getMethodBody(method: AstNode): AstNode | null {
+function getMethodBody(method: MaybeAstNode): MaybeAstNode {
+    if (!method) return null;
     // MethodDefinition → value is FunctionExpression
     const fn = unwrapNode(method.value as AstNode | undefined);
     if (!fn) return null;

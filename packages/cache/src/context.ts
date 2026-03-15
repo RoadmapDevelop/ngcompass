@@ -9,7 +9,7 @@ import { createResultCache } from './services/result-cache.js';
 import { createConfigCache } from './services/config-cache.js';
 import { createMetaCache, FileMeta } from './services/meta-cache.js';
 import { createPlanCache } from './services/plan-cache.js';
-import { createFileCache } from './services/file-cache.js';
+import { createFileCache, FileCacheEntry } from './services/file-cache.js';
 import { CacheConfig } from './drivers/types.js';
 import { computeCompositeHash } from './services/hashing.js';
 import { CACHE_VERSION } from './constants.js';
@@ -42,7 +42,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         path: path.join(config.disk?.path ?? defaultBaseDir, 'results')
     });
 
-    const configDriver = createAtomicDriver<any>({
+    const configDriver = createAtomicDriver<unknown>({
         path: path.join(config.disk?.path ?? defaultBaseDir, 'config')
     });
 
@@ -51,11 +51,11 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
     });
 
     // Use regular disk driver for plan cache
-    const planDriver = createDiskDriver<any>({
+    const planDriver = createDiskDriver<unknown>({
         path: path.join(config.disk?.path ?? defaultBaseDir, 'plans'),
     });
 
-    const fileDriver = createDiskDriver<any>({
+    const fileDriver = createDiskDriver<FileCacheEntry>({
         path: path.join(config.disk?.path ?? defaultBaseDir, 'files'),
     });
 

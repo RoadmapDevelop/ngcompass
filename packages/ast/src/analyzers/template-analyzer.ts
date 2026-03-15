@@ -1,6 +1,6 @@
 
 export interface HtmlParserResult {
-    rootNodes: readonly any[];
+    rootNodes: readonly unknown[];
 }
 import type { TemplateExpressionNode, TemplateAttributeNode } from '../node-streams.js';
 import { parseSync } from 'oxc-parser';

@@ -273,7 +273,7 @@ export interface ConfigIssue {
 export interface HealthReport {
     valid: boolean;
     issues: ConfigIssue[];
-    config?: any;
+    config?: unknown;
 }
 
 /**

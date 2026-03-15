@@ -38,7 +38,7 @@ function isFireAndForgetSubscription(subscribeNode: AstNode): boolean {
     const callee = unwrapNode(subscribeNode.callee);
     if (!isMemberExpressionLike(callee)) return false;
 
-    const receiver = unwrapNode((callee as AstNode).object);
+    const receiver = unwrapNode(callee?.object);
     if (!receiver) return false;
 
     // Pattern 1: explicit take(1) / first() anywhere in the pipe chain
