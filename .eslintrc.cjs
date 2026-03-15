@@ -10,7 +10,11 @@ module.exports = {
   settings: {
     'boundaries/elements': [
       { type: 'common', pattern: 'packages/common/src/*' },
-      { type: 'core', pattern: 'packages/core/src/*' },
+      { type: 'ast', pattern: 'packages/ast/src/*' },
+      { type: 'cache', pattern: 'packages/cache/src/*' },
+      { type: 'scanner', pattern: 'packages/scanner/src/*' },
+      { type: 'config', pattern: 'packages/config/src/*' },
+      { type: 'planner', pattern: 'packages/planner/src/*' },
       { type: 'engine', pattern: 'packages/engine/src/*' },
       { type: 'reporters', pattern: 'packages/reporters/src/*' },
       { type: 'rules', pattern: 'packages/rules/src/*' },
@@ -41,12 +45,16 @@ module.exports = {
     'boundaries/element-types': ['warn', {
       default: 'disallow',
       rules: [
-        { from: 'core',      allow: ['common'] },
-        { from: 'reporters', allow: ['common'] },
-        { from: 'engine',    allow: ['common'] },
-        { from: 'rules',     allow: ['common', 'core', 'engine'] },
+        { from: 'ast',       allow: ['common'] },
+        { from: 'cache',     allow: ['common'] },
+        { from: 'scanner',   allow: ['common', 'cache'] },
+        { from: 'config',    allow: ['common', 'cache'] },
+        { from: 'planner',   allow: ['common', 'cache'] },
+        { from: 'engine',    allow: ['common', 'ast', 'cache', 'planner'] },
+        { from: 'reporters', allow: ['common', 'cache'] },
+        { from: 'rules',     allow: ['common', 'ast', 'engine'] },
         { from: 'testing',   allow: ['common'] },
-        { from: 'cli',       allow: ['common', 'core', 'reporters', 'rules'] },
+        { from: 'cli',       allow: ['common', 'cache', 'config', 'engine', 'planner', 'reporters', 'rules', 'scanner'] },
       ]
     }],
     'no-restricted-imports': ['error', {

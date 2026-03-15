@@ -4,6 +4,7 @@ import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
 import { CacheContext } from '@ngcompass/cache';
+import { exitWithError } from './exit.js';
 import { getGlobalRegistry, executeBatchedNewEngineRules, isNewEngineRule } from '@ngcompass/rules';
 import { loadPlugins } from '@ngcompass/config';
 import { runAnalysis, configureRuleExecutor } from '@ngcompass/engine';
@@ -101,7 +102,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 exitCode = 1;
             } finally {
                 if (exitCode !== 0) {
-                    process.exit(exitCode);
+                    exitWithError(exitCode);
                 }
             }
         });

@@ -27,10 +27,10 @@
         "clean": "rimraf dist .turbo"
     },
     "dependencies": {
-        "@ngcompass/common": "workspace:*",
         "@ngcompass/cache": "workspace:*",
+        "@ngcompass/common": "workspace:*",
         "ignore": "^7.0.3",
-        "minimatch": "^10.1.1",
+        "minimatch": "^10.2.4",
         "tinyglobby": "^0.2.15"
     },
     "peerDependencies": {

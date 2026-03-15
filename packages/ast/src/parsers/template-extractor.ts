@@ -96,7 +96,7 @@ function tryExtractFromClass(classNode: any): ExtractedTemplate | null {
 /**
  * Finds the value expression of a named property in an ObjectExpression.
  */
-function findPropertyValue(properties: any[], keyName: string): any | null {
+function findPropertyValue(properties: any[], keyName: string): any {
     if (!Array.isArray(properties)) return null;
     for (const prop of properties) {
         const key = prop?.key;

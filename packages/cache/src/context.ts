@@ -119,6 +119,9 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
                     break;
             }
         },
+        flush: async () => {
+            await metaDriver.flush();
+        },
         getCachePath: () => config.disk?.path ?? defaultBaseDir,
         getInfo: async () => {
             const astL1Stats = astL1.getStats();

@@ -37,10 +37,11 @@ export const rxjsAvoidBehaviorSubjectRule = createAnyAngularClassRule(
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
         if (!shouldAnalyzeFile(context.filePath)) return null;
 
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sourceText: string | undefined = (context as any).sourceText;
         const behaviorSubjectNames = collectRxjsAliases(sourceText, 'BehaviorSubject');
 

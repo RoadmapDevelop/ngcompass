@@ -6,6 +6,7 @@ import { AstNode, unwrapNode, childNodes } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateExpressionNode): number {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const templateStartOffset = (context as any).template?.templateStartOffset;
     if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
         return node.sourceSpan.start + templateStartOffset;
@@ -42,6 +43,7 @@ function findAllArrayLiterals(root: AstNode | null | undefined): AstNode[] {
 export const templateNoArrayLiteralBindingRule = createTemplateExpressionRule(
     'template-no-array-literal-binding',
     (node: TemplateExpressionNode, context: RuleContext): RuleFailure[] | null => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const hits = findAllArrayLiterals((node as any).expression);
         if (hits.length === 0) return null;
 

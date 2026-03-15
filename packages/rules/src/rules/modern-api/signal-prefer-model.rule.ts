@@ -10,6 +10,7 @@ function shouldAnalyzeFile(filePath: string): boolean {
 }
 
 function getDecoratorName(dec: AstNode): string | null {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const inner = unwrapNode(dec.expression ?? (dec as any).callee ?? dec);
     if (!inner) return null;
     if (inner.type === 'CallExpression') {
@@ -21,7 +22,7 @@ function getDecoratorName(dec: AstNode): string | null {
 }
 
 function getPropertyName(member: AstNode): string | null {
-    const key = member.key as AstNode | undefined;
+    const key = member.key;
     if (!key) return null;
     if (key.type === 'Identifier') return key.name as string ?? null;
     if (key.type === 'Literal') return String(key.value);
@@ -44,7 +45,7 @@ export const signalPreferModelRule = createAnyAngularClassRule(
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
         if (!shouldAnalyzeFile(context.filePath)) return null;
 
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
 

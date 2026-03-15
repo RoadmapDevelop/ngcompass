@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
 import { validateConfig } from '@ngcompass/config';
+import { exitWithError } from './exit.js';
 
 export function registerConfigCommand(program: Command, cache: CacheContext) {
     const configGroup = program
@@ -22,14 +23,12 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
                 const reporter = getConfigReporter();
                 await reporter.renderHealthReport(result.report);
 
-                const shouldFail = !result.report.valid;
-
-                if (shouldFail) {
-                    process.exit(1);
+                if (!result.report.valid) {
+                    exitWithError();
                 }
             } catch (error: any) {
                 console.error(`Error: ${error.message}`);
-                process.exit(1);
+                exitWithError();
             }
         });
 }

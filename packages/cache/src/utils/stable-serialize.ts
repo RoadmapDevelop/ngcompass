@@ -82,7 +82,7 @@ export function stableSerialize(
     }
 
     if (typeof value === 'object') {
-        const obj = value as object;
+        const obj = value;
 
         if (_seen.has(obj)) {
             throw new SerializationError(

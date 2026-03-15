@@ -50,7 +50,7 @@ export interface RulePlugin {
     /** Globally unique rule name. Use namespacing: 'my-org/rule-name' */
     readonly name: string;
     /** The rule handler (created via createComponentRule, createDecoratedPropertyRule, etc.) */
-    readonly handler: RuleHandler<any>;
+    readonly handler: RuleHandler<unknown>;
     /** Optional metadata overrides (category, description, dependencyType, etc.) */
     readonly meta?: Partial<RuleMetadata>;
     /** Optional manifest (RFC §7.6) */
@@ -81,7 +81,7 @@ export interface RegisterOptions {
  *  - Expose read-only views for the engine and adapter
  */
 export class RuleRegistry {
-    private readonly _handlers = new Map<string, RuleHandler<any>>();
+    private readonly _handlers = new Map<string, RuleHandler<unknown>>();
     private readonly _meta = new Map<string, Partial<RuleMetadata>>();
 
     /**
@@ -105,7 +105,7 @@ export class RuleRegistry {
     /**
      * Returns the handler for a rule name, or undefined if not registered.
      */
-    get(name: string): RuleHandler<any> | undefined {
+    get(name: string): RuleHandler<unknown> | undefined {
         return this._handlers.get(name);
     }
 
@@ -127,7 +127,7 @@ export class RuleRegistry {
      * Returns the full handler map (read-only view).
      * Used by the engine adapter for batched execution.
      */
-    getAll(): ReadonlyMap<string, RuleHandler<any>> {
+    getAll(): ReadonlyMap<string, RuleHandler<unknown>> {
         return this._handlers;
     }
 

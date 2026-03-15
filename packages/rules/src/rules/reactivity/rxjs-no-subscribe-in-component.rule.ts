@@ -35,7 +35,7 @@ import { RuleContext } from "@ngcompass/common";
  * are suppressed to avoid double-flagging with rxjs-require-takeUntilDestroyed.
  */
 function isFireAndForgetSubscription(subscribeNode: AstNode): boolean {
-    const callee = unwrapNode((subscribeNode as any).callee);
+    const callee = unwrapNode(subscribeNode.callee);
     if (!isMemberExpressionLike(callee)) return false;
 
     const receiver = unwrapNode((callee as AstNode).object);
@@ -43,10 +43,10 @@ function isFireAndForgetSubscription(subscribeNode: AstNode): boolean {
 
     // Pattern 1: explicit take(1) / first() anywhere in the pipe chain
     if (receiver.type === 'CallExpression') {
-        const pipeCallee = unwrapNode((receiver as AstNode).callee);
+        const pipeCallee = unwrapNode((receiver).callee);
         if (isMemberExpressionLike(pipeCallee) && getStaticPropertyName(pipeCallee) === 'pipe') {
-            const args = Array.isArray((receiver as AstNode).arguments)
-                ? (receiver as AstNode).arguments as AstNode[]
+            const args = Array.isArray((receiver).arguments)
+                ? (receiver).arguments
                 : [];
             const hasTakeOrFirst = args.some(arg => {
                 const op = unwrapNode(arg);
@@ -85,17 +85,17 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
     'rxjs-no-subscribe-in-component',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
         if (!context.filePath.endsWith('.component.ts')) return null;
-        if (!isSubscribeCall(node as any)) return null;
-        if (isFireAndForgetSubscription(node as any)) return null;
+        if (!isSubscribeCall(node as unknown as AstNode)) return null;
+        if (isFireAndForgetSubscription(node as unknown as AstNode)) return null;
 
         // Suppress when a full teardown operator is already present —
         // rxjs-require-takeUntilDestroyed covers that case and double-flagging
         // creates noise without additional signal.
-        const callee = unwrapNode((node as any).callee);
+        const callee = unwrapNode((node as unknown as AstNode).callee);
         const receiver = isMemberExpressionLike(callee) ? (callee as AstNode).object : null;
-        if (receiver && hasTeardownInReceiverChain(receiver as AstNode)) return null;
+        if (receiver && hasTeardownInReceiverChain(receiver)) return null;
 
-        const start = getNodeStart(node as any);
+        const start = getNodeStart(node as unknown as AstNode);
         const { line, column } = context.locator.location(start);
 
         // CTX-008: When CrossRef data is available, extract the stream property name from the
@@ -110,7 +110,7 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
         if (templateRefs !== undefined) {
             // Dig into `<receiver>.subscribe(…)` to find the immediate property name.
             // Works for both `this.users$.subscribe(…)` and `this.service.data$.subscribe(…)`.
-            const subscribeCallee = unwrapNode((node as any).callee);
+            const subscribeCallee = unwrapNode((node as unknown as AstNode).callee);
             if (isMemberExpressionLike(subscribeCallee)) {
                 const receiver = unwrapNode((subscribeCallee as AstNode).object);
                 if (receiver) {

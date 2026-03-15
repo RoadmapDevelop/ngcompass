@@ -34,14 +34,14 @@ function fileContainsRenderHooks(sourceText: string | undefined): boolean {
  * Returns true/false when parent refs are available, or null when they are absent.
  */
 function isInsideRenderHookViaParents(node: AstNode): boolean | null {
-    let current = (node as any).parent as AstNode | undefined;
+    let current = node.parent as AstNode;
     if (!current) return null;
 
     while (current) {
         if (current.type === 'CallExpression' && RENDER_HOOK_NAMES.has(getCalleeName(current))) {
             return true;
         }
-        current = (current as any).parent as AstNode | undefined;
+        current = current.parent as AstNode;
     }
 
     return false;
@@ -62,6 +62,7 @@ function isInsideRenderHookByPosition(node: AstNode, sourceText: string): boolea
  * Tries parent-pointer walk first; falls back to positional source scan.
  */
 function isInsideRenderHookCallback(node: AstNode, context: RuleContext): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sourceText: string | undefined = (context as any).sourceText ?? context.fileContent;
 
     // Fast path: if the file has no render hooks at all, skip all further checks
@@ -70,7 +71,7 @@ function isInsideRenderHookCallback(node: AstNode, context: RuleContext): boolea
     const parentWalkResult = isInsideRenderHookViaParents(node);
     if (parentWalkResult !== null) return parentWalkResult;
 
-    // Parent refs missing — fall back to positional heuristic
+    // Parent refs missing â€” fall back to positional heuristic
     return typeof sourceText === 'string' && isInsideRenderHookByPosition(node, sourceText);
 }
 
@@ -83,17 +84,17 @@ function isInsideRenderHookCallback(node: AstNode, context: RuleContext): boolea
 export const signalAvoidUntrackedRule = createCallExpressionRule(
     'signal-avoid-untracked-overuse',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        if (!isCalleeNamed((node as any).callee, 'untracked')) return null;
-        if (isInsideRenderHookCallback(node as any, context)) return null;
+        if (!isCalleeNamed((node as unknown as AstNode).callee, 'untracked')) return null;
+        if (isInsideRenderHookCallback(node as unknown as AstNode, context)) return null;
 
-        const start = getNodeStart(node as any);
+        const start = getNodeStart(node as unknown as AstNode);
         const { line, column } = context.locator.location(start);
 
         return {
             filePath: context.filePath,
             ruleName: 'signal-avoid-untracked-overuse',
             message:
-                'Review this untracked() call. Each usage intentionally opts out of reactive tracking—ensure it is deliberate and necessary to avoid masking dependency bugs.',
+                'Review this untracked() call. Each usage intentionally opts out of reactive trackingâ€”ensure it is deliberate and necessary to avoid masking dependency bugs.',
             line,
             column,
             severity: 'warn',
@@ -101,4 +102,5 @@ export const signalAvoidUntrackedRule = createCallExpressionRule(
         };
     }
 );
+
 

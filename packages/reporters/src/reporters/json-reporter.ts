@@ -11,8 +11,8 @@ import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
 import { RuleResult, Severity } from '@ngcompass/common';
 
 // JSON format severity constants — named to avoid inline magic numbers.
-const JSON_SEVERITY_ERROR: 2 = 2;
-const JSON_SEVERITY_WARNING: 1 = 1;
+const JSON_SEVERITY_ERROR = 2 as const;
+const JSON_SEVERITY_WARNING = 1 as const;
 
 // ---------------------------------------------------------------------------
 // Pure mapping helpers

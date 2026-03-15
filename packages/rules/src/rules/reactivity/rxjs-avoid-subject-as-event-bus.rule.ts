@@ -79,7 +79,7 @@ function findInputBridgeSubjectNames(classBody: AstNode[]): Set<string> {
 
         // Must carry an @Input() decorator
         const decorators = Array.isArray(member.decorators)
-            ? (member.decorators as AstNode[])
+            ? (member.decorators)
             : [];
         const hasInputDecorator = decorators.some((dec) => {
             // Decorator node may carry the expression directly or as a child
@@ -133,10 +133,11 @@ export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
         if (!context.filePath.endsWith('.component.ts')) return null;
 
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const sourceText: string | undefined = (context as any).sourceText;
         const ctorNames = collectSubjectConstructorNames(sourceText);
 

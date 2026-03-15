@@ -80,7 +80,7 @@ function findViolations(root: AstNode): Violation[] {
 export const signalNoSideEffectsInComputedRule = createCallExpressionRule(
     'signal-no-side-effects-in-computed',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const call = node as any as AstNode;
+        const call = node as unknown as AstNode;
 
         if (!isCalleeNamed(call.callee, 'computed')) return null;
 

@@ -14,6 +14,7 @@ function hasValidRequireSync(options: AstNode): boolean {
 }
 
 function hasNonNullInitialValue(options: AstNode): boolean {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     if (!hasObjectProperty(options as any as ObjectExpression, 'initialValue')) return false;
     const prop = getObjectProperty(options, 'initialValue');
     if (!prop) return true;
@@ -26,7 +27,7 @@ function hasNonNullInitialValue(options: AstNode): boolean {
 export const toSignalRequireInitialValueRule = createCallExpressionRule(
     'toSignal-require-initialValue',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const call = node as any as AstNode;
+        const call = node as unknown as AstNode;
 
         if (!isCalleeNamed(call.callee, 'toSignal')) return null;
 

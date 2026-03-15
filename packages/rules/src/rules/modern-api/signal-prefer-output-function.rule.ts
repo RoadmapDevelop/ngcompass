@@ -19,6 +19,7 @@ function isOutputDecoratedProperty(node: AstNode): boolean {
     if (!Array.isArray(decorators) || decorators.length === 0) return false;
 
     return decorators.some((dec: AstNode) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const inner = unwrapNode(dec.expression ?? (dec as any).callee ?? dec);
         if (!inner) return false;
         if (inner.type === 'CallExpression') {
@@ -39,7 +40,7 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
         if (!shouldAnalyzeFile(context.filePath)) return null;
 
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
 

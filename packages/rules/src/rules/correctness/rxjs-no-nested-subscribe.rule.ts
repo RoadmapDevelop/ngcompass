@@ -54,7 +54,7 @@ function containsNestedSubscribe(body: AstNode): boolean {
 function getSubscribeCallback(node: AstNode): AstNode | null {
     const args = node.arguments;
     if (!Array.isArray(args) || args.length === 0) return null;
-    const first = unwrapNode(args[0] as AstNode);
+    const first = unwrapNode(args[0]);
     if (!first) return null;
     if (
         first.type === 'ArrowFunctionExpression' ||
@@ -72,7 +72,7 @@ function getSubscribeCallback(node: AstNode): AstNode | null {
 export const rxjsNoNestedSubscribeRule = createCallExpressionRule(
     'rxjs-no-nested-subscribe',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const n = node as any as AstNode;
+        const n = node as unknown as AstNode;
         if (!isSubscribeCall(n)) return null;
 
         const callback = getSubscribeCallback(n);

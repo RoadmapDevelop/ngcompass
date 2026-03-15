@@ -5,6 +5,7 @@ import { RECOMMENDATIONS } from "../../recommendations";
 import { RuleContext } from "@ngcompass/common";
 
 function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateAttributeNode): number {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const templateStartOffset = (context as any).template?.templateStartOffset;
     if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
         return node.sourceSpan.start + templateStartOffset;

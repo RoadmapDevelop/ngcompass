@@ -56,7 +56,7 @@ export const specNoFocusedTestRule = createCallExpressionRule(
         const fp = context.filePath;
         if (!fp.endsWith('.spec.ts') && !fp.endsWith('.test.ts')) return null;
 
-        const n = node as any as AstNode;
+        const n = node as unknown as AstNode;
         const focusedName = isFocusedCall(n);
         if (!focusedName) return null;
 

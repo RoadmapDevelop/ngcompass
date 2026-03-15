@@ -78,7 +78,7 @@ function findAfterViewInitMethod(classBody: AstNode[]): AstNode | null {
         const m = unwrapNode(member);
         if (!m) continue;
         if (m.type !== 'MethodDefinition' && m.type !== 'PropertyDefinition') continue;
-        const key = m.key as AstNode | undefined;
+        const key = m.key;
         const name = key?.type === 'Identifier' ? (key.name as string) : '';
         if (name === 'ngAfterViewInit') return m;
     }
@@ -105,7 +105,7 @@ export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure | null => {
         if (!shouldAnalyzeFile(context.filePath)) return null;
 
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
 

@@ -115,7 +115,7 @@ export interface ConfigOverride {
  * Profile-specific configuration (dev/ci)
  * Profiles can override most settings except nested profiles
  */
-export interface ProfileConfig extends Partial<Omit<AnalyzerConfig, 'profiles'>> { }
+export type ProfileConfig = Partial<Omit<AnalyzerConfig, 'profiles'>>;
 
 /**
  * Main analyzer configuration interface

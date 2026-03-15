@@ -98,7 +98,7 @@ const stableJson = (value: unknown): string => {
         if (Array.isArray(v)) return v.map(normalize);
         if (v !== null && typeof v === 'object') {
             const sorted: Record<string, unknown> = {};
-            for (const k of Object.keys(v as object).sort()) {
+            for (const k of Object.keys(v).sort()) {
                 sorted[k] = normalize((v as Record<string, unknown>)[k]);
             }
             return sorted;
@@ -126,7 +126,14 @@ const sha256 = (input: string): string =>
  */
 const computeRuleRegistryFp = async (): Promise<string> => {
     try {
-        const { getGlobalRegistry } = await import('../rules/registry/rule-registry.js');
+        // Dynamic import to avoid circular dependency (cache ← engine ← rules).
+        // At runtime the CLI has already loaded @ngcompass/rules before this runs.
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const moduleName = '@ngcompass/rules';
+        const mod = await import(/* webpackIgnore: true */ moduleName) as {
+            getGlobalRegistry: () => { getRuleNames: () => Iterable<string> };
+        };
+        const { getGlobalRegistry } = mod;
         const ruleNames = [...getGlobalRegistry().getRuleNames()].sort();
 
         if (ruleNames.length === 0) return sha256('empty-registry');

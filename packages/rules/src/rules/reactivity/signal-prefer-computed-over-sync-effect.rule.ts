@@ -50,7 +50,7 @@ function isLikelySignalRead(nodeRaw: AstNode | null | undefined, context?: RuleC
                     }
                 }
             }
-        } catch { }
+        } catch { /* TypeChecker unavailable — fall through to heuristic path */ }
     }
 
     // RULE-ACC-007: Tightened static fallback — only patterns that strongly suggest
@@ -66,7 +66,7 @@ function isLikelySignalRead(nodeRaw: AstNode | null | undefined, context?: RuleC
     // is not `this` is intentionally excluded to avoid treating service or util
     // zero-arg calls as signal reads.
     if (isMemberExpressionLike(callee)) {
-        const obj = unwrapNode((callee as AstNode).object);
+        const obj = unwrapNode((callee).object);
         if (obj?.type === 'ThisExpression') return true;
         return false;
     }
@@ -136,7 +136,7 @@ function analyzeEffectCallbackBody(root: AstNode, context?: RuleContext): Effect
 export const signalPreferComputedRule = createCallExpressionRule(
     'signal-prefer-computed-over-sync-effect',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const call = node as any as AstNode;
+        const call = node as unknown as AstNode;
 
         if (!isCalleeNamed(call.callee, 'effect')) return null;
 

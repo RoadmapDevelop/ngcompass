@@ -57,4 +57,9 @@ export interface CacheContext {
      * Get absolute path to cache directory
      */
     getCachePath: () => string;
+    /**
+     * Flushes all pending writes to disk.
+     * Call this before process exit to prevent data loss.
+     */
+    flush: () => Promise<void>;
 }
