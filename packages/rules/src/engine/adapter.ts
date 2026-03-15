@@ -26,7 +26,7 @@ import type { RulePlugin } from '../registry/rule-registry.js';
  * Delegates to RuleRegistry.register() — the single source of truth
  * for both rule handlers and metadata. No dual-registration needed.
  */
-export const registerNewEngineRule = (handler: RuleHandler<any>): void => {
+export const registerNewEngineRule = (handler: RuleHandler<unknown>): void => {
     const plugin: RulePlugin = {
         name: handler.name,
         handler,
@@ -84,7 +84,7 @@ export const executeBatchedNewEngineRules = (
 ): ReadonlyArray<RuleResult> => {
     const registry = getGlobalRegistry();
 
-    const handlers: RuleHandler<any>[] = [];
+    const handlers: RuleHandler<unknown>[] = [];
     for (const name of ruleNames) {
         const handler = registry.get(name);
         if (handler) handlers.push(handler);

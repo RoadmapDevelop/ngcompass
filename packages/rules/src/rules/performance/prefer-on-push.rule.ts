@@ -3,6 +3,7 @@ import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 import { createComponentRule } from '@ngcompass/engine';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyNode = any;
 
 function getSafeReportOffset(classNode: AngularClassNode): number {

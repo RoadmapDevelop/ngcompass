@@ -43,11 +43,11 @@ function getBypassMethodName(node: AstNode): string | null {
 export const noBypassSanitizationRule = createCallExpressionRule(
     'no-bypass-sanitization',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const methodName = getBypassMethodName(node as any as AstNode);
+        const methodName = getBypassMethodName(node as unknown as AstNode);
         if (!methodName) return null;
 
         const context_ = BYPASS_METHODS.get(methodName)!;
-        const start = getNodeStart(node as any as AstNode);
+        const start = getNodeStart(node as unknown as AstNode);
         const { line, column } = context.locator.location(start);
 
         return {

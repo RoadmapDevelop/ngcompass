@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import writeFileAtomic from 'write-file-atomic';
+import { debug } from '@ngcompass/common';
 import { AsyncDriver, DiskDriverConfig, DriverStats } from './types.js';
 
 export const createJsonFileDriver = <T>(
@@ -52,8 +53,9 @@ export const createJsonFileDriver = <T>(
                 await fs.mkdir(config.path, { recursive: true });
                 const data = Object.fromEntries(cache);
                 await writeFileAtomic(filePath, JSON.stringify(data));
-            } catch {
-                // Ignore
+            } catch (err) {
+                const msg = err instanceof Error ? err.message : String(err);
+                debug('cache', `Failed to flush metadata cache to ${filePath}: ${msg}`);
             } finally {
                 savePromise = null;
             }

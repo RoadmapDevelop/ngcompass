@@ -74,9 +74,8 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
                 const nodeStart = node.sourceSpan?.start?.offset ?? 0;
                 let lastIndex = 0;
 
-                while (true) {
-                    const start = textValue.indexOf('{{', lastIndex);
-                    if (start === -1) break;
+                let start = textValue.indexOf('{{', lastIndex);
+                while (start !== -1) {
                     const end = textValue.indexOf('}}', start + 2);
                     if (end === -1) break;
 
@@ -87,6 +86,7 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
                     );
 
                     lastIndex = end + 2;
+                    start = textValue.indexOf('{{', lastIndex);
                 }
             }
         }

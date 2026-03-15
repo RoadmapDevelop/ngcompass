@@ -48,8 +48,10 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
     'rxjs-require-takeUntilDestroyed',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
         if (!context.filePath.endsWith('.component.ts')) return null;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         if (!isSubscribeCall(node as any)) return null;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const callee = unwrapNode((node as any).callee);
         const receiver = isMemberExpressionLike(callee) ? callee?.object : null;
 
@@ -67,6 +69,7 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
         // subscriptions as managed and skip this rule.
         if (fileHasManualTeardown(context.filePath, context.fileContent)) return null;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const start = getNodeStart(node as any);
         const { line, column } = context.locator.location(start);
 

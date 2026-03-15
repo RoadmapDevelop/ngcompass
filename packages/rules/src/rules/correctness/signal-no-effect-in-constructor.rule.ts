@@ -11,7 +11,7 @@ import { RuleContext } from "@ngcompass/common";
 export const signalNoEffectInConstructorRule = createAnyAngularClassRule(
     'signal-no-effect-in-constructor',
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
 

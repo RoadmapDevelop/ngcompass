@@ -2,6 +2,7 @@ import { CacheContext } from '@ngcompass/cache';
 import { Command } from 'commander';
 import { getCacheReporter } from '@ngcompass/reporters';
 import pc from 'picocolors';
+import { exitWithError } from './exit.js';
 
 export function registerCacheCommand(program: Command, cache: CacheContext) {
     const cacheCmd = program
@@ -21,7 +22,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
             const validTypes = ['ast', 'config', 'results', 'all'];
             if (!validTypes.includes(type)) {
                 console.error(pc.red(`Invalid cache type: ${type}. Must be one of: ${validTypes.join(', ')}`));
-                process.exit(1);
+                exitWithError();
             }
 
             try {
@@ -33,7 +34,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
                 reporter.renderClearResult(type);
             } catch (err) {
                 console.error(pc.red('Error clearing cache:'), err);
-                process.exit(1);
+                exitWithError();
             }
         });
 
@@ -47,7 +48,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
                 reporter.renderCacheInfo(info);
             } catch (err) {
                 console.error(pc.red('Error getting cache info:'), err);
-                process.exit(1);
+                exitWithError();
             }
         });
 
@@ -58,4 +59,3 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
             console.log(cache.getCachePath());
         });
 }
-

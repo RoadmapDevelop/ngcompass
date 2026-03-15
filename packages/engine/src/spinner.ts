@@ -29,6 +29,10 @@ export class Spinner {
         }, SPINNER_FRAME_INTERVAL_MS);
     }
 
+    update(message: string): void {
+        this.message = message;
+    }
+
     stop(finalMessage?: string): void {
         if (this.interval) {
             clearInterval(this.interval);

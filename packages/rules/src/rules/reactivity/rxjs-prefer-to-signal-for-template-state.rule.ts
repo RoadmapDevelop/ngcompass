@@ -33,8 +33,8 @@ function getTypeReferenceName(typeNode: AstNode | null | undefined): string {
     if (t.type === 'TSTypeReference' || t.type === 'TypeReference') {
         const tn = t.typeName ?? t.name;
         if (tn && typeof tn === 'object') {
-            if ((tn as AstNode).type === 'Identifier') return ((tn as AstNode).name as string) ?? '';
-            if ((tn as AstNode).type === 'TSQualifiedName') return (((tn as AstNode).right as AstNode)?.name as string) ?? '';
+            if ((tn).type === 'Identifier') return ((tn).name as string) ?? '';
+            if ((tn).type === 'TSQualifiedName') return (((tn).right as AstNode)?.name as string) ?? '';
         }
         if (typeof tn === 'string') return tn;
     }
@@ -42,8 +42,8 @@ function getTypeReferenceName(typeNode: AstNode | null | undefined): string {
 }
 
 function isLikelyObservableByType(member: AstNode): boolean {
-    const typeAnnotation = member?.typeAnnotation as AstNode | undefined;
-    const typeNode = (typeAnnotation?.typeAnnotation ?? typeAnnotation) as AstNode | undefined;
+    const typeAnnotation = member?.typeAnnotation;
+    const typeNode = (typeAnnotation?.typeAnnotation ?? typeAnnotation);
     const name = getTypeReferenceName(typeNode);
     return Boolean(name) && OBSERVABLE_TYPE_NAMES.has(name);
 }
@@ -61,7 +61,7 @@ function hasPipeCallInInitializer(init: AstNode | null | undefined): boolean {
     const stack: AstNode[] = [root];
 
     while (stack.length > 0) {
-        const current = unwrapNode(stack.pop()!);
+        const current = unwrapNode(stack.pop());
         if (!current) continue;
 
         if (current.type === 'CallExpression' && getCalleeName(current) === 'pipe') return true;
@@ -112,10 +112,10 @@ function getDecoratorNames(classNode: AstNode): Set<string> {
         if (!expr) continue;
         if (expr.type === 'CallExpression') {
             const callee = unwrapNode(expr.callee);
-            if (callee?.type === 'Identifier' && callee.name) names.add(callee.name as string);
+            if (callee?.type === 'Identifier' && callee.name) names.add(callee.name);
             continue;
         }
-        if (expr.type === 'Identifier' && expr.name) names.add(expr.name as string);
+        if (expr.type === 'Identifier' && expr.name) names.add(expr.name);
     }
     return names;
 }
@@ -136,7 +136,7 @@ function isComponentOrDirective(classNode: AstNode): boolean {
 export const rxjsPreferToSignalRule = createAnyAngularClassRule(
     'rxjs-prefer-toSignal-for-template-state',
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        const classNode = streamNode.node as any as AstNode;
+        const classNode = streamNode.node as unknown as AstNode;
         if (!isComponentOrDirective(classNode)) return null;
 
         const classBody = getClassBody(classNode);

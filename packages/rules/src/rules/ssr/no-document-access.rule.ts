@@ -76,7 +76,7 @@ function getBrowserGlobalFromCall(node: AstNode): string | null {
 export const noDocumentAccessRule = createCallExpressionRule(
     'no-document-access',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const n = node as any as AstNode;
+        const n = node as unknown as AstNode;
         const globalName = getBrowserGlobalFromCall(n);
         if (!globalName) return null;
 

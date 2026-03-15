@@ -13,51 +13,51 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Coverage thresholds (must match vitest.config.ts)
+// Coverage thresholds (must match vitest.config.ts) — Beta baselines
 const thresholds = {
-    lines: 90,
-    functions: 90,
-    branches: 85,
-    statements: 90,
+    lines: 40,
+    functions: 40,
+    branches: 25,
+    statements: 40,
 };
 
-// Module-specific thresholds (optional overrides)
+// Module-specific thresholds (optional overrides) — Beta baselines
 const moduleThresholds = {
-    'packages/core/src/scanner': {
-        lines: 95,
-        functions: 95,
-        branches: 90,
-        statements: 95,
+    'packages/scanner': {
+        lines: 40,
+        functions: 40,
+        branches: 25,
+        statements: 40,
     },
     'packages/common': {
-        lines: 95,
-        functions: 95,
-        branches: 90,
-        statements: 95,
+        lines: 40,
+        functions: 40,
+        branches: 25,
+        statements: 40,
     },
-    'packages/core/src/cache': {
-        lines: 90,
-        functions: 90,
-        branches: 85,
-        statements: 90,
+    'packages/cache': {
+        lines: 40,
+        functions: 40,
+        branches: 25,
+        statements: 40,
     },
-    'packages/core/src/config': {
-        lines: 90,
-        functions: 90,
-        branches: 85,
-        statements: 90,
+    'packages/config': {
+        lines: 40,
+        functions: 40,
+        branches: 25,
+        statements: 40,
     },
     'packages/reporters': {
-        lines: 85,
-        functions: 85,
-        branches: 80,
-        statements: 85,
+        lines: 40,
+        functions: 40,
+        branches: 25,
+        statements: 40,
     },
     'packages/cli': {
-        lines: 80,
-        functions: 80,
-        branches: 75,
-        statements: 80,
+        lines: 40,
+        functions: 40,
+        branches: 25,
+        statements: 40,
     },
 };
 

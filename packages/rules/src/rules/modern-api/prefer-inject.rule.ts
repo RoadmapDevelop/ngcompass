@@ -123,6 +123,7 @@ function getFunctionValueFromConstructor(ctor: AstNode): AstNode | null {
 export const preferInjectRule = createAnyAngularClassRule(
     'prefer-inject-over-constructor-di',
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure | null => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const classNode = streamNode.node as any;
         const classBody = getClassBody(classNode);
         if (classBody.length === 0) return null;
@@ -136,6 +137,7 @@ export const preferInjectRule = createAnyAngularClassRule(
         const params = getParamsArray(funcNode);
         if (params.length === 0) return null;
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const diParams = params.filter((p: any) => isLikelyDIParam(p, context));
         if (diParams.length === 0) return null;
 

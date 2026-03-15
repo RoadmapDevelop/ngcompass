@@ -594,7 +594,8 @@ export function getTemplateAbsoluteOffset(
     context: { template?: { templateStartOffset?: number } },
     nodeStart: number
 ): number {
-    const templateStartOffset = ((context as any).template as any)?.templateStartOffset;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const templateStartOffset = ((context as Record<string, unknown>).template as Record<string, unknown>)?.templateStartOffset;
     if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
         return nodeStart + templateStartOffset;
     }
@@ -759,15 +760,15 @@ export function getParamIdentifierName(param: AstNode | null | undefined): strin
 export function getParamTypeName(param: AstNode | null | undefined): string {
     const p = unwrapNode(param);
     if (!p) return '';
-    const typeAnnotation = p.typeAnnotation as AstNode | undefined;
-    const typeNode = (typeAnnotation?.typeAnnotation ?? typeAnnotation) as AstNode | undefined;
+    const typeAnnotation = p.typeAnnotation;
+    const typeNode = (typeAnnotation?.typeAnnotation ?? typeAnnotation);
     const t = unwrapNode(typeNode);
     if (!t) return '';
 
     if (t.type === 'TSTypeReference' || t.type === 'TypeReference') {
         const typeName = t.typeName ?? t.name;
         if (typeName && typeof typeName === 'object') {
-            const tn = typeName as AstNode;
+            const tn = typeName;
             if (tn.type === 'Identifier') return (tn.name as string) ?? '';
             if (tn.type === 'TSQualifiedName') return ((tn.right as AstNode)?.name as string) ?? '';
         }
@@ -821,6 +822,7 @@ export function getTsSymbolAtNode(
     try {
         // Lazy-create a TS SourceFile from file content if not already present
         if (!context.sourceFile && context.fileContent) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (context as any).sourceFile = ts.createSourceFile(
                 context.filePath,
                 context.fileContent,
@@ -915,7 +917,7 @@ function findTsNodeAtPosition(
 
     // Walk down to the innermost child that contains pos.
     // forEachChild returns a truthy value when its callback returns truthy, allowing early exit.
-    while (true) {
+    for (;;) {
         const child = ts.forEachChild(current, (c) => {
             if (pos >= c.getStart() && pos < c.getEnd()) return c;
             return undefined;

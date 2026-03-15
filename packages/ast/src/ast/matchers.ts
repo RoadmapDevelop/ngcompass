@@ -18,7 +18,6 @@ import type {
     MemberExpression,
     CallExpression,
     Identifier,
-    ObjectProperty,
     StringLiteral,
     BooleanLiteral,
 } from './types.js';
@@ -116,7 +115,7 @@ export const hasObjectProperty = (
         const prop = properties[i];
         if (!prop || prop.type === 'SpreadElement') continue;
 
-        const objectProp = prop as ObjectProperty;
+        const objectProp = prop;
         const actualKeyName = getKeyNameUnsafe(objectProp.key);
 
         if (actualKeyName === keyName) return true;
@@ -141,7 +140,7 @@ export const getObjectPropertyUnsafe = (
         const prop = properties[i];
         if (!prop || prop.type === 'SpreadElement') continue;
 
-        const objectProp = prop as ObjectProperty;
+        const objectProp = prop;
         const actualKeyName = getKeyNameUnsafe(objectProp.key);
 
         if (actualKeyName === keyName) {

@@ -132,6 +132,18 @@ async function discoverFiles(
         debug('scanner', 'Git repository detected. Using fast Git discovery...');
         const gitFiles = await executeGitDiscovery(normalized.rootDir);
 
+        if (gitFiles.length === 0) {
+            debug('scanner', 'Git discovery returned 0 files — this may indicate a git command failure. Falling back to glob-based scanning.');
+            const result = await executeGlob(patterns, normalized.rootDir, {
+                followSymlinks: normalized.followSymlinks,
+                dot: normalized.dot,
+            });
+            if (result.ok) {
+                debug('scanner', `Glob fallback found ${result.data.files.length} files`);
+            }
+            return result.ok ? Ok(result.data.files) : result;
+        }
+
         const filtered = filterByGlob(
             gitFiles,
             patterns.include,

@@ -29,9 +29,7 @@
     "dependencies": {
         "@ngcompass/common": "workspace:*",
         "@ngcompass/cache": "workspace:*",
-        "@ngcompass/scanner": "workspace:*",
-        "p-limit": "^7.3.0",
-        "xxhash-wasm": "^1.1.0"
+        "@ngcompass/scanner": "workspace:*"
     },
     "peerDependencies": {
         "typescript": "catalog:"

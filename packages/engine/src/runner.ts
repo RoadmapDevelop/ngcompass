@@ -36,6 +36,7 @@ export const executeBatchedTasks = async (
 ): Promise<RuleResult[]> => {
     if (tasks.length === 0) return [];
 
+    const filePath = tasks[0].filePath;
     const factory = new RuleContextFactory(context);
 
     const batches = new Map<string, {
@@ -87,7 +88,7 @@ export const executeBatchedTasks = async (
             );
 
             const ruleContext = await factory.build(
-                tasks[0].filePath,
+                filePath,
                 batch.options,
                 needsTemplate,
             );
@@ -123,9 +124,9 @@ export const executeBatchedTasks = async (
             }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            debug("engine", `Failed to execute batch for ${tasks[0].filePath}: ${msg}`);
+            debug("engine", `Failed to execute batch for ${filePath}: ${msg}`);
             errorCollector?.record(createInfrastructureError('ParseError', {
-                filePath: tasks[0].filePath,
+                filePath,
                 cause: msg,
                 phase: 'engine',
                 recoverable: true,

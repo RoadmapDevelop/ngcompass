@@ -88,10 +88,10 @@ export const componentNoManualDetectChangesRule = createCallExpressionRule(
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
         if (!context.filePath.endsWith('.component.ts')) return null;
 
-        const sourceText: string | undefined = (context as any).sourceText;
+        const sourceText: string | undefined = (context as unknown as Record<string, unknown>).sourceText as string | undefined;
         const allowBareIdentifierChecks = fileContainsCdrSignals(context.filePath, sourceText);
 
-        const callee = unwrapNode((node as any).callee);
+        const callee = unwrapNode((node as unknown as AstNode).callee);
         let methodName = '';
         let shouldFlag = false;
 
@@ -116,7 +116,7 @@ export const componentNoManualDetectChangesRule = createCallExpressionRule(
             if (methodName === 'markForCheck') return null;
 
             // detectChanges() under OnPush is unusual but can be intentional — warn only.
-            const start = getNodeStart(node as any);
+            const start = getNodeStart(node as unknown as AstNode);
             const { line, column } = context.locator.location(start);
             return {
                 filePath: context.filePath,
@@ -130,7 +130,7 @@ export const componentNoManualDetectChangesRule = createCallExpressionRule(
             };
         }
 
-        const start = getNodeStart(node as any);
+        const start = getNodeStart(node as unknown as AstNode);
         const { line, column } = context.locator.location(start);
 
         return {

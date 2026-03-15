@@ -168,7 +168,7 @@ class Logger {
         const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
         const colorFn = getNamespaceColor(namespace);
         const prefix = `${pc.gray(`[${timeStr}]`)} ${colorFn(`[ngcompass:${namespace}]`)}`;
-        let timestamp = this.config.showTimestamps ? pc.gray(`[${now.toISOString()}] `) : '';
+        const timestamp = this.config.showTimestamps ? pc.gray(`[${now.toISOString()}] `) : '';
 
         console.error(`${timestamp}${prefix} ${message}`, ...args);
     }

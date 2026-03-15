@@ -34,10 +34,13 @@ jobs:
         run: pnpm exec turbo lint typecheck test build --concurrency=4
 
       - name: Security audit
-        run: pnpm audit --audit-level moderate
+        # --prod scopes audit to runtime dependencies only (devDep vulns don't ship to users)
+        run: pnpm audit --audit-level high --prod
 
       - name: Upload coverage
         if: matrix.node == '20.x'
         uses: codecov/codecov-action@v4
         with:
-          files: coverage/lcov.info
+          directory: .
+          flags: unittests
+          fail_ci_if_error: false

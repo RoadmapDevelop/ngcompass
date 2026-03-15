@@ -31,6 +31,16 @@ export const MIN_WORKER_COUNT = 2;
 export const SPINNER_FRAME_INTERVAL_MS = 80;
 
 /**
+ * Maximum wall-clock time a single worker thread is allowed to run before it
+ * is forcibly terminated and its results replaced with empty failures.
+ *
+ * 60 seconds is intentionally generous — the timeout is a last-resort safety
+ * net for hung workers (e.g. infinite loops or deadlocked TypeScript programs),
+ * not a performance budget.
+ */
+export const WORKER_TIMEOUT_MS = 60_000;
+
+/**
  * Performance Budgets:
  * Thresholds used to monitor and report execution efficiency.
  */
