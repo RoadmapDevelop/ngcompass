@@ -120,19 +120,19 @@ class Logger {
         return this.config.enabled;
     }
 
-    public debug(namespace: Namespace, message: string, ...args: any[]) {
+    public debug(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('debug', namespace, message, ...args);
     }
 
-    public info(namespace: Namespace, message: string, ...args: any[]) {
+    public info(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('info', namespace, message, ...args);
     }
 
-    public warn(namespace: Namespace, message: string, ...args: any[]) {
+    public warn(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('warn', namespace, message, ...args);
     }
 
-    public error(namespace: Namespace, message: string, ...args: any[]) {
+    public error(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('error', namespace, message, ...args);
     }
 
@@ -160,7 +160,7 @@ class Logger {
         return duration;
     }
 
-    private log(_level: LogLevel, namespace: Namespace, message: string, ...args: any[]) {
+    private log(_level: LogLevel, namespace: Namespace, message: string, ...args: unknown[]) {
         if (!this.config.enabled) return;
         if (this.config.namespaces !== 'all' && !this.config.namespaces.has(namespace)) return;
 
@@ -209,16 +209,16 @@ class Logger {
 const logger = new Logger();
 
 // Convenience exports
-export const debug = (namespace: Namespace, message: string, ...args: any[]) =>
+export const debug = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.debug(namespace, message, ...args);
 
-export const info = (namespace: Namespace, message: string, ...args: any[]) =>
+export const info = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.info(namespace, message, ...args);
 
-export const warn = (namespace: Namespace, message: string, ...args: any[]) =>
+export const warn = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.warn(namespace, message, ...args);
 
-export const error = (namespace: Namespace, message: string, ...args: any[]) =>
+export const error = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.error(namespace, message, ...args);
 
 export const time = (label: string) =>

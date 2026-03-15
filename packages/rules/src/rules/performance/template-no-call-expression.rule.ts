@@ -2,7 +2,7 @@ import { TemplateExpressionNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, childNodes } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, childNodes } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 // Known-safe call names that are pipe-like or framework utilities
@@ -24,19 +24,19 @@ function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateExpressio
     return node.sourceSpan.start;
 }
 
-function isCallExpressionLike(node: AstNode | null | undefined): boolean {
+function isCallExpressionLike(node: MaybeAstNode): boolean {
     const n = unwrapNode(node);
     if (!n) return false;
     return n.type === 'CallExpression' || n.type === 'OptionalCallExpression';
 }
 
-function getCallArguments(node: AstNode | null | undefined): AstNode[] {
+function getCallArguments(node: MaybeAstNode): AstNode[] {
     const n = unwrapNode(node);
     const args = n?.arguments;
     return Array.isArray(args) ? args : [];
 }
 
-function getCallName(node: AstNode | null | undefined): string {
+function getCallName(node: MaybeAstNode): string {
     const n = unwrapNode(node);
     if (!n) return '';
     const callee = unwrapNode(n.callee);
@@ -47,7 +47,7 @@ function getCallName(node: AstNode | null | undefined): string {
     return '';
 }
 
-function findAllFlaggedCallExpressions(root: AstNode | null | undefined): AstNode[] {
+function findAllFlaggedCallExpressions(root: MaybeAstNode): AstNode[] {
     const stack: AstNode[] = root ? [root] : [];
     const hits: AstNode[] = [];
 

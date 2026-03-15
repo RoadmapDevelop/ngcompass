@@ -34,14 +34,14 @@ function fileContainsRenderHooks(sourceText: string | undefined): boolean {
  * Returns true/false when parent refs are available, or null when they are absent.
  */
 function isInsideRenderHookViaParents(node: AstNode): boolean | null {
-    let current = node.parent as AstNode;
+    let current = node.parent;
     if (!current) return null;
 
     while (current) {
         if (current.type === 'CallExpression' && RENDER_HOOK_NAMES.has(getCalleeName(current))) {
             return true;
         }
-        current = current.parent as AstNode;
+        current = current.parent;
     }
 
     return false;

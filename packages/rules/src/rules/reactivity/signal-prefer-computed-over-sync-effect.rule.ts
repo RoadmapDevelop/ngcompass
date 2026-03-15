@@ -2,7 +2,7 @@ import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getTsSymbolAtNode, getCalleeName, childNodes, isCalleeNamed, getCallbackArg, getFunctionBody, getNodeStart } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getTsSymbolAtNode, getCalleeName, childNodes, isCalleeNamed, getCallbackArg, getFunctionBody, getNodeStart } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 
@@ -16,7 +16,7 @@ const ASYNC_BOUNDARY_CALLEES = new Set([
 // linkedSignal callees - if present, don't suggest computed()
 const LINKED_SIGNAL_CALLEES = new Set(['linkedSignal']);
 
-function isSignalWriteCall(callExprRaw: AstNode | null | undefined): boolean {
+function isSignalWriteCall(callExprRaw: MaybeAstNode): boolean {
     const call = unwrapNode(callExprRaw);
     if (!call || call.type !== 'CallExpression') return false;
     const callee = unwrapNode(call.callee);
@@ -24,7 +24,7 @@ function isSignalWriteCall(callExprRaw: AstNode | null | undefined): boolean {
     return WRITE_METHODS.has(getStaticPropertyName(callee));
 }
 
-function isLikelySignalRead(nodeRaw: AstNode | null | undefined, context?: RuleContext): boolean {
+function isLikelySignalRead(nodeRaw: MaybeAstNode, context?: RuleContext): boolean {
     const node = unwrapNode(nodeRaw);
     if (!node || node.type !== 'CallExpression') return false;
 

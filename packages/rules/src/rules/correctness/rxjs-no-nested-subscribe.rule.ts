@@ -2,7 +2,7 @@ import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getNodeStart, childNodes } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getNodeStart, childNodes } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 function isSubscribeCall(node: AstNode): boolean {
@@ -51,7 +51,7 @@ function containsNestedSubscribe(body: AstNode): boolean {
  * Returns the callback argument of a `.subscribe(...)` call (first argument),
  * or null if there is none / it is not a function.
  */
-function getSubscribeCallback(node: AstNode): AstNode | null {
+function getSubscribeCallback(node: AstNode): MaybeAstNode {
     const args = node.arguments;
     if (!Array.isArray(args) || args.length === 0) return null;
     const first = unwrapNode(args[0]);
@@ -78,7 +78,7 @@ export const rxjsNoNestedSubscribeRule = createCallExpressionRule(
         const callback = getSubscribeCallback(n);
         if (!callback) return null;
 
-        const body = unwrapNode(callback.body as AstNode | undefined);
+        const body = unwrapNode((callback as any).body);
         if (!body) return null;
 
         if (!containsNestedSubscribe(body)) return null;

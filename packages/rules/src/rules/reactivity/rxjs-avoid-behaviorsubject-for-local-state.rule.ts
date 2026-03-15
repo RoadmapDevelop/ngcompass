@@ -2,11 +2,11 @@ import { AnyAngularClassNode } from "@ngcompass/ast";
 import { RuleFailure } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { AstNode, unwrapNode, getStaticPropertyName, getClassBody, collectRxjsAliases, getNodeStart } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, getStaticPropertyName, getClassBody, collectRxjsAliases, getNodeStart } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 
-function isBehaviorSubjectCallee(calleeRaw: AstNode | null | undefined, names: Set<string>): boolean {
+function isBehaviorSubjectCallee(calleeRaw: MaybeAstNode, names: Set<string>): boolean {
     const callee = unwrapNode(calleeRaw);
     if (!callee) return false;
     if (callee.type === 'Identifier') return names.has((callee.name as string) ?? '');

@@ -2,7 +2,7 @@ import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { AstNode, unwrapNode, isMemberExpressionLike, getNodeStart } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getNodeStart } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 /**
@@ -35,7 +35,7 @@ const SAFE_INJECTION_TOKENS = new Set([
  *       `window.location.href`     →  `"window"`
  */
 function getRootIdentifierName(node: AstNode): string | null {
-    let current: AstNode | null = node;
+    let current: MaybeAstNode = node;
     while (current) {
         if (current.type === 'Identifier') return (current.name as string) ?? null;
         if (isMemberExpressionLike(current)) {

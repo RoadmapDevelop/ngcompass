@@ -2,7 +2,7 @@ import { RuleFailure } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, childNodes, isCalleeNamed, getCallbackArg, getFunctionBody, getNodeStart } from "../../rule-utils";
+import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, childNodes, isCalleeNamed, getCallbackArg, getFunctionBody, getNodeStart } from "../../rule-utils";
 import { RuleContext } from "@ngcompass/common";
 
 
@@ -15,7 +15,7 @@ const SIDE_EFFECT_METHODS = new Set([
 
 const WRITE_METHODS = new Set(['set', 'update', 'mutate']);
 
-function isWriteCall(callExpr: AstNode | null | undefined): boolean {
+function isWriteCall(callExpr: MaybeAstNode): boolean {
     const call = unwrapNode(callExpr);
     if (!call || call.type !== 'CallExpression') return false;
     const callee = unwrapNode(call.callee);
@@ -23,7 +23,7 @@ function isWriteCall(callExpr: AstNode | null | undefined): boolean {
     return WRITE_METHODS.has(getStaticPropertyName(callee));
 }
 
-function isSideEffectCall(callExpr: AstNode | null | undefined): boolean {
+function isSideEffectCall(callExpr: MaybeAstNode): boolean {
     const call = unwrapNode(callExpr);
     if (!call || call.type !== 'CallExpression') return false;
     const callee = unwrapNode(call.callee);
@@ -31,7 +31,7 @@ function isSideEffectCall(callExpr: AstNode | null | undefined): boolean {
     return SIDE_EFFECT_METHODS.has(getStaticPropertyName(callee));
 }
 
-function isWriteNode(node: AstNode | null | undefined): boolean {
+function isWriteNode(node: MaybeAstNode): boolean {
     const n = unwrapNode(node);
     if (!n) return false;
     if (n.type === 'AssignmentExpression') return true;
@@ -41,7 +41,7 @@ function isWriteNode(node: AstNode | null | undefined): boolean {
     return false;
 }
 
-function isEffectNode(node: AstNode | null | undefined): boolean {
+function isEffectNode(node: MaybeAstNode): boolean {
     const n = unwrapNode(node);
     if (!n) return false;
     if (n.type === 'CallExpression') return isSideEffectCall(n);

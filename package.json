@@ -28,8 +28,7 @@
     "turbo:daemon": "turbo daemon",
     "turbo:daemon:status": "turbo daemon status",
     "ci": "turbo build test lint typecheck --concurrency=4",
-    "ci:affected": "turbo build test lint typecheck --filter=[HEAD^1]",
-    "prepare": "husky"
+    "ci:affected": "turbo build test lint typecheck --filter=[HEAD^1]"
   },
   "keywords": [
     "angular",
@@ -42,12 +41,6 @@
   ],
   "author": "ngcompass",
   "license": "MIT",
-  "lint-staged": {
-    "*.ts": [
-      "eslint --fix",
-      "prettier --write"
-    ]
-  },
   "engines": {
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
@@ -67,8 +60,6 @@
     "eslint-plugin-boundaries": "^5.4.0",
     "eslint-plugin-prettier": "^5.5.5",
     "fast-check": "^4.5.3",
-    "husky": "^9.1.7",
-    "lint-staged": "^16.4.0",
     "prettier": "^3.8.1",
     "rimraf": "^6.1.2",
     "tsup": "^8.5.1",

@@ -1,6 +1,6 @@
 import { Command } from 'commander';
 
-import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult } from '@ngcompass/common';
+import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult, type ParseError } from '@ngcompass/common';
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
 import { CacheContext } from '@ngcompass/cache';
@@ -76,8 +76,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 const duration = performance.now() - startTime;
 
                 // 6. Report Results
-                reporter.parseErrors(analysis.parseErrors as any);
-                reporter.report(analysis.results as any);
+                reporter.parseErrors(analysis.parseErrors as ParseError[]);
+                reporter.report(analysis.results as RuleResult[]);
 
                 const summary: ResultSummary = {
                     totalFiles: analysis.stats.totalFiles,
@@ -279,7 +279,7 @@ async function saveToCacheStep(
     reporter: Reporter
 ): Promise<void> {
     const tStart = performance.now();
-    const cacheEntries: [string, any][] = [];
+    const cacheEntries: [string, RuleResult][] = [];
 
     for (const result of results) {
         if (result.taskId) {
