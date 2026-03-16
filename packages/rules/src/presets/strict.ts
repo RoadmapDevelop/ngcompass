@@ -20,7 +20,6 @@ export const strictPreset: PresetConfig = {
         // RxJS → Signals migration
         'rxjs-no-subscribe-in-component': 'error',
         'rxjs-require-takeUntilDestroyed': 'error',
-        'rxjs-avoid-behaviorsubject-for-local-state': 'error',
         'rxjs-avoid-subject-as-event-bus': 'error',
         'rxjs-prefer-toSignal-for-template-state': 'error',
         'toSignal-require-initialValue': 'error',

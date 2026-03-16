@@ -29,6 +29,21 @@ export interface TemplateAttributeNode {
     readonly sourceSpan: { start: number, end: number };
 }
 
+export interface TemplateBlockNode {
+    readonly name: string;
+    readonly parameters: ReadonlyArray<{
+        readonly expression: string;
+        readonly sourceSpan: { start: number, end: number };
+    }>;
+    readonly sourceSpan: { start: number, end: number };
+}
+
+export interface TemplateAnalysis {
+    readonly expressions: ReadonlyArray<TemplateExpressionNode>;
+    readonly attributes: ReadonlyArray<TemplateAttributeNode>;
+    readonly blocks: ReadonlyArray<TemplateBlockNode>;
+}
+
 /**
  * Angular Decorator Stream: ClassDeclaration nodes with @Component or @Directive.
  *

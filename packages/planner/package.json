@@ -29,7 +29,8 @@
     "dependencies": {
         "@ngcompass/common": "workspace:*",
         "@ngcompass/cache": "workspace:*",
-        "@ngcompass/scanner": "workspace:*"
+        "@ngcompass/scanner": "workspace:*",
+        "minimatch": "^10.2.4"
     },
     "peerDependencies": {
         "typescript": "catalog:"

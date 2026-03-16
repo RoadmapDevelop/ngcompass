@@ -15,7 +15,7 @@
 import type { RuleContext, RuleResult, RuleFailure } from './types.js';
 import { walkProgram, toAngularClassStream, toAnyAngularClassStream, toDecoratedPropertyStream, toCallExpressionStream, toNewExpressionStream } from '@ngcompass/ast';
 import type { RuleHandler } from './rule-handler.js';
-import type { TemplateExpressionNode, TemplateAttributeNode } from '@ngcompass/ast';
+import type { TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode } from '@ngcompass/ast';
 import { resetComponentCacheStats, getComponentCacheStats } from '@ngcompass/ast';
 import { analyzeTemplate } from '@ngcompass/ast';
 import { buildVisitorMap } from './visitor-registry.js';
@@ -46,9 +46,9 @@ export interface PerformanceReport {
 // ============================================
 
 /**
- * Union of the two node types that template-stream handlers receive.
+ * Union of the node types that template-stream handlers receive.
  */
-type AnyTemplateNode = TemplateExpressionNode | TemplateAttributeNode;
+type AnyTemplateNode = TemplateExpressionNode | TemplateAttributeNode | TemplateBlockNode;
 
 /**
  * Coordinates the distribution of template-specific nodes to registered handlers.
@@ -143,6 +143,8 @@ export const runSinglePassAnalysis = (
 
     const templateExpressionHandlers = rules.filter(r => r.streamType === 'TemplateExpression');
     const templateAttributeHandlers = rules.filter(r => r.streamType === 'TemplateAttribute');
+    const templateBlockHandlers = rules.filter(r => r.streamType === 'TemplateBlock');
+    const templateHandlers = rules.filter(r => r.streamType === 'Template');
 
     const failuresByRule = new Map<string, RuleFailure[]>();
     const ruleTimings = new Map<string, RuleTiming>();
@@ -198,10 +200,12 @@ export const runSinglePassAnalysis = (
         }
     });
 
-    if (context.template && (templateExpressionHandlers.length > 0 || templateAttributeHandlers.length > 0)) {
+    if (context.template && (templateExpressionHandlers.length > 0 || templateAttributeHandlers.length > 0 || templateBlockHandlers.length > 0 || templateHandlers.length > 0)) {
         const templateAnalysis = analyzeTemplate(context.template);
         dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
         dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.blocks, templateBlockHandlers as any, context, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers([templateAnalysis as any], templateHandlers as any, context, failuresByRule, ruleTimings, options?.errorCollector);
     }
 
     const results: RuleResult[] = [];

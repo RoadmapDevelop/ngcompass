@@ -108,7 +108,11 @@
       "Bash(find /c/Users/30694/Desktop/ngcompass_ -maxdepth 3 -name .env* -o -name env.ts -o -name env.js)",
       "Bash(pnpm list:*)",
       "Bash(pnpm update:*)",
-      "Bash(grep -l '\"\"minimatch\"\"' packages/*/package.json)"
+      "Bash(grep -l '\"\"minimatch\"\"' packages/*/package.json)",
+      "Bash(pnpm --filter @ngcompass/rules test --reporter=verbose)",
+      "Bash(pnpm turbo:*)",
+      "Bash(find C:Users30694Desktoptest_compassngcompasssrccases -name *behaviorsubject* -o -name *behavior*)",
+      "Bash(find C:/Users/30694/Desktop/test_compass/ngcompass -name .ngcompass -o -name *.cache -type d)"
     ]
   }
 }

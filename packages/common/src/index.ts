@@ -19,6 +19,7 @@ export {
     PluginManifest,
     TelemetryConfig,
     TelemetryEventBase,
+    ConfigOverride,
 } from './interfaces.js';
 export * from './errors';
 export * from './types';

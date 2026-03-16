@@ -28,6 +28,8 @@ export const STREAM_TO_NODE_TYPE: StreamToNodeType = {
     DecoratedProperty: 'PropertyDefinition',
     TemplateExpression: '__template_expression__', // dispatched post-walk
     TemplateAttribute: '__template_attribute__',   // dispatched post-walk
+    TemplateBlock: '__template_block__',           // dispatched post-walk
+    Template: '__template_analysis__',             // dispatched post-walk
     CallExpression: 'CallExpression',
     NewExpression: 'NewExpression',
 };

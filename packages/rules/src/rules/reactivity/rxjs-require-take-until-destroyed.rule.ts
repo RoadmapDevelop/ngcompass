@@ -25,6 +25,11 @@ import { RuleContext } from "@ngcompass/common";
  */
 const fileManualTeardownCache = new Map<string, boolean>();
 
+// Evict all entries once the cache exceeds this limit to prevent unbounded
+// growth in long-running watch/LSP server modes.  CLI runs are single-shot
+// and exit immediately, so they are unaffected by the eviction threshold.
+const TEARDOWN_CACHE_MAX = 500;
+
 function fileHasManualTeardown(filePath: string, fileContent: string): boolean {
     const cached = fileManualTeardownCache.get(filePath);
     if (cached !== undefined) return cached;
@@ -33,6 +38,7 @@ function fileHasManualTeardown(filePath: string, fileContent: string): boolean {
     const hasUnsubscribeCall = /\.unsubscribe\(\)/.test(fileContent);
     const result = hasNgOnDestroy && hasUnsubscribeCall;
 
+    if (fileManualTeardownCache.size >= TEARDOWN_CACHE_MAX) fileManualTeardownCache.clear();
     fileManualTeardownCache.set(filePath, result);
     return result;
 }

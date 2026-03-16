@@ -7,6 +7,7 @@
 import type { CacheContext } from '@ngcompass/cache';
 import type { CacheKeyContext } from '@ngcompass/cache';
 import { Result, Ok, Err, ResolvedRule, RuleSeverity, AnalysisResult } from '@ngcompass/common';
+import type { ConfigOverride } from '@ngcompass/common';
 
 // ==============================================================================
 // EXECUTION PLAN OUTPUT
@@ -365,6 +366,20 @@ export interface ExecutionPlanOptions {
      * Defaults to 4.
      */
     readonly workerCount?: number;
+
+    /**
+     * Per-file rule overrides from config.overrides[].
+     *
+     * Each override entry's `files` glob patterns are matched against each
+     * analysed file path. Matching override rules are merged on top of the
+     * global resolved rules before tasks are created for that file.
+     * Last matching override wins.
+     *
+     * - `'off'`        → rule is disabled for matching files
+     * - `'warn'|'error'` → severity changed, options inherited from global
+     * - object form   → severity + options merged (override wins on conflicts)
+     */
+    readonly overrides?: ReadonlyArray<ConfigOverride>;
 }
 
 // ==============================================================================

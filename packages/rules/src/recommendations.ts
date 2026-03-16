@@ -11,8 +11,6 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
         'Function calls in templates are executed on every change detection cycle.',
     'rxjs-no-subscribe-in-component':
         'For reactive data streams (state derived from observables), use `toSignal()` or the `async` pipe. For imperative user-triggered actions (save, dialog, navigation), a subscription is acceptable — add `takeUntilDestroyed()` for long-lived streams.',
-    'rxjs-avoid-behaviorsubject-for-local-state':
-        'Replace BehaviorSubject with a Signal for local state to improve performance and simplify reactivity.',
     'template-trackby-required-for-ngfor':
         'Add a `trackBy` function to `*ngFor` to help Angular identify which items have changed and avoid unnecessary DOM recreations.',
     'template-no-object-literal-binding':
@@ -102,12 +100,6 @@ onSave() {
     .pipe(takeUntilDestroyed(this.destroyRef))
     .subscribe(res => this.notify(res));
 }`,
-
-    'rxjs-avoid-behaviorsubject-for-local-state': `// Before:
-private count$ = new BehaviorSubject<number>(0);
-
-// After:
-count = signal(0);`,
 
     'rxjs-avoid-subject-as-event-bus': `// Case A — UI state: replace with signal()
 // Before:

@@ -734,13 +734,17 @@ export function getParamsArray(funcNode: AstNode | null | undefined): AstNode[] 
 }
 
 /**
- * Gets the identifier name from a parameter node (handles AssignmentPattern, RestElement).
+ * Gets the identifier name from a parameter node (handles AssignmentPattern, RestElement, TSParameterProperty).
  */
 export function getParamIdentifierName(param: AstNode | null | undefined): string {
     const p = unwrapNode(param);
     if (!p) return '';
 
     if (p.type === 'Identifier') return (p.name as string) ?? '';
+
+    if (p.type === 'TSParameterProperty') {
+        return getParamIdentifierName(p.parameter as AstNode);
+    }
 
     if (p.type === 'AssignmentPattern') {
         const left = unwrapNode(p.left);
@@ -756,11 +760,16 @@ export function getParamIdentifierName(param: AstNode | null | undefined): strin
 }
 
 /**
- * Gets the type name from a parameter's type annotation.
+ * Gets the type name from a parameter's type annotation (handles TSParameterProperty).
  */
 export function getParamTypeName(param: AstNode | null | undefined): string {
     const p = unwrapNode(param);
     if (!p) return '';
+
+    if (p.type === 'TSParameterProperty') {
+        return getParamTypeName(p.parameter as AstNode);
+    }
+
     const typeAnnotation = p.typeAnnotation;
     const typeNode = (typeAnnotation?.typeAnnotation ?? typeAnnotation);
     const t = unwrapNode(typeNode);
