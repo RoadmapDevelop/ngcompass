@@ -1,13 +1,25 @@
 import { ChangeDetectionStrategy, type AngularClassNode } from '@ngcompass/ast';
-import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
-import { createComponentRule } from '@ngcompass/engine';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
+import { createComponentRule } from '@ngcompass/engine';
+
+import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyNode = any;
 
+const RULE_NAME = 'prefer-on-push-component-change-detection';
+
+type DeclaringModuleContext = {
+    moduleName: string;
+    siblingComponentCount: number;
+};
+
+/**
+ * Returns the safest available offset for reporting.
+ */
 function getSafeReportOffset(classNode: AngularClassNode): number {
     const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
+
     return (
         metadata?.decoratorStart ??
         metadata?.start ??
@@ -17,86 +29,201 @@ function getSafeReportOffset(classNode: AngularClassNode): number {
     );
 }
 
+/**
+ * Returns the component class name when available.
+ */
 function getComponentName(classNode: AngularClassNode): string {
     const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
     return metadata?.className ?? 'AnonymousComponent';
 }
 
+/**
+ * Returns true when the component should be reported.
+ *
+ * Report when:
+ * - changeDetection is missing
+ * - changeDetection is a literal and not OnPush
+ *
+ * Skip when:
+ * - changeDetection is non-literal
+ * - changeDetection already resolves to OnPush
+ */
 function isReportableChangeDetection(changeDetection: AnyNode): boolean {
-    if (!changeDetection || typeof changeDetection !== 'object') return false;
+    if (!changeDetection || typeof changeDetection !== 'object') {
+        return false;
+    }
+
     const kind = changeDetection.kind;
-    if (kind === 'non-literal') return false;
-    if (kind === 'literal') return changeDetection.value !== ChangeDetectionStrategy.OnPush;
-    if (kind === 'missing') return true;
+
+    if (kind === 'non-literal') {
+        return false;
+    }
+
+    if (kind === 'literal') {
+        return changeDetection.value !== ChangeDetectionStrategy.OnPush;
+    }
+
+    if (kind === 'missing') {
+        return true;
+    }
+
     return false;
+}
+
+/**
+ * Normalizes a file path for stable comparisons.
+ */
+function normalizeFilePath(filePath: string): string {
+    return filePath.replace(/\\/g, '/');
+}
+
+/**
+ * Returns true when the declared file is likely a component file.
+ *
+ * This is intentionally heuristic and is only used for contextual messaging,
+ * not for determining whether the current component violates the rule.
+ */
+function isLikelyComponentFile(filePath: string | undefined): boolean {
+    return !!filePath && normalizeFilePath(filePath).endsWith('.component.ts');
+}
+
+/**
+ * Derives a readable module name from a module file path.
+ *
+ * Example:
+ * /src/app/shared/shared.module.ts -> shared.module
+ */
+function getModuleNameFromFilePath(moduleFilePath: string): string {
+    const normalized = normalizeFilePath(moduleFilePath);
+    const segments = normalized.split('/');
+    const fileName = segments[segments.length - 1] ?? moduleFilePath;
+
+    return fileName.replace(/\.ts$/, '');
+}
+
+/**
+ * Resolves NgModule context for the current component, when available.
+ *
+ * Notes:
+ * - This uses the project's declaration map for contextual enrichment only.
+ * - Sibling component count is heuristic and reflects other `.component.ts`
+ *   declarations in the same NgModule, not verified peer violations.
+ */
+function getDeclaringModuleContext(
+    classNode: AngularClassNode,
+    context: RuleContext,
+): DeclaringModuleContext | null {
+    if (!context.project) {
+        return null;
+    }
+
+    const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
+    const componentName = metadata?.className;
+    if (!componentName) {
+        return null;
+    }
+
+    const currentFilePath = normalizeFilePath(context.filePath);
+    const { ngModuleMap, classToFile } = context.project;
+
+    for (const [moduleFile, moduleInfo] of ngModuleMap) {
+        if (moduleInfo.isStandalone) {
+            continue;
+        }
+
+        if (!moduleInfo.declarations.has(componentName)) {
+            continue;
+        }
+
+        const declaredFile = classToFile.get(componentName);
+        if (declaredFile && normalizeFilePath(declaredFile) !== currentFilePath) {
+            continue;
+        }
+
+        let siblingComponentCount = 0;
+
+        for (const declaredClass of moduleInfo.declarations) {
+            if (declaredClass === componentName) {
+                continue;
+            }
+
+            const declarationFile = classToFile.get(declaredClass);
+            if (isLikelyComponentFile(declarationFile)) {
+                siblingComponentCount++;
+            }
+        }
+
+        return {
+            moduleName: getModuleNameFromFilePath(moduleFile),
+            siblingComponentCount,
+        };
+    }
+
+    return null;
+}
+
+/**
+ * Builds the failure message with optional NgModule context.
+ */
+function buildFailureMessage(
+    componentName: string,
+    moduleContext: DeclaringModuleContext | null,
+): string {
+    if (!moduleContext) {
+        return `Component '${componentName}' should use ChangeDetectionStrategy.OnPush.`;
+    }
+
+    const { moduleName, siblingComponentCount } = moduleContext;
+    const siblingNote =
+        siblingComponentCount > 0
+            ? ` ${siblingComponentCount} other component${siblingComponentCount === 1 ? '' : 's'
+            } are declared in '${moduleName}'.`
+            : '';
+
+    return `Component '${componentName}' (declared in '${moduleName}') should use ChangeDetectionStrategy.OnPush.${siblingNote}`;
+}
+
+/**
+ * Creates a failure for a component that does not use OnPush.
+ */
+function createFailure(
+    classNode: AngularClassNode,
+    context: RuleContext,
+): RuleFailure {
+    const offset = getSafeReportOffset(classNode);
+    const { line, column } = context.locator.location(offset);
+    const componentName = getComponentName(classNode);
+    const moduleContext = getDeclaringModuleContext(classNode, context);
+
+    return {
+        filePath: context.filePath,
+        ruleName: RULE_NAME,
+        message: buildFailureMessage(componentName, moduleContext),
+        line,
+        column,
+        severity: 'error',
+        fix: RECOMMENDATIONS[RULE_NAME],
+        codeExample: CODE_EXAMPLES[RULE_NAME],
+    };
 }
 
 /**
  * Enforces ChangeDetectionStrategy.OnPush for Angular components.
  */
 export const preferOnPushRule = createComponentRule(
-    'prefer-on-push-component-change-detection',
+    RULE_NAME,
     (classNode: AngularClassNode, context: RuleContext): RuleFailure | null => {
         const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
-        if (metadata.type !== 'Component') return null;
 
-        const changeDetection = metadata.changeDetection;
-        if (!isReportableChangeDetection(changeDetection)) return null;
-
-        const offset = getSafeReportOffset(classNode);
-        const { line, column } = context.locator.location(offset);
-        const name = getComponentName(classNode);
-
-        // CTX-008: Use ngModuleMap to find which NgModule declares this component.
-        // When found, add module context to the message and report how many components
-        // in the same module still need OnPush — turns a generic advisory into an
-        // actionable, module-scoped finding.
-        let moduleContext = '';
-        if (context.project) {
-            const { ngModuleMap, classToFile } = context.project;
-            let declaringModuleFile: string | undefined;
-            let componentPeersInModule = 0;
-
-            for (const [moduleFile, moduleInfo] of ngModuleMap) {
-                if (moduleInfo.isStandalone) continue;
-                if (!moduleInfo.declarations.has(name)) continue;
-
-                declaringModuleFile = moduleFile;
-
-                // Count component peers in this module (to surface module-level coverage info).
-                for (const declaredClass of moduleInfo.declarations) {
-                    const declFile = classToFile.get(declaredClass);
-                    if (declFile && declFile.endsWith('.component.ts')) componentPeersInModule++;
-                }
-                break;
-            }
-
-            if (declaringModuleFile) {
-                // Derive a human-readable module name from the file path.
-                // e.g. "/src/app/shared/shared.module.ts" → "shared.module"
-                const segments = declaringModuleFile.replace(/\\/g, '/').split('/');
-                const fileName = segments[segments.length - 1] ?? declaringModuleFile;
-                const moduleName = fileName.replace(/\.ts$/, '');
-                // peerCount excludes the current component itself
-                const peerCount = Math.max(0, componentPeersInModule - 1);
-                const peerNote = peerCount > 0
-                    ? ` ${peerCount} other component${peerCount === 1 ? '' : 's'} in '${moduleName}' may also need OnPush.`
-                    : '';
-                moduleContext = ` (declared in '${moduleName}')${peerNote}`;
-            }
+        if (metadata.type !== 'Component') {
+            return null;
         }
 
-        return {
-            filePath: context.filePath,
-            ruleName: 'prefer-on-push-component-change-detection',
-            message: `Component '${name}'${moduleContext} should use ChangeDetectionStrategy.OnPush.`,
-            line,
-            column,
-            severity: 'error',
-            fix: RECOMMENDATIONS['prefer-on-push-component-change-detection'],
-            codeExample: CODE_EXAMPLES['prefer-on-push-component-change-detection'],
-        };
-    },
-    { requires: { projectContext: true } }
-);
+        if (!isReportableChangeDetection(metadata.changeDetection)) {
+            return null;
+        }
 
+        return createFailure(classNode, context);
+    },
+    { requires: { projectContext: true } },
+);

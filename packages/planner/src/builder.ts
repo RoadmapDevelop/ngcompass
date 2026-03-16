@@ -14,6 +14,8 @@ import type {
     Result,
     FileType,
 } from "./types.js";
+import type { ConfigOverride } from "@ngcompass/common";
+import { resolveOverridesForFile } from "./overrides.js";
 import { Ok, Err } from "./types.js";
 import { AnalysisResult, debug, time, timeLog } from "@ngcompass/common";
 import { detectFileType } from "./file-type.js";
@@ -96,7 +98,8 @@ export const buildExecutionPlan = async (
                 context,
                 fileTypeCache,
                 options.parallelThreshold,
-                options.workerCount
+                options.workerCount,
+                options.overrides
             );
             if (options.debug && context.graphStats) {
                 const { hits, misses, fallbacks } = context.graphStats;
@@ -410,14 +413,15 @@ const buildAllTasks = async (
     context?: TaskBuilderContext,
     fileTypeCache?: Map<string, FileType>,
     parallelThreshold = 10000,
-    workerCount = 4
+    workerCount = 4,
+    overrides?: ReadonlyArray<ConfigOverride>
 ): Promise<ReadonlyArray<Task>> => {
     if (files.length >= parallelThreshold) {
-        const tasks = await tryBuildAllTasksParallel(files, rules, fileTypeCache, workerCount);
+        const tasks = await tryBuildAllTasksParallel(files, rules, fileTypeCache, workerCount, overrides);
         if (tasks) return tasks;
     }
 
-    return buildAllTasksSequential(files, rules, context, fileTypeCache);
+    return buildAllTasksSequential(files, rules, context, fileTypeCache, overrides);
 };
 
 /**
@@ -433,13 +437,18 @@ const buildAllTasksSequential = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, any>,
     context?: TaskBuilderContext,
-    fileTypeCache?: Map<string, FileType>
+    fileTypeCache?: Map<string, FileType>,
+    overrides?: ReadonlyArray<ConfigOverride>
 ): Promise<Task[]> => {
     const allTasks: Task[] = [];
 
     for (const file of files) {
         const fileType = getOrDetectFileType(file, fileTypeCache);
-        const fileTasks = await buildTasksForFileTaskCentric(file, fileType, rules, context);
+        // Apply per-file overrides when configured; returns globalRules unchanged on no match.
+        const fileRules = overrides?.length
+            ? resolveOverridesForFile(file, rules, overrides)
+            : rules;
+        const fileTasks = await buildTasksForFileTaskCentric(file, fileType, fileRules, context);
         allTasks.push(...fileTasks);
     }
 
@@ -459,7 +468,8 @@ const tryBuildAllTasksParallel = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, any>,
     fileTypeCache: Map<string, FileType> | undefined,
-    workerCount: number
+    workerCount: number,
+    overrides?: ReadonlyArray<ConfigOverride>
 ): Promise<Task[] | null> => {
     debug("planner", `Parallelizing task discovery across ${workerCount} workers...`);
 
@@ -475,7 +485,7 @@ const tryBuildAllTasksParallel = async (
         const chunks = splitIntoChunks(files, workerCount);
         debug("planner", `Split ${files.length} files into ${chunks.length} chunks`);
 
-        const tasks = await runWorkerChunks(chunks, workerPath, rules, fileTypeCache);
+        const tasks = await runWorkerChunks(chunks, workerPath, rules, fileTypeCache, overrides);
         debug("planner", `Workers completed. Generated ${tasks.length} tasks.`);
         return tasks;
     } catch (error) {
@@ -551,13 +561,16 @@ const runWorkerChunks = async (
     chunks: ReadonlyArray<string[]>,
     workerPath: string,
     rules: ReadonlyMap<string, any>,
-    fileTypeCache?: Map<string, FileType>
+    fileTypeCache?: Map<string, FileType>,
+    overrides?: ReadonlyArray<ConfigOverride>
 ): Promise<Task[]> => {
     const { Worker } = await import("node:worker_threads");
 
     // Serialize Maps to plain arrays so structured-clone preserves all data.
     const rulesEntries = Array.from(rules.entries());
     const fileTypeCacheEntries = fileTypeCache ? Array.from(fileTypeCache.entries()) : undefined;
+    // ConfigOverride[] is plain JSON — safe to send as-is via structured-clone.
+    const overridesData = overrides?.length ? [...overrides] : undefined;
 
     const workerPromises = chunks.map((chunk, index) => {
         return new Promise<Task[]>((resolve, reject) => {
@@ -566,6 +579,7 @@ const runWorkerChunks = async (
                     files: chunk,
                     rulesEntries,
                     fileTypeCacheEntries,
+                    overridesData,
                 },
             });
 

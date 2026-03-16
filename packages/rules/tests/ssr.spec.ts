@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { makeContext, findCallExpressions } from './helpers.js';
+import { makeContext, makeAngularClassNode, findCallExpressions } from './helpers.js';
 import { noDocumentAccessRule } from '../src/rules/ssr/no-document-access.rule.js';
 import { preferAfterRenderOverAfterViewInitRule } from '../src/rules/ssr/prefer-after-render-over-after-view-init.rule.js';
 
@@ -110,5 +110,70 @@ describe('prefer-after-render-over-after-view-init', () => {
     it('has correct name and streamType', () => {
         expect(preferAfterRenderOverAfterViewInitRule.name).toBe('prefer-after-render-over-after-view-init');
         expect(preferAfterRenderOverAfterViewInitRule.streamType).toBe('AnyAngularClass');
+    });
+
+    it('flags ngAfterViewInit that accesses DOM (nativeElement)', () => {
+        const source = `
+class AppComponent {
+    ngAfterViewInit() {
+        this.el.nativeElement.focus();
+    }
+}`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/ssr-avit-flag-a.component.ts'
+        );
+        const result = preferAfterRenderOverAfterViewInitRule.handle(classStreamNode, ctx) as any;
+        expect(result).not.toBeNull();
+        expect(result.ruleName).toBe('prefer-after-render-over-after-view-init');
+        expect(result.severity).toBe('warn');
+    });
+
+    it('flags ngAfterViewInit that calls document.querySelector()', () => {
+        const source = `
+class AppComponent {
+    ngAfterViewInit() {
+        const el = document.querySelector('.cls');
+    }
+}`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/ssr-avit-flag-b.component.ts'
+        );
+        const result = preferAfterRenderOverAfterViewInitRule.handle(classStreamNode, ctx) as any;
+        expect(result).not.toBeNull();
+    });
+
+    it('does NOT flag ngAfterViewInit with no DOM access', () => {
+        const source = `
+class AppComponent {
+    ngAfterViewInit() {
+        this.subscribeToUpdates();
+    }
+}`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/ssr-avit-clean-c.component.ts'
+        );
+        const result = preferAfterRenderOverAfterViewInitRule.handle(classStreamNode, ctx);
+        expect(result).toBeNull();
+    });
+
+    it('does NOT flag a component without ngAfterViewInit', () => {
+        const source = `class AppComponent { ngOnInit() { this.setup(); } }`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/ssr-no-avit-d.component.ts'
+        );
+        const result = preferAfterRenderOverAfterViewInitRule.handle(classStreamNode, ctx);
+        expect(result).toBeNull();
+    });
+
+    it('does NOT flag in a non-component/directive file', () => {
+        const source = `
+class SomePipe {
+    ngAfterViewInit() { this.el.nativeElement.focus(); }
+}`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/ssr-avit-pipe-e.pipe.ts'
+        );
+        const result = preferAfterRenderOverAfterViewInitRule.handle(classStreamNode, ctx);
+        expect(result).toBeNull();
     });
 });

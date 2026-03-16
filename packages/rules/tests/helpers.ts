@@ -22,6 +22,10 @@ export function makeContext(
     return {
         filePath,
         fileContent: source,
+        // Some rules access sourceText via (context as any).sourceText for import
+        // alias detection (collectRxjsAliases). Aliasing fileContent here ensures
+        // those rules receive source text in both fields without duplicating it.
+        sourceText: source,
         locator: new Locator(source),
         program,
     } as any;
@@ -59,4 +63,44 @@ export function findCallExpressions(program: Program, callee?: string): any[] {
         ) return true;
         return false;
     });
+}
+
+// ---------------------------------------------------------------------------
+// Angular class node factory  (for AnyAngularClass / AngularClass stream rules)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses `source` and returns the first ClassDeclaration node wrapped in the
+ * minimal `AnyAngularClassNode`-compatible shape expected by Angular class rules.
+ *
+ * All `AnyAngularClass` stream rules do:
+ *   const classNode = streamNode.node as unknown as AstNode;
+ *   const classBody = getClassBody(classNode);
+ *
+ * Wrapping the parsed ClassDeclaration as `{ node, metadata }` satisfies that
+ * contract without requiring the full engine streaming infrastructure.
+ *
+ * For rules that additionally inspect `streamNode.metadata` (e.g. prefer-on-push),
+ * pass `metadata` explicitly:
+ *
+ *   const { classStreamNode, ctx } = makeAngularClassNode(src, '/src/a.component.ts', {
+ *     type: 'Component',
+ *     changeDetection: { kind: 'missing' },
+ *     className: 'MyComponent',
+ *   });
+ */
+export function makeAngularClassNode(
+    source: string,
+    filePath = '/src/test.component.ts',
+    metadata: Record<string, unknown> = {},
+): { classStreamNode: any; ctx: RuleContext & { program: Program } } {
+    const ctx = makeContext(source, filePath);
+    const classNodes = findNodes(ctx.program, (n: any) => n.type === 'ClassDeclaration');
+    if (!classNodes.length) {
+        throw new Error(
+            `makeAngularClassNode: no ClassDeclaration found in source:\n${source.slice(0, 200)}`
+        );
+    }
+    const classStreamNode = { node: classNodes[0], metadata };
+    return { classStreamNode, ctx };
 }

@@ -8,11 +8,11 @@
  */
 
 import type { RuleFailure, RuleContext } from './types.js';
-import type { AngularClassNode, AnyAngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode } from '@ngcompass/ast';
+import type { AngularClassNode, AnyAngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode, TemplateAnalysis } from '@ngcompass/ast';
 import type { CallExpression, NewExpression } from '@ngcompass/ast';
 import { RuleMetadata } from '@ngcompass/common';
 
-export type StreamType = 'AngularClass' | 'AnyAngularClass' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute' | 'CallExpression' | 'NewExpression';
+export type StreamType = 'AngularClass' | 'AnyAngularClass' | 'DecoratedProperty' | 'TemplateExpression' | 'TemplateAttribute' | 'TemplateBlock' | 'Template' | 'CallExpression' | 'NewExpression';
 
 /**
  * Rule handler for a specific stream type.
@@ -137,6 +137,34 @@ export const createNewExpressionRule = (
 ): RuleHandler<NewExpression> => ({
     name,
     streamType: 'NewExpression',
+    handle: handler,
+    meta,
+});
+
+/**
+ * Helper to create template block rule handlers.
+ */
+export const createTemplateBlockRule = (
+    name: string,
+    handler: (node: TemplateBlockNode, context: RuleContext) => RuleFailure | RuleFailure[] | null,
+    meta?: Partial<RuleMetadata>
+): RuleHandler<TemplateBlockNode> => ({
+    name,
+    streamType: 'TemplateBlock',
+    handle: handler,
+    meta,
+});
+
+/**
+ * Helper to create template rules that receive the full template analysis.
+ */
+export const createTemplateRule = (
+    name: string,
+    handler: (node: TemplateAnalysis, context: RuleContext) => RuleFailure | RuleFailure[] | null,
+    meta?: Partial<RuleMetadata>
+): RuleHandler<TemplateAnalysis> => ({
+    name,
+    streamType: 'Template',
     handle: handler,
     meta,
 });

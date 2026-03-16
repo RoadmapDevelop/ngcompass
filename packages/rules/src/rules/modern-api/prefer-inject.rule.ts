@@ -1,8 +1,23 @@
-import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
-import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { AnyAngularClassNode } from '@ngcompass/ast';
-import { AstNode, MaybeAstNode, unwrapNode, getTsSymbolAtNode, isLikelyAngularInjectableSymbol, getParamIdentifierName, getParamTypeName, getClassBody, getConstructorMember, getParamsArray, getNodeStart } from '../../rule-utils';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
+import { createAnyAngularClassRule } from '@ngcompass/engine';
+
+import {
+    AstNode,
+    MaybeAstNode,
+    getClassBody,
+    getConstructorMember,
+    getNodeStart,
+    getParamIdentifierName,
+    getParamTypeName,
+    getParamsArray,
+    getTsSymbolAtNode,
+    isLikelyAngularInjectableSymbol,
+    unwrapNode,
+} from '../../rule-utils';
+import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
+
+const RULE_NAME = 'prefer-inject-over-constructor-di';
 
 const DIISH_PARAM_NAMES = new Set([
     'http', 'router', 'route', 'cdr', 'cdref', 'changedetectorref',
@@ -29,11 +44,7 @@ const NON_DIISH_PARAM_NAMES = new Set([
 ]);
 
 /**
- * Type name suffixes that strongly indicate Angular DI injection.
- * Sorted roughly by frequency for marginal early-exit benefit in the endsWith loop.
- *
- * NOTE: INJECTABLE_SYMBOL_SUFFIXES in rule-utils.ts is a subset of this list.
- * Keep both in sync when adding entries.
+ * Type suffixes that strongly suggest DI-oriented dependencies.
  */
 export const DIISH_TYPE_SUFFIXES = [
     'Service', 'Facade', 'Store', 'Client', 'Repository', 'Adapter',
@@ -50,112 +61,246 @@ export const DIISH_TYPE_SUFFIXES = [
     'Resolver', 'Factory', 'Strategy', 'Validator',
 ] as const;
 
-function lower(s: string): string {
-    return s.toLowerCase();
-}
-
-function hasParamDecorators(param: AstNode): boolean {
-    const p = unwrapNode(param);
-    const decs = p?.decorators;
-    return Array.isArray(decs) && decs.length > 0;
-}
-
-function hasParamPropertyModifier(param: AstNode): boolean {
-    const p = unwrapNode(param);
-    return Boolean(p?.accessibility) || Boolean(p?.readonly);
-}
-
-function isPrimitiveTypeName(typeName: string): boolean {
-    const t = lower(typeName);
-    return t === 'string' || t === 'number' || t === 'boolean' || t === 'symbol' || t === 'bigint' || t === 'any' || t === 'unknown' || t === 'void';
+function normalize(value: string): string {
+    return value.trim().toLowerCase();
 }
 
 /**
- * Returns true when the type name ends with a known Angular DI suffix.
- *
- * The redundant Array.includes() guard was removed: endsWith() already handles
- * exact matches (e.g. 'Service'.endsWith('Service') === true), so the extra
- * O(N) includes() scan added cost without shortening the happy path.
+ * Returns the constructor node from the class body.
  */
-function isInjectedServiceType(typeName: string): boolean {
-    if (!typeName) return false;
+function getConstructorNode(classNode: AstNode): MaybeAstNode {
+    const classBody = getClassBody(classNode);
+    if (classBody.length === 0) {
+        return null;
+    }
+
+    return getConstructorMember(classBody);
+}
+
+/**
+ * Returns constructor parameters for the given class.
+ */
+function getConstructorParams(classNode: AstNode): AstNode[] {
+    const ctor = getConstructorNode(classNode);
+    if (!ctor) {
+        return [];
+    }
+
+    const ctorValue = (ctor.value ?? ctor) as AstNode;
+    return getParamsArray(ctorValue);
+}
+
+/**
+ * Returns true when the parameter has Angular/TS parameter decorators.
+ */
+function hasParamDecorators(param: AstNode): boolean {
+    const node = unwrapNode(param);
+    const decorators = node?.decorators;
+    return Array.isArray(decorators) && decorators.length > 0;
+}
+
+/**
+ * Returns true when the parameter is declared as a constructor parameter property.
+ */
+function hasParamPropertyModifier(param: AstNode): boolean {
+    const node = unwrapNode(param);
+    return Boolean(node?.accessibility) || Boolean(node?.readonly);
+}
+
+/**
+ * Returns true when the parameter resolves to an injectable symbol via TypeChecker.
+ */
+function hasInjectableTypeSymbol(param: AstNode, context: RuleContext): boolean {
+    if (!context.typeChecker) {
+        return false;
+    }
+
+    const symbol = getTsSymbolAtNode(param, context);
+    return Boolean(symbol && isLikelyAngularInjectableSymbol(symbol));
+}
+
+/**
+ * Returns the normalized identifier name for the parameter.
+ */
+function getNormalizedParamName(param: AstNode): string {
+    return normalize(getParamIdentifierName(param));
+}
+
+/**
+ * Returns the raw declared type name for the parameter.
+ */
+function getDeclaredParamTypeName(param: AstNode): string {
+    return getParamTypeName(param).trim();
+}
+
+/**
+ * Returns true when the type is primitive-ish and should not be treated as DI.
+ */
+function isPrimitiveTypeName(typeName: string): boolean {
+    switch (normalize(typeName)) {
+        case 'string':
+        case 'number':
+        case 'boolean':
+        case 'symbol':
+        case 'bigint':
+        case 'any':
+        case 'unknown':
+        case 'void':
+            return true;
+        default:
+            return false;
+    }
+}
+
+/**
+ * Returns true when the type name ends with a DI-ish suffix.
+ */
+function hasDiishTypeSuffix(typeName: string): boolean {
+    if (!typeName) {
+        return false;
+    }
+
     return DIISH_TYPE_SUFFIXES.some(suffix => typeName.endsWith(suffix));
 }
 
-function isLikelyDIParam(param: AstNode, context: RuleContext): boolean {
-    if (hasParamDecorators(param)) return true;
-    if (hasParamPropertyModifier(param)) return true;
-
-    // TypeChecker Integration
-    if (context.typeChecker) {
-        const symbol = getTsSymbolAtNode(param, context);
-        if (symbol && isLikelyAngularInjectableSymbol(symbol)) return true;
-    }
-
-    const name = lower(getParamIdentifierName(param));
-    const typeName = getParamTypeName(param);
-
-    if (!name && !typeName) return false;
-
-    if (name && DIISH_PARAM_NAMES.has(name)) return true;
-    if (name && NON_DIISH_PARAM_NAMES.has(name)) return false;
-
-    if (typeName && !isPrimitiveTypeName(typeName) && isInjectedServiceType(typeName)) return true;
-
-    return false;
+/**
+ * Returns true when the parameter name is a strong DI heuristic.
+ */
+function hasDiishParamName(param: AstNode): boolean {
+    const name = getNormalizedParamName(param);
+    return Boolean(name) && DIISH_PARAM_NAMES.has(name);
 }
 
-function paramDisplayName(param: AstNode): string {
+/**
+ * Returns true when the parameter name strongly suggests non-DI data.
+ */
+function hasNonDiishParamName(param: AstNode): boolean {
+    const name = getNormalizedParamName(param);
+    return Boolean(name) && NON_DIISH_PARAM_NAMES.has(name);
+}
+
+/**
+ * Returns true when the parameter type heuristically looks like an injected dependency.
+ */
+function hasDiishTypeName(param: AstNode): boolean {
+    const typeName = getDeclaredParamTypeName(param);
+    if (!typeName || isPrimitiveTypeName(typeName)) {
+        return false;
+    }
+
+    return hasDiishTypeSuffix(typeName);
+}
+
+/**
+ * Returns true when the parameter has strong semantic DI evidence.
+ */
+function hasStrongDiEvidence(param: AstNode, context: RuleContext): boolean {
+    return (
+        hasParamDecorators(param) ||
+        hasParamPropertyModifier(param) ||
+        hasInjectableTypeSymbol(param, context)
+    );
+}
+
+/**
+ * Returns true when the parameter has fallback heuristic DI evidence.
+ */
+function hasHeuristicDiEvidence(param: AstNode): boolean {
+    if (hasNonDiishParamName(param)) {
+        return false;
+    }
+
+    if (hasDiishParamName(param)) {
+        return true;
+    }
+
+    return hasDiishTypeName(param);
+}
+
+/**
+ * Returns true when the constructor parameter likely participates in Angular DI.
+ */
+function isLikelyConstructorDiParam(param: AstNode, context: RuleContext): boolean {
+    if (hasStrongDiEvidence(param, context)) {
+        return true;
+    }
+
+    return hasHeuristicDiEvidence(param);
+}
+
+/**
+ * Returns all constructor params that likely represent dependency injection.
+ */
+function collectConstructorDiParams(classNode: AstNode, context: RuleContext): AstNode[] {
+    const params = getConstructorParams(classNode);
+    return params.filter(param => isLikelyConstructorDiParam(param, context));
+}
+
+/**
+ * Builds a readable display label for a constructor parameter.
+ */
+function formatParam(param: AstNode): string {
     const name = getParamIdentifierName(param);
     const typeName = getParamTypeName(param);
-    if (name && typeName) return `${name}: ${typeName}`;
+
+    if (name && typeName) {
+        return `${name}: ${typeName}`;
+    }
+
     return name || typeName || '<param>';
 }
 
-function getFunctionValueFromConstructor(ctor: MaybeAstNode): MaybeAstNode {
-    if (!ctor) return null;
-    return (ctor.value ?? ctor) as AstNode;
+/**
+ * Builds the failure message.
+ */
+function buildFailureMessage(diParams: AstNode[]): string {
+    const listed = diParams.map(formatParam).join(', ');
+    const suffix = listed ? ` Offending params: ${listed}.` : '';
+
+    return `Prefer inject() over constructor-based dependency injection.${suffix}`;
+}
+
+/**
+ * Creates the rule failure for constructor-based DI.
+ */
+function createFailure(
+    ctor: AstNode,
+    context: RuleContext,
+    diParams: AstNode[],
+): RuleFailure {
+    const start = getNodeStart(ctor);
+    const { line, column } = context.locator.location(start);
+
+    return {
+        filePath: context.filePath,
+        ruleName: RULE_NAME,
+        message: buildFailureMessage(diParams),
+        line,
+        column,
+        severity: 'warn',
+        fix: RECOMMENDATIONS[RULE_NAME],
+        codeExample: CODE_EXAMPLES[RULE_NAME],
+    };
 }
 
 /**
  * Prefer `inject()` over constructor-based dependency injection in Angular classes.
  */
 export const preferInjectRule = createAnyAngularClassRule(
-    'prefer-inject-over-constructor-di',
-    (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure | null => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const classNode = streamNode.node as any;
-        const classBody = getClassBody(classNode);
-        if (classBody.length === 0) return null;
+    RULE_NAME,
+    (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure | null => {
+        const classNode = classNodeWrapper.node as AstNode;
 
-        const ctor = getConstructorMember(classBody);
-        if (!ctor) return null;
+        const ctor = getConstructorNode(classNode);
+        if (!ctor) {
+            return null;
+        }
 
-        const funcNode = getFunctionValueFromConstructor(ctor);
-        if (!funcNode) return null;
+        const diParams = collectConstructorDiParams(classNode, context);
+        if (diParams.length === 0) {
+            return null;
+        }
 
-        const params = getParamsArray(funcNode);
-        if (params.length === 0) return null;
-
-        const diParams = params.filter((p: AstNode) => isLikelyDIParam(p, context));
-        if (diParams.length === 0) return null;
-
-        const start = getNodeStart(ctor);
-        const { line, column } = context.locator.location(start);
-
-        const listed = diParams.map(paramDisplayName).join(', ');
-        const suffix = listed ? ` Offending params: ${listed}.` : '';
-
-        return {
-            filePath: context.filePath,
-            ruleName: 'prefer-inject-over-constructor-di',
-            message: `Use inject() instead of constructor parameters for dependency injection.${suffix}`,
-            line,
-            column,
-            severity: 'warn',
-            fix: RECOMMENDATIONS['prefer-inject-over-constructor-di'],
-            codeExample: CODE_EXAMPLES['prefer-inject-over-constructor-di'],
-        };
-    }
+        return createFailure(ctor as AstNode, context, diParams);
+    },
 );
-

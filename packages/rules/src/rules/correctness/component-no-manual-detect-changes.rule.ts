@@ -1,148 +1,342 @@
-import type { CallExpression } from '@ngcompass/ast';
+import {
+    AnyAngularClassNode,
+    ChangeDetectionStrategy,
+    analyzeComponent,
+} from '@ngcompass/ast';
+import { RuleContext, RuleFailure } from '@ngcompass/common';
+import { createAnyAngularClassRule } from '@ngcompass/engine';
 
-import { createCallExpressionRule } from '@ngcompass/engine';
-import { AstNode, MaybeAstNode, getNodeStart, getStaticPropertyName, isMemberExpressionLike, unwrapNode } from '../../rule-utils';
-import { RuleContext } from '@ngcompass/common';
-import { RuleFailure } from '@ngcompass/common';
+import {
+    AstNode,
+    childNodes,
+    getClassBody,
+    getNodeStart,
+    getParamIdentifierName,
+    getParamTypeName,
+    getParamsArray,
+    getStaticPropertyName,
+    getConstructorMember,
+    isMemberExpressionLike,
+    unwrapNode,
+} from '../../rule-utils';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 
+const RULE_NAME = 'component-no-manual-detect-changes';
 const DISCOURAGED_CDR_METHODS = new Set(['detectChanges', 'markForCheck']);
-
-const CDR_VAR_NAMES = new Set([
-    'cdr', 'cdref', 'changedetectorref', '_cdr', '_cdref',
-    'changedetector', '_changedetector', 'changedetectionref',
-    'cd', '_cd', 'ref',
+const HEURISTIC_CDR_NAMES = new Set([
+    'cdr',
+    'cdref',
+    'changedetectorref',
+    '_cdr',
+    '_cdref',
+    'changedetector',
+    '_changedetector',
+    'changedetectionref',
+    'cd',
+    '_cd',
 ]);
 
-function getReceiverIdentifier(memberObject: MaybeAstNode): string {
-    const obj = unwrapNode(memberObject);
-    if (!obj) return '';
-    if (obj.type === 'Identifier') return (obj.name as string) ?? '';
-    if (isMemberExpressionLike(obj)) return getStaticPropertyName(obj) || '';
-    return '';
+/**
+ * Returns true when the node is `inject(ChangeDetectorRef)`.
+ */
+function isInjectChangeDetectorRefCall(node: AstNode): boolean {
+    if (node.type !== 'CallExpression') {
+        return false;
+    }
+
+    const callee = unwrapNode(node.callee);
+    if (callee?.type !== 'Identifier' || callee.name !== 'inject') {
+        return false;
+    }
+
+    const [firstArg] = node.arguments ?? [];
+    const token = unwrapNode(firstArg as AstNode);
+
+    return token?.type === 'Identifier' && token.name === 'ChangeDetectorRef';
 }
 
 /**
- * Returns true when the source text contains any ChangeDetectorRef-related symbols.
- * Used as a gate before allowing bare-identifier CDR method detection.
+ * Returns true when the provided parameter is typed as `ChangeDetectorRef`.
  */
-function hasChangeDetectorRefSignals(sourceText: string | undefined): boolean {
-    if (typeof sourceText !== 'string') return false;
+function isChangeDetectorRefParam(param: AstNode): boolean {
+    return getParamTypeName(param) === 'ChangeDetectorRef';
+}
+
+/**
+ * Collects constructor-injected and `inject()`-based `ChangeDetectorRef` aliases.
+ */
+function collectExplicitCdrAliases(classNode: AstNode): Set<string> {
+    const aliases = new Set<string>();
+    const classBody = getClassBody(classNode);
+
+    collectConstructorCdrAliases(classBody, aliases);
+    collectInjectedFieldCdrAliases(classBody, aliases);
+
+    return aliases;
+}
+
+/**
+ * Collects constructor parameter aliases typed as `ChangeDetectorRef`.
+ */
+function collectConstructorCdrAliases(classBody: AstNode[], aliases: Set<string>): void {
+    const ctor = getConstructorMember(classBody);
+    if (!ctor) {
+        return;
+    }
+
+    const ctorValue = (ctor.value ?? ctor) as AstNode;
+    const params = getParamsArray(ctorValue);
+
+    for (const param of params) {
+        if (!isChangeDetectorRefParam(param)) {
+            continue;
+        }
+
+        const alias = getParamIdentifierName(param);
+        if (alias) {
+            aliases.add(alias);
+        }
+    }
+}
+
+/**
+ * Collects class field aliases initialized with `inject(ChangeDetectorRef)`.
+ */
+function collectInjectedFieldCdrAliases(classBody: AstNode[], aliases: Set<string>): void {
+    for (const member of classBody) {
+        if (member.type !== 'PropertyDefinition' || !member.value) {
+            continue;
+        }
+
+        const value = unwrapNode(member.value as AstNode);
+        if (!value || !isInjectChangeDetectorRefCall(value)) {
+            continue;
+        }
+
+        const key = member.key;
+        if (key?.type === 'Identifier') {
+            aliases.add(key.name as string);
+        }
+    }
+}
+
+/**
+ * Returns true when the component uses `ChangeDetectionStrategy.OnPush`.
+ */
+function isOnPushComponent(classNode: AstNode): boolean {
+    const metadata = analyzeComponent(classNode as never);
+
     return (
-        /\bChangeDetectorRef\b/.test(sourceText) ||
-        /\bdetectChanges\b/.test(sourceText) ||
-        /\bmarkForCheck\b/.test(sourceText)
+        metadata?.type === 'Component' &&
+        metadata.changeDetection?.kind === 'literal' &&
+        metadata.changeDetection.value === ChangeDetectionStrategy.OnPush
     );
 }
 
 /**
- * Per-file cache for the CDR signals presence check.
- *
- * The CallExpression rule fires for every call node in a file. Without caching,
- * hasChangeDetectorRefSignals() would run 3 regex scans on the full source text
- * for every single call expression � potentially dozens of times per component.
- * Keyed by filePath: stable within a single analysis session.
+ * Returns true when the class node represents an Angular component.
  */
-const fileCdrPresenceCache = new Map<string, boolean>();
-
-function fileContainsCdrSignals(filePath: string, sourceText: string | undefined): boolean {
-    const cached = fileCdrPresenceCache.get(filePath);
-    if (cached !== undefined) return cached;
-
-    const result = hasChangeDetectorRefSignals(sourceText);
-    fileCdrPresenceCache.set(filePath, result);
-    return result;
+function isAngularComponent(classNode: AstNode): boolean {
+    const metadata = analyzeComponent(classNode as never);
+    return metadata?.type === 'Component';
 }
 
 /**
- * RULE-ACC-004: Returns true when the source file declares `ChangeDetectionStrategy.OnPush`.
- *
- * With `OnPush`, calling `markForCheck()` is correct Angular practice — it schedules the
- * component for the next CD cycle without forcing a synchronous traversal.  Flagging it in
- * this context produces false positives and discourages idiomatic OnPush usage.
- *
- * `detectChanges()` remains flagged even under OnPush (it forces synchronous CD) but is
- * downgraded from `error` to `warn` since it can be intentional in edge-cases.
+ * Returns true when the alias is a tracked or heuristically valid CDR reference.
  */
-const fileOnPushCache = new Map<string, boolean>();
+function createCdrAliasMatcher(explicitAliases: Set<string>): (name: string) => boolean {
+    const hasExplicitAliases = explicitAliases.size > 0;
 
-function fileUsesOnPush(filePath: string, fileContent: string): boolean {
-    const cached = fileOnPushCache.get(filePath);
-    if (cached !== undefined) return cached;
+    return (name: string): boolean => {
+        if (explicitAliases.has(name)) {
+            return true;
+        }
 
-    const result = /ChangeDetectionStrategy\.OnPush/.test(fileContent);
-    fileOnPushCache.set(filePath, result);
-    return result;
+        if (hasExplicitAliases) {
+            return false;
+        }
+
+        return HEURISTIC_CDR_NAMES.has(name.toLowerCase());
+    };
 }
 
 /**
- * Flags manual change detection triggers in Angular component files.
- *
- * RULE-ACC-004: Respects `ChangeDetectionStrategy.OnPush`:
- *  - `markForCheck()` with OnPush is valid (schedules re-render) → not flagged.
- *  - `detectChanges()` with OnPush is unusual but can be intentional → downgraded to `warn`.
- *  - Both methods under default CD → flagged as `error` (unchanged).
+ * Returns the discouraged method name when the node is a discouraged CDR call.
  */
-export const componentNoManualDetectChangesRule = createCallExpressionRule(
-    'component-no-manual-detect-changes',
-    (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        if (!context.filePath.endsWith('.component.ts')) return null;
-
-        const sourceText: string | undefined = (context as unknown as Record<string, unknown>).sourceText as string | undefined;
-        const allowBareIdentifierChecks = fileContainsCdrSignals(context.filePath, sourceText);
-
-        const callee = unwrapNode((node as AstNode).callee);
-        let methodName = '';
-        let shouldFlag = false;
-
-        if (isMemberExpressionLike(callee)) {
-            methodName = getStaticPropertyName(callee);
-            if (DISCOURAGED_CDR_METHODS.has(methodName)) {
-                const receiverName = getReceiverIdentifier(callee?.object).toLowerCase();
-                shouldFlag = CDR_VAR_NAMES.has(receiverName);
-            }
-        } else if (callee?.type === 'Identifier') {
-            methodName = (callee.name as string) ?? '';
-            shouldFlag = allowBareIdentifierChecks && DISCOURAGED_CDR_METHODS.has(methodName);
-        }
-
-        if (!shouldFlag) return null;
-
-        // RULE-ACC-004: Check ChangeDetectionStrategy before deciding severity / skip.
-        const isOnPush = fileUsesOnPush(context.filePath, context.fileContent);
-
-        if (isOnPush) {
-            // markForCheck() is the idiomatic way to trigger re-render under OnPush — skip it.
-            if (methodName === 'markForCheck') return null;
-
-            // detectChanges() under OnPush is unusual but can be intentional — warn only.
-            const start = getNodeStart(node as AstNode);
-            const { line, column } = context.locator.location(start);
-            return {
-                filePath: context.filePath,
-                ruleName: 'component-no-manual-detect-changes',
-                message: `Prefer Signals or async pipe over detectChanges() even with OnPush. Manual CD triggers couple your component to imperative rendering.`,
-                line,
-                column,
-                severity: 'warn',
-                fix: RECOMMENDATIONS['component-no-manual-detect-changes'],
-                codeExample: CODE_EXAMPLES['component-no-manual-detect-changes'],
-            };
-        }
-
-        const start = getNodeStart(node as AstNode);
-        const { line, column } = context.locator.location(start);
-
-        return {
-            filePath: context.filePath,
-            ruleName: 'component-no-manual-detect-changes',
-            message: `Avoid manual change detection (${methodName}). Prefer Signals/async pipe for reactivity.`,
-            line,
-            column,
-            severity: 'error',
-            fix: RECOMMENDATIONS['component-no-manual-detect-changes'],
-            codeExample: CODE_EXAMPLES['component-no-manual-detect-changes'],
-        };
+function getDiscouragedMethodName(node: AstNode): string | null {
+    if (node.type !== 'CallExpression') {
+        return null;
     }
-);
 
+    const callee = unwrapNode(node.callee);
+    if (!isMemberExpressionLike(callee)) {
+        return null;
+    }
+
+    const methodName = getStaticPropertyName(callee);
+    if (!methodName || !DISCOURAGED_CDR_METHODS.has(methodName)) {
+        return null;
+    }
+
+    return methodName;
+}
+
+/**
+ * Returns true when the member-expression receiver resolves to a tracked CDR alias.
+ */
+function isTrackedCdrReceiver(callNode: AstNode, isCdrAlias: (name: string) => boolean): boolean {
+    if (callNode.type !== 'CallExpression') {
+        return false;
+    }
+
+    const callee = unwrapNode(callNode.callee);
+    if (!callee || !isMemberExpressionLike(callee)) {
+        return false;
+    }
+
+    const target = unwrapNode(callee.object);
+    if (!target) {
+        return false;
+    }
+
+    if (target.type === 'Identifier') {
+        return isCdrAlias(target.name as string);
+    }
+
+    if (!target || !isMemberExpressionLike(target)) {
+        return false;
+    }
+
+    const receiver = unwrapNode(target.object);
+    const propertyName = getStaticPropertyName(target);
+
+    const isThis = receiver?.type === 'ThisExpression' || (receiver?.type === 'Identifier' && receiver.name === 'this');
+    return isThis && !!propertyName && isCdrAlias(propertyName);
+}
+
+/**
+ * Creates a rule failure for a discouraged manual change-detection call.
+ */
+function createFailure(
+    node: AstNode,
+    context: RuleContext,
+    methodName: string,
+    isOnPush: boolean,
+): RuleFailure {
+    const start = getNodeStart(node);
+    const { line, column } = context.locator.location(start);
+
+    return {
+        filePath: context.filePath,
+        ruleName: RULE_NAME,
+        message: buildFailureMessage(methodName, isOnPush),
+        line,
+        column,
+        severity: isOnPush ? 'warn' : 'error',
+        fix: RECOMMENDATIONS[RULE_NAME],
+        codeExample: CODE_EXAMPLES[RULE_NAME],
+    };
+}
+
+/**
+ * Builds the rule message for a discouraged manual change-detection call.
+ */
+function buildFailureMessage(methodName: string, isOnPush: boolean): string {
+    if (isOnPush) {
+        return 'Prefer Signals or async pipe over detectChanges() even with OnPush. Manual CD triggers couple your component to imperative rendering.';
+    }
+
+    return `Avoid manual change detection (${methodName}). Prefer Signals/async pipe for reactivity.`;
+}
+
+/**
+ * Returns true when the call should be skipped for the given component strategy.
+ */
+function shouldSkipCall(methodName: string, isOnPush: boolean): boolean {
+    return isOnPush && methodName === 'markForCheck';
+}
+
+/**
+ * Traverses the class body and returns all discouraged manual CDR failures.
+ */
+function findManualChangeDetectionFailures(
+    classNode: AstNode,
+    context: RuleContext,
+    isOnPush: boolean,
+    isCdrAlias: (name: string) => boolean,
+): RuleFailure[] {
+    const failures: RuleFailure[] = [];
+    const stack: AstNode[] = [...getClassBody(classNode)];
+
+    while (stack.length > 0) {
+        const current = stack.pop()!;
+        const node = unwrapNode(current);
+        if (!node) {
+            continue;
+        }
+
+        collectFailureFromNode(node, context, isOnPush, isCdrAlias, failures);
+
+        for (const child of childNodes(node)) {
+            stack.push(child);
+        }
+    }
+
+    return failures;
+}
+
+/**
+ * Appends a failure when the node is a discouraged manual CDR call.
+ */
+function collectFailureFromNode(
+    node: AstNode,
+    context: RuleContext,
+    isOnPush: boolean,
+    isCdrAlias: (name: string) => boolean,
+    failures: RuleFailure[],
+): void {
+    const methodName = getDiscouragedMethodName(node);
+    if (!methodName) {
+        return;
+    }
+
+    if (!isTrackedCdrReceiver(node, isCdrAlias)) {
+        return;
+    }
+
+    if (shouldSkipCall(methodName, isOnPush)) {
+        return;
+    }
+
+    failures.push(createFailure(node, context, methodName, isOnPush));
+}
+
+/**
+ *
+ * Flags manual `ChangeDetectorRef` triggers in Angular components.
+ * Allows `markForCheck()` in `OnPush` components.
+ * Downgrades `detectChanges()` to `warn` in `OnPush` components.
+ */
+export const componentNoManualDetectChangesRule = createAnyAngularClassRule(
+    RULE_NAME,
+    (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
+        const classNode = classNodeWrapper.node as AstNode;
+
+        if (!isAngularComponent(classNode)) {
+            return null;
+        }
+
+        const explicitAliases = collectExplicitCdrAliases(classNode);
+        const isCdrAlias = createCdrAliasMatcher(explicitAliases);
+        const isOnPush = isOnPushComponent(classNode);
+
+        const failures = findManualChangeDetectionFailures(
+            classNode,
+            context,
+            isOnPush,
+            isCdrAlias,
+        );
+
+        return failures.length > 0 ? failures : null;
+    },
+);

@@ -1,76 +1,102 @@
-import { TemplateAttributeNode } from "@ngcompass/ast";
-import { RuleFailure } from "@ngcompass/common";
-import { createTemplateAttributeRule } from '@ngcompass/engine';
-import { RECOMMENDATIONS } from "../../recommendations";
-import { RuleContext } from "@ngcompass/common";
+import { TemplateAttributeNode, TemplateBlockNode, TemplateAnalysis } from '@ngcompass/ast';
+import { RuleContext, RuleFailure } from '@ngcompass/common';
+import {
+    createTemplateRule,
+} from '@ngcompass/engine';
 
+import { RECOMMENDATIONS } from '../../recommendations';
 
-function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateAttributeNode): number {
+const NGFOR_RULE_NAME = 'template-trackby-required-for-ngfor';
+const ATFOR_RULE_NAME = 'template-track-required-for-atfor';
+const COMBINED_RULE_NAME = 'template-trackby-required';
+
+const NGFOR_MESSAGE =
+    'Add a trackBy function to *ngFor to reduce unnecessary DOM updates for dynamic lists.';
+
+const ATFOR_MESSAGE =
+    'Add a track expression to @for to reduce unnecessary DOM updates for dynamic lists.';
+
+function getTemplateAbsoluteOffset(
+    context: RuleContext,
+    node: TemplateAttributeNode | TemplateBlockNode,
+): number {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const templateStartOffset = (context as any).template?.templateStartOffset;
+
     if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
         return node.sourceSpan.start + templateStartOffset;
     }
+
     return node.sourceSpan.start;
 }
 
-function hasNonEmptyTrackBy(microsyntax: string): boolean {
-    return /\btrackBy\s*:\s*[^;,\s]+/.test(microsyntax);
+function createFailure(
+    context: RuleContext,
+    node: TemplateAttributeNode | TemplateBlockNode,
+    ruleName: string,
+    message: string,
+): RuleFailure {
+    const offset = getTemplateAbsoluteOffset(context, node);
+    const { line, column } = context.locator.location(offset);
+
+    return {
+        filePath: context.filePath,
+        ruleName,
+        message,
+        line,
+        column,
+        severity: 'error',
+        fix: RECOMMENDATIONS[ruleName],
+    };
 }
 
-/**
- * Requires an explicit `trackBy` function on `*ngFor` directives.
- */
-export const templateTrackByRequiredRule = createTemplateAttributeRule(
-    'template-trackby-required-for-ngfor',
-    (node: TemplateAttributeNode, context: RuleContext): RuleFailure | null => {
-        if (node.name !== '*ngFor') return null;
+function hasNonEmptyTrackBy(microsyntax: string): boolean {
+    const match = microsyntax.match(/\btrackBy\s*:\s*([^;]+?)\s*(?:;|$)/);
+    return !!match?.[1]?.trim();
+}
 
-        const value = node.value ?? '';
-        if (hasNonEmptyTrackBy(value)) return null;
+function hasNonEmptyForTrack(node: TemplateBlockNode): boolean {
+    return node.parameters.some((param) => {
+        const expression = param.expression?.trim() ?? '';
+        if (!expression) {
+            return false;
+        }
 
-        const offset = getTemplateAbsoluteOffset(context, node);
-        const { line, column } = context.locator.location(offset);
+        if (!/^track\b/.test(expression)) {
+            return false;
+        }
 
-        return {
-            filePath: context.filePath,
-            ruleName: 'template-trackby-required-for-ngfor',
-            message: 'Add a trackBy function to *ngFor to reduce unnecessary DOM updates for dynamic lists.',
-            line,
-            column,
-            severity: 'error',
-            fix: RECOMMENDATIONS['template-trackby-required-for-ngfor'],
-        };
+        return expression.replace(/^track\b/, '').trim().length > 0;
+    });
+}
+
+export const templateTrackByRequiredRule = createTemplateRule(
+    COMBINED_RULE_NAME,
+    (analysis: TemplateAnalysis, context: RuleContext): RuleFailure[] | null => {
+        const failures: RuleFailure[] = [];
+
+        // Check *ngFor (attributes)
+        for (const node of analysis.attributes) {
+            if (node.name === '*ngFor') {
+                const value = node.value ?? '';
+                if (!hasNonEmptyTrackBy(value)) {
+                    failures.push(createFailure(context, node, NGFOR_RULE_NAME, NGFOR_MESSAGE));
+                }
+            }
+        }
+
+        // Check @for (blocks)
+        for (const node of analysis.blocks) {
+            if (node.name === 'for') {
+                if (!hasNonEmptyForTrack(node)) {
+                    failures.push(createFailure(context, node, ATFOR_RULE_NAME, ATFOR_MESSAGE));
+                }
+            }
+        }
+
+        return failures.length > 0 ? failures : null;
     },
     {
         requires: { htmlAst: true },
-    }
-);
-
-/**
- * Checks for @for blocks without track expressions in the raw template source.
- * Returns an array of line numbers where violations are found.
- */
-export function findForBlocksWithoutTrack(templateSource: string): { line: number; column: number }[] {
-    const violations: { line: number; column: number }[] = [];
-    // Match @for (...) but NOT followed by track expression
-    const forBlockRegex = /@for\s*\(([^)]*)\)/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = forBlockRegex.exec(templateSource)) !== null) {
-        const forContent = match[1];
-        // @for requires a `track` expression: @for (item of items; track item.id)
-        if (!/\btrack\s+\S/.test(forContent)) {
-            // Calculate line/column from offset
-            const beforeMatch = templateSource.substring(0, match.index);
-            const lines = beforeMatch.split('\n');
-            violations.push({
-                line: lines.length,
-                column: (lines[lines.length - 1]?.length ?? 0) + 1,
-            });
-        }
-    }
-
-    return violations;
-}
-
+    },
+);

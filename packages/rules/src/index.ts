@@ -5,7 +5,6 @@ export const rules = '@ngcompass/rules';
 export * from './rules/correctness/component-no-manual-detect-changes.rule.js';
 export * from './rules/correctness/signal-no-side-effects-in-computed.rule.js';
 export * from './rules/correctness/signal-effect-must-be-destroy-scoped.rule.js';
-export * from './rules/correctness/signal-no-effect-in-constructor.rule.js';
 export * from './rules/correctness/rxjs-no-nested-subscribe.rule.js';
 
 // ─── Performance ─────────────────────────────────────────────────────────────
@@ -30,7 +29,6 @@ export * from './rules/ssr/prefer-after-render-over-after-view-init.rule.js';
 // Rules that enforce correct RxJS and Signal reactive patterns.
 export * from './rules/reactivity/rxjs-no-subscribe-in-component.rule.js';
 export * from './rules/reactivity/rxjs-require-take-until-destroyed.rule.js';
-export * from './rules/reactivity/rxjs-avoid-behaviorsubject-for-local-state.rule.js';
 export * from './rules/reactivity/rxjs-avoid-subject-as-event-bus.rule.js';
 export * from './rules/reactivity/rxjs-prefer-to-signal-for-template-state.rule.js';
 export * from './rules/reactivity/to-signal-require-initial-value.rule.js';

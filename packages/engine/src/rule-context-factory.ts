@@ -119,8 +119,8 @@ export class RuleContextFactory {
         const cluster = project.componentGraph.get(componentPath);
 
         const templatePath = cluster?.templatePath;
-        const stylePaths   = cluster?.stylePaths ?? [];
-        const specPath     = cluster?.specPath;
+        const stylePaths = cluster?.stylePaths ?? [];
+        const specPath = cluster?.specPath;
 
         let publicMembers: ReadonlySet<string> | undefined;
         const tsSourceFile = this.context.getTsSourceFile?.(componentPath);
@@ -193,103 +193,90 @@ function extractPublicMembers(sourceFile: ts.SourceFile): ReadonlySet<string> {
 }
 
 /**
- * Extracts the set of component-instance identifiers referenced in the
- * template.  Covers:
- *   - Property reads: `[prop]="value"`, `{{ value }}`
- *   - Method calls: `(click)="handler($event)"`, `[disabled]="isLoading()"`
- *   - Safe navigation: `{{ obj?.prop }}`
+ * Regex that matches valid Angular/JS identifier characters, including `$`
+ * which is conventional for Observable properties (e.g. `loading$`).
+ * Anchored with word boundaries so it doesn't match mid-word substrings.
  *
- * The extraction is conservative — only identifiers whose implicit receiver
- * is the component instance (i.e. `ImplicitReceiver`, meaning `this.X`) are
- * collected.  A node is treated as having an implicit receiver when its
- * `.receiver` is present but has neither a `.name` nor a nested `.receiver`
- * (the two properties that distinguish real object references from the
- * implicit component `this`).
+ * We intentionally cast a wide net here — non-member names (pipe names, Angular
+ * keywords, method args) will appear in the set but are harmless because callers
+ * only look up specific class-member names that are known to exist.
+ */
+const TEMPLATE_IDENT_RE = /\b([a-zA-Z_$][a-zA-Z0-9_$]*)\b/g;
+
+/**
+ * Extracts all identifiers from an Angular expression string.
  *
- * False positives (e.g. `obj.property` where `obj` is a local variable) are
- * rare in Angular templates and are acceptable for the heuristic use-cases
- * this field targets.
+ * Used to pull identifiers out of raw attribute values produced by
+ * `angular-html-parser`, which stores ALL binding syntaxes
+ * (`[prop]="expr"`, `(event)="handler"`, `*ngIf="expr"`) as plain
+ * `{ name, value }` attribute objects rather than parsed expression AST nodes.
+ */
+function extractIdentifiersFromExprString(expr: string, refs: Set<string>): void {
+    TEMPLATE_IDENT_RE.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = TEMPLATE_IDENT_RE.exec(expr)) !== null) {
+        refs.add(match[1]);
+    }
+}
+
+/**
+ * Extracts the set of identifiers referenced anywhere in the template.
+ *
+ * `angular-html-parser` (the HTML parser used here) returns a *raw* AST in
+ * which every attribute — property bindings `[prop]="…"`, event bindings
+ * `(event)="…"`, and structural directives `*ngIf="…"` — is stored as a
+ * plain `{ name: string; value: string }` object inside the `attrs` array.
+ * No parsed sub-expression AST is attached.
+ *
+ * Text interpolations (`{{ expr }}`) are carried as the raw string value of
+ * `Text` nodes (e.g. `"Hello {{ name }}!"`).
+ *
+ * This function handles both cases by:
+ *   1. Scanning each attribute's raw `value` string for identifiers.
+ *   2. Scanning `Text` node `value` strings for `{{ … }}` interpolations
+ *      and extracting identifiers from each interpolation expression.
+ *   3. Recursing into `children`.
+ *
+ * The resulting set intentionally includes pipe names, Angular keywords, and
+ * local template variables — callers are responsible for filtering to
+ * class-member names of interest.
  */
 function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string> {
     const refs = new Set<string>();
+
+    /** Interpolation pattern: {{ ... }} */
+    const INTERPOLATION_RE = /\{\{([\s\S]*?)\}\}/g;
 
     function walkNode(node: unknown): void {
         if (!node || typeof node !== 'object') return;
         const n = node as Record<string, unknown>;
 
-        if (Array.isArray(n['inputs'])) {
-            for (const input of n['inputs'] as unknown[]) {
-                walkExpression((input as Record<string, unknown>)['value'] ??
-                               (input as Record<string, unknown>)['expression']);
-            }
-        }
-
-        if (Array.isArray(n['outputs'])) {
-            for (const output of n['outputs'] as unknown[]) {
-                walkExpression((output as Record<string, unknown>)['handler']);
-            }
-        }
-
-        const val = n['value'];
-        if (val && typeof val === 'object') {
-            const v = val as Record<string, unknown>;
-            if (Array.isArray(v['expressions'])) {
-                for (const expr of v['expressions'] as unknown[]) {
-                    walkExpression(expr);
+        // angular-html-parser represents ALL Angular bindings ([prop], (event),
+        // *dir, plain attributes) as raw { name, value } objects in `attrs`.
+        if (Array.isArray(n['attrs'])) {
+            for (const attr of n['attrs'] as unknown[]) {
+                const value = (attr as Record<string, unknown>)['value'];
+                if (typeof value === 'string' && value) {
+                    extractIdentifiersFromExprString(value, refs);
                 }
             }
         }
 
-        if (n['expression'] && typeof n['expression'] === 'object') {
-            walkExpression(n['expression']);
+        // Text nodes carry their content as a plain string (e.g. "Hello {{ name }}!").
+        // Extract identifiers from each {{ … }} interpolation found in the text.
+        if (typeof n['value'] === 'string' && n['value']) {
+            INTERPOLATION_RE.lastIndex = 0;
+            let m: RegExpExecArray | null;
+            while ((m = INTERPOLATION_RE.exec(n['value'] as string)) !== null) {
+                extractIdentifiersFromExprString(m[1], refs);
+            }
         }
 
+        // Recurse into child nodes.
         if (Array.isArray(n['children'])) {
             for (const child of n['children'] as unknown[]) {
                 walkNode(child);
             }
-        }
-    }
-
-    function walkExpression(expr: unknown): void {
-        if (!expr || typeof expr !== 'object') return;
-        const e = expr as Record<string, unknown>;
-
-        if (typeof e['name'] === 'string' && e['name'].length > 0) {
-            const rec = e['receiver'];
-            if (rec && typeof rec === 'object') {
-                const r = rec as Record<string, unknown>;
-                if (!r['name'] && !r['receiver']) {
-                    refs.add(e['name'] as string);
-                }
-            }
-        }
-
-        // Recurse into receiver chain
-        if (e['receiver']) walkExpression(e['receiver']);
-
-        // Method arguments
-        if (Array.isArray(e['args'])) {
-            for (const arg of e['args'] as unknown[]) walkExpression(arg);
-        }
-
-        // Binary: { left, right }
-        if (e['left'])  walkExpression(e['left']);
-        if (e['right']) walkExpression(e['right']);
-
-        // Conditional: { condition, trueExp, falseExp }
-        if (e['condition']) walkExpression(e['condition']);
-        if (e['trueExp'])   walkExpression(e['trueExp']);
-        if (e['falseExp'])  walkExpression(e['falseExp']);
-
-        // LiteralArray: { expressions }
-        if (Array.isArray(e['expressions'])) {
-            for (const sub of e['expressions'] as unknown[]) walkExpression(sub);
-        }
-
-        // LiteralMap: { values }
-        if (Array.isArray(e['values'])) {
-            for (const sub of e['values'] as unknown[]) walkExpression(sub);
         }
     }
 

@@ -65,7 +65,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!enabledRules) { exitCode = 1; return; }
 
                 // 4. Build Execution Plan
-                const plan = await buildPlanStep(files, enabledRules, cache, options, reporter);
+                const plan = await buildPlanStep(files, enabledRules, cache, options, reporter, config);
                 if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
@@ -214,7 +214,8 @@ async function buildPlanStep(
     rules: ResolvedRulesMap,
     cache: CacheContext,
     options: AnalyzeOptions,
-    reporter: Reporter
+    reporter: Reporter,
+    config: NormalizedAnalyzerConfig
 ): Promise<ExecutionPlanOutput | null> {
     const tStart = performance.now();
     reporter.step('Building execution plan...');
@@ -225,7 +226,8 @@ async function buildPlanStep(
         rootDir: process.cwd(),
         cache,
         debug: options.debug,
-        incremental: options.force ? { forceRerun: true } : undefined
+        incremental: options.force ? { forceRerun: true } : undefined,
+        overrides: config.overrides,
     });
 
     if (!planResult.ok) {

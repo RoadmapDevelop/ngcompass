@@ -42,7 +42,13 @@ const restoreCursor = () => process.stdout.write('\x1B[?25h');
 /**
  * Performs cleanup before process exit: restores the terminal cursor and
  * flushes any pending cache writes.  Re-entrant calls are ignored.
+ *
+ * TICKET-007 hardening: the flush is raced against a 10 s timeout so a
+ * stalled LevelDB write (full disk, locked file, etc.) can never prevent
+ * the process from exiting on SIGINT/SIGTERM.
  */
+const FLUSH_TIMEOUT_MS = 10_000;
+
 let shutdownInProgress = false;
 const gracefulShutdown = async (cache: CacheContext | null, exitCode: number): Promise<void> => {
     if (shutdownInProgress) return;
@@ -52,7 +58,10 @@ const gracefulShutdown = async (cache: CacheContext | null, exitCode: number): P
 
     if (cache) {
         try {
-            await cache.flush();
+            const flushTimeout = new Promise<void>((resolve) =>
+                setTimeout(resolve, FLUSH_TIMEOUT_MS).unref()
+            );
+            await Promise.race([cache.flush(), flushTimeout]);
         } catch {
             // Best-effort flush — do not block shutdown on failure.
         }

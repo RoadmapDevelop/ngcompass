@@ -4,7 +4,6 @@ import { registerNewEngineRule } from '../engine/adapter.js';
 import { componentNoManualDetectChangesRule } from '../rules/correctness/component-no-manual-detect-changes.rule.js';
 import { signalNoSideEffectsInComputedRule } from '../rules/correctness/signal-no-side-effects-in-computed.rule.js';
 import { signalEffectDestroyScopedRule } from '../rules/correctness/signal-effect-must-be-destroy-scoped.rule.js';
-import { signalNoEffectInConstructorRule } from '../rules/correctness/signal-no-effect-in-constructor.rule.js';
 import { rxjsNoNestedSubscribeRule } from '../rules/correctness/rxjs-no-nested-subscribe.rule.js';
 
 // ─── Performance ─────────────────────────────────────────────────────────────
@@ -25,7 +24,6 @@ import { preferAfterRenderOverAfterViewInitRule } from '../rules/ssr/prefer-afte
 // ─── Reactivity ──────────────────────────────────────────────────────────────
 import { rxjsNoSubscribeInComponentRule } from '../rules/reactivity/rxjs-no-subscribe-in-component.rule.js';
 import { rxjsRequireTakeUntilDestroyedRule } from '../rules/reactivity/rxjs-require-take-until-destroyed.rule.js';
-import { rxjsAvoidBehaviorSubjectRule } from '../rules/reactivity/rxjs-avoid-behaviorsubject-for-local-state.rule.js';
 import { rxjsAvoidSubjectRule } from '../rules/reactivity/rxjs-avoid-subject-as-event-bus.rule.js';
 import { rxjsPreferToSignalRule } from '../rules/reactivity/rxjs-prefer-to-signal-for-template-state.rule.js';
 import { toSignalRequireInitialValueRule } from '../rules/reactivity/to-signal-require-initial-value.rule.js';
@@ -49,10 +47,8 @@ export function registerAllBuiltinRules() {
     registerNewEngineRule(componentNoManualDetectChangesRule);
     registerNewEngineRule(signalNoSideEffectsInComputedRule);
     registerNewEngineRule(signalEffectDestroyScopedRule);
-    registerNewEngineRule(signalNoEffectInConstructorRule);
     registerNewEngineRule(rxjsNoNestedSubscribeRule);
 
-    // Performance — change detection, rendering, template efficiency
     registerNewEngineRule(preferOnPushRule);
     registerNewEngineRule(templateNoCallExpressionRule);
     registerNewEngineRule(templateTrackByRequiredRule);
@@ -70,7 +66,6 @@ export function registerAllBuiltinRules() {
     // Reactivity — RxJS patterns, signal reactivity, observable lifecycle
     registerNewEngineRule(rxjsNoSubscribeInComponentRule);
     registerNewEngineRule(rxjsRequireTakeUntilDestroyedRule);
-    registerNewEngineRule(rxjsAvoidBehaviorSubjectRule);
     registerNewEngineRule(rxjsAvoidSubjectRule);
     registerNewEngineRule(rxjsPreferToSignalRule);
     registerNewEngineRule(toSignalRequireInitialValueRule);

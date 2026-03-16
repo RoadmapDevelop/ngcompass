@@ -57,7 +57,7 @@ const config: AnalyzerConfig = {
     // ANALYSIS SETTINGS
     // ==========================================================================
 
-    failOnSeverity: 'high',
+    failOnSeverity: 'error',
     maxWorkers: 4,
     maxWarnings: 10,
 
@@ -123,12 +123,12 @@ const config: AnalyzerConfig = {
 
     rules: {
         // Example rules with configurable prefixes:
-        'component-selector': { severity: 'moderate', options: { prefix: 'app', type: 'element' } },
-        'directive-selector': { severity: 'high', options: { prefix: 'app', type: 'attribute' } },
-        // 'no-input-rename': 'moderate',
-        // 'no-output-rename': 'moderate',
-        // 'use-lifecycle-interface': 'low',
-        // 'prefer-on-push': 'info',
+        'component-selector': { severity: 'warn', options: { prefix: 'app', type: 'element' } },
+        'directive-selector': { severity: 'error', options: { prefix: 'app', type: 'attribute' } },
+        // 'no-input-rename': 'warn',
+        // 'no-output-rename': 'warn',
+        // 'use-lifecycle-interface': 'warn',
+        // 'prefer-on-push': 'warn',
     },
 
     // ==========================================================================
@@ -139,7 +139,7 @@ const config: AnalyzerConfig = {
         // Development: fast feedback with watch mode
         dev: {
             watch: true,
-            failOnSeverity: 'critical',
+            failOnSeverity: 'error',
             maxWorkers: 2,
             maxWarnings: 50,
             watchOptions: {
@@ -153,7 +153,7 @@ const config: AnalyzerConfig = {
 
         // CI/CD: strict validation for pipelines
         ci: {
-            failOnSeverity: 'high',
+            failOnSeverity: 'error',
             maxWorkers: 8,
             maxWarnings: 0,
             outputFormat: 'json',
@@ -167,7 +167,7 @@ const config: AnalyzerConfig = {
 
         // Production: comprehensive checks before deployment
         prod: {
-            failOnSeverity: 'moderate',
+            failOnSeverity: 'warn',
             maxWarnings: 0,
             outputFormat: 'html',
             outputPath: './reports/ngcompass-prod.html'
@@ -175,7 +175,7 @@ const config: AnalyzerConfig = {
 
         // Quick: fast checks with minimal rules
         quick: {
-            failOnSeverity: 'critical',
+            failOnSeverity: 'error',
             maxWorkers: 2,
             maxWarnings: 100,
             cache: {

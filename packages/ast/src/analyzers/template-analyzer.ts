@@ -2,7 +2,7 @@
 export interface HtmlParserResult {
     rootNodes: readonly unknown[];
 }
-import type { TemplateExpressionNode, TemplateAttributeNode } from '../node-streams.js';
+import type { TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode } from '../node-streams.js';
 import { parseSync } from 'oxc-parser';
 
 /**
@@ -11,9 +11,11 @@ import { parseSync } from 'oxc-parser';
 export const analyzeTemplate = (htmlResult: HtmlParserResult): {
     expressions: TemplateExpressionNode[];
     attributes: TemplateAttributeNode[];
+    blocks: TemplateBlockNode[];
 } => {
     const expressions: TemplateExpressionNode[] = [];
     const attributes: TemplateAttributeNode[] = [];
+    const blocks: TemplateBlockNode[] = [];
 
     const visit = (node: any) => {
         if (!node) return;
@@ -90,11 +92,61 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
                 }
             }
         }
+
+        // 3. Control Flow Blocks (@for, @if, etc.)
+        if (node.kind === 'block' || node.constructor?.name === 'Block') {
+            const blockName = node.name;
+            const parameters = node.parameters ?? [];
+
+            blocks.push({
+                name: blockName,
+                parameters: parameters.map((p: any) => ({
+                    expression: p.expression,
+                    sourceSpan: {
+                        start: p.sourceSpan?.start?.offset ?? 0,
+                        end: p.sourceSpan?.end?.offset ?? 0,
+                    }
+                })),
+                sourceSpan: {
+                    start: node.sourceSpan?.start?.offset ?? 0,
+                    end: node.sourceSpan?.end?.offset ?? 0,
+                }
+            });
+
+            for (const param of parameters) {
+                if (param.expression) {
+                    const offset = param.sourceSpan?.start?.offset ?? 0;
+
+                    // Special handling for @for microsyntax: (item of items; track item.id)
+                    // The parser might provide the whole string. 
+                    // For now, we'll try to parse the expression part.
+                    if (blockName === 'for') {
+                        if (param.expression.includes(' track ')) {
+                            const trackPart = param.expression.split(' track ')[1];
+                            const trackOffset = offset + param.expression.indexOf(' track ') + 7;
+                            parseAndAdd(trackPart, trackOffset, expressions);
+                        } else if (param.expression.startsWith('track ')) {
+                            const trackPart = param.expression.substring(6);
+                            const trackOffset = offset + 6;
+                            parseAndAdd(trackPart, trackOffset, expressions);
+                        }
+                        // Also try to parse the collection expression
+                        if (param.expression.includes(' of ')) {
+                            const collectionPart = param.expression.split(' of ')[1].split(';')[0];
+                            const collectionOffset = offset + param.expression.indexOf(' of ') + 4;
+                            parseAndAdd(collectionPart, collectionOffset, expressions);
+                        }
+                    } else {
+                        parseAndAdd(param.expression, offset, expressions);
+                    }
+                }
+            }
+        }
     };
 
     for (const rootNode of htmlResult.rootNodes) visit(rootNode);
 
-    return { expressions, attributes };
+    return { expressions, attributes, blocks };
 };
 
 const parseAndAdd = (code: string, offset: number, outcomes: TemplateExpressionNode[]) => {

@@ -1,7 +1,9 @@
 import { parentPort, workerData } from "node:worker_threads";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
+import { resolveOverridesForFile } from "./overrides.js";
 import { detectFileType } from "./file-type.js";
 import type { FileType, Task, TaskInputs } from "./types.js";
+import type { ConfigOverride } from "@ngcompass/common";
 import { ResolvedRule } from "@ngcompass/common";
 import { initHasher } from "@ngcompass/cache";
 
@@ -19,6 +21,8 @@ export interface WorkerData {
     rulesEntries: [string, ResolvedRule][];
     /** Serialized Map<string, FileType> entries (optional) */
     fileTypeCacheEntries?: [string, FileType][];
+    /** Per-file rule overrides from config.overrides (JSON-serializable, optional) */
+    overridesData?: ConfigOverride[];
 }
 
 /**
@@ -33,7 +37,7 @@ const main = async (): Promise<void> => {
     if (!port) return;
 
     try {
-        const { files, rulesEntries, fileTypeCacheEntries } = workerData as WorkerData;
+        const { files, rulesEntries, fileTypeCacheEntries, overridesData } = workerData as WorkerData;
 
         // Reconstruct Maps from serialized entries.
         const rules = new Map<string, ResolvedRule>(rulesEntries);
@@ -58,7 +62,7 @@ const main = async (): Promise<void> => {
             resourceCache: new Map<string, TaskInputs>(),
         };
 
-        const tasks = await buildTasksForFiles(files, rules, fileTypeCache, context);
+        const tasks = await buildTasksForFiles(files, rules, fileTypeCache, context, overridesData);
 
         port.postMessage({ tasks } satisfies WorkerResult);
     } catch (error) {
@@ -74,13 +78,18 @@ const buildTasksForFiles = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, ResolvedRule>,
     fileTypeCache: Map<string, FileType> | undefined,
-    context: TaskBuilderContext
+    context: TaskBuilderContext,
+    overrides?: ConfigOverride[]
 ): Promise<Task[]> => {
     const tasks: Task[] = [];
 
     for (const file of files) {
         const fileType = fileTypeCache?.get(file) ?? detectFileType(file);
-        const fileTasks = await buildTasksForFileTaskCentric(file, fileType, rules, context);
+        // Apply per-file overrides when configured; returns globalRules unchanged on no match.
+        const fileRules = overrides?.length
+            ? resolveOverridesForFile(file, rules, overrides)
+            : rules;
+        const fileTasks = await buildTasksForFileTaskCentric(file, fileType, fileRules, context);
         tasks.push(...fileTasks);
     }
 
