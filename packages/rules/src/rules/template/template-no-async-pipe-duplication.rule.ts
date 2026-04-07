@@ -1,147 +1,124 @@
 import { TemplateExpressionNode } from "@ngcompass/ast";
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
 import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getTemplateAbsoluteOffset } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
 
-
-// ============================================================================
-// Per-context state — scoped to RuleContext via WeakMap so each analysis
-// run gets its own isolated tracking table.
-//
-// WHY WeakMap: Module-level Maps (the previous design) are shared across
-// all invocations in the same worker thread module instance. Two sequential
-// files could bleed state if the file-change detection logic ever fails.
-// WeakMap keys are the RuleContext object, which is created fresh per file
-// per batch, so GC automatically reclaims the sets when the context is dropped.
-// ============================================================================
 const seenByTemplateKey = new WeakMap<RuleContext, Map<string, Set<string>>>();
 
-/**
- * Returns (or creates) the template-key > seen-expressions map for a context.
- */
-function getContextState(context: RuleContext): Map<string, Set<string>> {
-    let state = seenByTemplateKey.get(context);
-    if (!state) {
-        state = new Map<string, Set<string>>();
-        seenByTemplateKey.set(context, state);
-    }
-    return state;
-}
-
 function getTemplateKey(context: RuleContext): string {
-    const templateStartOffset = (context as unknown as { template?: { templateStartOffset?: number } }).template?.templateStartOffset;
-    const offsetPart = typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset) ? `@${templateStartOffset}` : '@0';
-    return `${context.filePath}${offsetPart}`;
+    const offset = (context as any).template?.templateStartOffset;
+    return `${context.filePath}@${Number.isFinite(offset) ? offset : 0}`;
 }
 
-function findAsyncPipedExpression(nodeRaw: AstNode | null | undefined): AstNode | null {
+function findAsyncExpression(nodeRaw: AstNode | null | undefined): AstNode | null {
     const node = unwrapNode(nodeRaw);
     if (!node) return null;
-
-    if (node.type === 'BinaryExpression') {
-        if (node.operator === '|') {
-            const right = unwrapNode(node.right);
-            if (right?.type === 'Identifier' && ((right.name as string) ?? '') === 'async') {
-                return unwrapNode(node.left);
-            }
-            return findAsyncPipedExpression(node.left);
-        }
+    if (node.type === 'BinaryExpression' && node.operator === '|') {
+        const right = unwrapNode(node.right);
+        if (right?.type === 'Identifier' && right.name === 'async') return unwrapNode(node.left);
+        return findAsyncExpression(node.left);
     }
-
     return null;
 }
 
-function stringifyExpression(nodeRaw: AstNode | null | undefined, depth = 0): string | null {
-    const node = unwrapNode(nodeRaw);
-    if (!node) return null;
-    if (depth > 6) return null;
+function stringify(node: AstNode | null | undefined, depth = 0): string | null {
+    if (!node || depth > 10) return null;
 
-    if (node.type === 'Identifier') return (node.name as string) ?? null;
+    if (node.type === 'Identifier') return node.name as string;
     if (node.type === 'ThisExpression') return 'this';
-
-    if (node.type === 'Literal') {
-        if (typeof node.value === 'string') return JSON.stringify(node.value);
-        if (typeof node.value === 'number') return String(node.value);
-        if (typeof node.value === 'boolean') return node.value ? 'true' : 'false';
-        if (node.value === null) return 'null';
-        return null;
-    }
+    if (node.type === 'Literal') return node.value === null ? 'null' : String(node.value);
 
     if (node.type === 'CallExpression') {
-        const calleeStr = stringifyExpression(node.callee, depth + 1);
-        if (!calleeStr) return null;
-        const args = Array.isArray(node.arguments) ? node.arguments : [];
-        const argParts: string[] = [];
-        for (const a of args) {
-            const s = stringifyExpression(a, depth + 1);
-            argParts.push(s ?? '?');
-        }
-        return `${calleeStr}(${argParts.join(',')})`;
+        const callee = stringify(node.callee, depth + 1);
+        const args = (Array.isArray(node.arguments) ? node.arguments : []).map(a => stringify(a as AstNode, depth + 1) ?? '?');
+        return `${callee}(${args.join(',')})`;
     }
 
     if (isMemberExpressionLike(node)) {
-        const obj = stringifyExpression(node.object, depth + 1);
+        const obj = stringify(node.object, depth + 1);
         const prop = getStaticPropertyName(node);
         if (obj && prop) return `${obj}.${prop}`;
-        return null;
     }
 
-    if (node.type === 'UnaryExpression') {
-        const arg = stringifyExpression(node.argument, depth + 1);
-        if (!arg) return null;
-        return `${node.operator}${arg}`;
+    if (node.type === 'UnaryExpression') return `${node.operator}${stringify(node.argument, depth + 1)}`;
+    if (node.type === 'ConditionalExpression') return `${stringify(node.test, depth + 1)}?${stringify(node.consequent, depth + 1)}:${stringify(node.alternate, depth + 1)}`;
+
+    // Optional chaining: a?.b
+    if (node.type === 'OptionalExpression' || node.type === 'ChainExpression') {
+        return stringify(node.expression, depth + 1);
     }
 
-    if (node.type === 'ConditionalExpression') {
-        const t = stringifyExpression(node.test, depth + 1);
-        const c = stringifyExpression(node.consequent, depth + 1);
-        const a = stringifyExpression(node.alternate, depth + 1);
-        if (!t || !c || !a) return null;
-        return `${t}?${c}:${a}`;
+    // Logical expressions: a && b, a || b, a ?? b
+    if (node.type === 'LogicalExpression') {
+        const left = stringify(node.left, depth + 1);
+        const right = stringify(node.right, depth + 1);
+        if (left && right) return `${left}${node.operator}${right}`;
+    }
+
+    // Non-pipe binary expressions (arithmetic, comparison, nullish coalescing)
+    if (node.type === 'BinaryExpression' && node.operator !== '|') {
+        const left = stringify(node.left, depth + 1);
+        const right = stringify(node.right, depth + 1);
+        if (left && right) return `${left}${node.operator}${right}`;
+    }
+
+    // Array expression: [a, b, c]
+    if (node.type === 'ArrayExpression') {
+        const elements = (node.elements ?? []).map((e: any) => stringify(e as AstNode, depth + 1) ?? '?');
+        return `[${elements.join(',')}]`;
+    }
+
+    // Object expression: {a: b}
+    if (node.type === 'ObjectExpression') {
+        const props = (node.properties ?? []).map((p: any) => {
+            const key = p.key ? stringify(p.key as AstNode, depth + 1) : '?';
+            const val = p.value ? stringify(p.value as AstNode, depth + 1) : '?';
+            return `${key}:${val}`;
+        });
+        return `{${props.join(',')}}`;
+    }
+
+    // Template literal
+    if (node.type === 'TemplateLiteral') return '`tmpl`';
+
+    // Assignment expression
+    if (node.type === 'AssignmentExpression') {
+        const left = stringify(node.left, depth + 1);
+        const right = stringify(node.right, depth + 1);
+        if (left && right) return `${left}${node.operator}${right}`;
     }
 
     return null;
 }
 
-function getSeenSetForTemplate(context: RuleContext): Set<string> {
-    const state = getContextState(context);
-    const key = getTemplateKey(context);
-    let set = state.get(key);
-    if (!set) {
-        set = new Set<string>();
-        state.set(key, set);
-    }
-    return set;
-}
-
-/**
- * Detects repeated `| async` usage on the same observable-like expression within a single template.
- *
- * State is scoped to the RuleContext instance (via WeakMap) so each file's analysis run
- * gets its own isolated tracking table. No module-level mutable state is used.
- */
 export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
     'template-no-async-pipe-duplication',
     (node: TemplateExpressionNode, context: RuleContext): RuleFailure | null => {
-        const asyncTarget = findAsyncPipedExpression(node.expression as unknown as AstNode);
-        if (!asyncTarget) return null;
+        const target = findAsyncExpression(node.expression as unknown as AstNode);
+        const key = target ? stringify(target) : null;
+        if (!key) return null;
 
-        const observableKey = stringifyExpression(asyncTarget);
-        if (!observableKey) return null;
+        const templateKey = getTemplateKey(context);
+        let state = seenByTemplateKey.get(context);
+        if (!state) {
+            state = new Map();
+            seenByTemplateKey.set(context, state);
+        }
 
-        const seen = getSeenSetForTemplate(context);
+        let seen = state.get(templateKey);
+        if (!seen) {
+            seen = new Set();
+            state.set(templateKey, seen);
+        }
 
-        if (seen.has(observableKey)) {
-            const offset = getTemplateAbsoluteOffset(context as unknown as { template?: { templateStartOffset?: number } }, node.sourceSpan.start);
+        if (seen.has(key)) {
+            const offset = getTemplateAbsoluteOffset(context, node.sourceSpan.start);
             const { line, column } = context.locator.location(offset);
-
             return {
                 filePath: context.filePath,
                 ruleName: 'template-no-async-pipe-duplication',
-                message:
-                    `Duplicate async pipe subscription for "${observableKey}". Share it with @if (${observableKey} | async; as v) { ... } or *ngIf="${observableKey} | async as v".`,
+                message: `Duplicate async pipe subscription for "${key}". Share it with @if (${key} | async; as v) { ... } or *ngIf="${key} | async as v".`,
                 line,
                 column,
                 severity: 'warn',
@@ -149,11 +126,8 @@ export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
             };
         }
 
-        seen.add(observableKey);
+        seen.add(key);
         return null;
     },
-    {
-        requires: { htmlAst: true },
-    }
+    { requires: { htmlAst: true } }
 );
-

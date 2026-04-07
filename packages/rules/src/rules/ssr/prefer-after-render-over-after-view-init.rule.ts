@@ -1,136 +1,72 @@
 import { AnyAngularClassNode } from "@ngcompass/ast";
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { AstNode, MaybeAstNode, unwrapNode, getClassBody, getNodeStart, childNodes } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
+import { AstNode, unwrapNode, getClassBody, getNodeStart, childNodes, getMethodBody } from "../../rule-utils";
 
-function shouldAnalyzeFile(filePath: string): boolean {
-    return filePath.endsWith('.component.ts') || filePath.endsWith('.directive.ts');
-}
+const DOM_PATTERNS = new Set([
+    'nativeElement', 'getBoundingClientRect', 'querySelector', 'querySelectorAll',
+    'getElementById', 'createElement', 'scrollIntoView', 'focus', 'blur',
+    'offsetWidth', 'offsetHeight', 'clientWidth', 'clientHeight',
+    'scrollTop', 'scrollLeft', 'innerHTML', 'outerHTML', 'textContent',
+    // DOM traversal
+    'parentElement', 'parentNode', 'firstChild', 'lastChild',
+    'nextSibling', 'previousSibling', 'children', 'ownerDocument',
+    // DOM manipulation
+    'insertBefore', 'appendChild', 'removeChild', 'replaceChild', 'cloneNode',
+    'setAttribute', 'getAttribute', 'removeAttribute', 'hasAttribute',
+    'classList', 'dispatchEvent',
+    // DOM query
+    'contains', 'matches', 'closest', 'getClientRects',
+    // Events
+    'addEventListener', 'removeEventListener',
+    // Browser APIs
+    'requestAnimationFrame', 'cancelAnimationFrame',
+]);
+const DOM_PATTERN_PREFIXES = ['getElementsBy', 'offset', 'client', 'scroll'];
 
-/**
- * DOM-access patterns that indicate browser-only code inside ngAfterViewInit.
- */
-const DOM_ACCESS_PATTERNS = [
-    'nativeElement',
-    'getBoundingClientRect',
-    'querySelector',
-    'querySelectorAll',
-    'getElementById',
-    'getElementsBy',
-    'createElement',
-    'scrollIntoView',
-    'focus',
-    'blur',
-    'offsetWidth',
-    'offsetHeight',
-    'clientWidth',
-    'clientHeight',
-    'scrollTop',
-    'scrollLeft',
-    'innerHTML',
-    'outerHTML',
-    'textContent',
-];
-
-/**
- * Returns true if any node in the subtree accesses a DOM property.
- */
-function bodyAccessesDom(body: MaybeAstNode): boolean {
-    if (!body) return false;
-    const stack: AstNode[] = [body];
-
+function bodyAccessesDom(root: AstNode): boolean {
+    const stack = [root];
     while (stack.length) {
-        const node = stack.pop()!;
-        const n = unwrapNode(node);
+        const n = unwrapNode(stack.pop()!);
         if (!n) continue;
-
-        // Check member expression property names
-        if (
-            (n.type === 'MemberExpression' || n.type === 'StaticMemberExpression' || n.type === 'OptionalMemberExpression') &&
-            !n.computed
-        ) {
-            const propName = (n.property as AstNode)?.name as string ?? '';
-            if (DOM_ACCESS_PATTERNS.some(p => propName === p || propName.startsWith(p))) {
-                return true;
-            }
+        if ((n.type === 'MemberExpression' || n.type === 'StaticMemberExpression' || n.type === 'OptionalMemberExpression') && !n.computed) {
+            const name = (n.property as any)?.name ?? '';
+            if (DOM_PATTERNS.has(name)) return true;
+            for (const p of DOM_PATTERN_PREFIXES) { if (name.startsWith(p)) return true; }
         }
-
-        // Check for direct `document.*` or `window.*` access
-        if (n.type === 'Identifier') {
-            const name = n.name as string ?? '';
-            if (name === 'document' || name === 'window') return true;
-        }
-
-        for (const child of childNodes(n)) {
-            stack.push(child);
-        }
+        if (n.type === 'Identifier' && (n.name === 'document' || n.name === 'window')) return true;
+        for (const child of childNodes(n)) stack.push(child);
     }
-
     return false;
 }
 
-/**
- * Finds the class method node named `ngAfterViewInit` in the class body.
- */
-function findAfterViewInitMethod(classBody: AstNode[]): MaybeAstNode {
-    for (const member of classBody) {
-        const m = unwrapNode(member);
-        if (!m) continue;
-        if (m.type !== 'MethodDefinition' && m.type !== 'PropertyDefinition') continue;
-        const key = m.key;
-        const name = key?.type === 'Identifier' ? (key.name as string) : '';
-        if (name === 'ngAfterViewInit') return m;
-    }
-    return null;
-}
-
-/**
- * Gets the function body of a method definition.
- */
-function getMethodBody(method: MaybeAstNode): MaybeAstNode {
-    if (!method) return null;
-    // MethodDefinition → value is FunctionExpression
-    const fn = unwrapNode(method.value as AstNode | undefined);
-    if (!fn) return null;
-    const body = unwrapNode(fn.body as AstNode | undefined);
-    return body ?? null;
-}
-
-/**
- * Flags `ngAfterViewInit` implementations that access the DOM directly and
- * suggests migrating to `afterNextRender()` for SSR safety.
- */
 export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
     'prefer-after-render-over-after-view-init',
-    (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure | null => {
-        if (!shouldAnalyzeFile(context.filePath)) return null;
+    (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
+        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
 
-        const classNode = streamNode.node as unknown as AstNode;
-        const classBody = getClassBody(classNode);
-        if (classBody.length === 0) return null;
+        const classBody = getClassBody(streamNode.node as unknown as AstNode);
+        const LIFECYCLE_HOOKS = ['ngAfterViewInit', 'ngAfterContentInit'];
+        const failures: RuleFailure[] = [];
 
-        const method = findAfterViewInitMethod(classBody);
-        if (!method) return null;
+        for (const hookName of LIFECYCLE_HOOKS) {
+            const method = classBody.find(m => (m as any).key?.name === hookName);
+            const body = method ? getMethodBody(method) : null;
+            if (!body || !bodyAccessesDom(body)) continue;
 
-        const body = getMethodBody(method);
-        if (!body) return null;
-
-        if (!bodyAccessesDom(body)) return null;
-
-        const start = getNodeStart(method);
-        const { line, column } = context.locator.location(start);
-
-        return {
-            filePath: context.filePath,
-            ruleName: 'prefer-after-render-over-after-view-init',
-            message: '`ngAfterViewInit` contains DOM access that will fail in SSR. Move browser-only DOM code into `afterNextRender()` to make it SSR-safe.',
-            line,
-            column,
-            severity: 'warn',
-            fix: RECOMMENDATIONS['prefer-after-render-over-after-view-init'],
-            codeExample: CODE_EXAMPLES['prefer-after-render-over-after-view-init'],
-        };
+            const { line, column } = context.locator.location(getNodeStart(method as AstNode));
+            failures.push({
+                filePath: context.filePath,
+                ruleName: 'prefer-after-render-over-after-view-init',
+                message: `\`${hookName}\` contains DOM access that will fail in SSR. Move browser-only DOM code into \`afterNextRender()\` to make it SSR-safe.`,
+                line,
+                column,
+                severity: 'warn',
+                fix: RECOMMENDATIONS['prefer-after-render-over-after-view-init'],
+                codeExample: CODE_EXAMPLES['prefer-after-render-over-after-view-init'],
+            });
+        }
+        return failures.length ? failures : null;
     }
 );

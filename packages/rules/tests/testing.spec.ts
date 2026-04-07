@@ -112,4 +112,59 @@ describe('spec-no-focused-test', () => {
         expect(result.line).toBeGreaterThanOrEqual(1);
         expect(result.column).toBeGreaterThanOrEqual(0);
     });
+
+    it('flags xit() in a .spec.ts file', () => {
+        const source = `xit('skipped test', () => {});`;
+        const ctx = makeContext(source, SPEC_PATH);
+        const calls = findCallExpressions(ctx.program, 'xit');
+        expect(calls.length).toBeGreaterThan(0);
+        const result = specNoFocusedTestRule.handle(calls[0], ctx);
+        expect(result).not.toBeNull();
+        expect((result as any).message).toContain('xit');
+    });
+
+    it('flags xdescribe() in a .spec.ts file', () => {
+        const source = `xdescribe('skipped suite', () => {});`;
+        const ctx = makeContext(source, SPEC_PATH);
+        const calls = findCallExpressions(ctx.program, 'xdescribe');
+        const result = specNoFocusedTestRule.handle(calls[0], ctx);
+        expect(result).not.toBeNull();
+        expect((result as any).message).toContain('xdescribe');
+    });
+
+    it('flags xtest() in a .spec.ts file', () => {
+        const source = `xtest('skipped test', () => {});`;
+        const ctx = makeContext(source, SPEC_PATH);
+        const calls = findCallExpressions(ctx.program, 'xtest');
+        const result = specNoFocusedTestRule.handle(calls[0], ctx);
+        expect(result).not.toBeNull();
+        expect((result as any).message).toContain('xtest');
+    });
+
+    it('uses "disables" wording for x-prefixed helpers', () => {
+        const source = `xit('skipped', () => {});`;
+        const ctx = makeContext(source, SPEC_PATH);
+        const calls = findCallExpressions(ctx.program, 'xit');
+        const result = specNoFocusedTestRule.handle(calls[0], ctx) as any;
+        expect(result.message).toContain('disables');
+        expect(result.message).not.toContain('focused');
+    });
+
+    it('flags pending() in a .spec.ts file', () => {
+        const source = `it('test', () => { pending(); });`;
+        const ctx = makeContext(source, SPEC_PATH);
+        const calls = findCallExpressions(ctx.program, 'pending');
+        expect(calls.length).toBeGreaterThan(0);
+        const result = specNoFocusedTestRule.handle(calls[0], ctx);
+        expect(result).not.toBeNull();
+        expect((result as any).message).toContain('pending');
+    });
+
+    it('does NOT flag pending() in a non-spec file', () => {
+        const source = `pending();`;
+        const ctx = makeContext(source, NON_SPEC_PATH);
+        const calls = findCallExpressions(ctx.program, 'pending');
+        const result = specNoFocusedTestRule.handle(calls[0], ctx);
+        expect(result).toBeNull();
+    });
 });

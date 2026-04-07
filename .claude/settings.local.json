@@ -112,7 +112,11 @@
       "Bash(pnpm --filter @ngcompass/rules test --reporter=verbose)",
       "Bash(pnpm turbo:*)",
       "Bash(find C:Users30694Desktoptest_compassngcompasssrccases -name *behaviorsubject* -o -name *behavior*)",
-      "Bash(find C:/Users/30694/Desktop/test_compass/ngcompass -name .ngcompass -o -name *.cache -type d)"
+      "Bash(find C:/Users/30694/Desktop/test_compass/ngcompass -name .ngcompass -o -name *.cache -type d)",
+      "Bash(find C:Users30694Desktoptest_compassngcompass -name .ngcompass -o -name *.cache -o -name ngcompass-cache*)",
+      "Bash(pnpm --filter @ngcompass/rules test --run)",
+      "Bash(ls -1 /c/Users/30694/Desktop/ngcompass_/packages/rules/src/rules/*/)",
+      "Bash(npx vitest:*)"
     ]
   }
 }

@@ -95,4 +95,151 @@ describe('template-no-async-pipe-duplication', () => {
         expect(templateNoAsyncPipeDuplicationRule.name).toBe('template-no-async-pipe-duplication');
         expect(templateNoAsyncPipeDuplicationRule.streamType).toBe('TemplateExpression');
     });
+
+    it('flags a duplicate async pipe on the same observable', () => {
+        // The rule tracks seen observables per context, so we need the same context object
+        // for both calls to simulate two template bindings in the same template.
+        const ctx = makeContext('', '/src/app.component.ts');
+
+        // Simulates `data$ | async` — the expression is a binary `|` with right = Identifier(async)
+        const makeAsyncPipeNode = (obsName: string) => ({
+            expression: {
+                type: 'BinaryExpression',
+                operator: '|',
+                left: { type: 'Identifier', name: obsName },
+                right: { type: 'Identifier', name: 'async' },
+            },
+            sourceSpan: { start: 0, end: 20 },
+        });
+
+        // First occurrence — should NOT be flagged
+        const first = templateNoAsyncPipeDuplicationRule.handle(makeAsyncPipeNode('data$') as any, ctx);
+        expect(first).toBeNull();
+
+        // Second occurrence in same template — SHOULD be flagged as duplicate
+        const second = templateNoAsyncPipeDuplicationRule.handle(makeAsyncPipeNode('data$') as any, ctx);
+        expect(second).not.toBeNull();
+        expect((second as any).ruleName).toBe('template-no-async-pipe-duplication');
+        expect((second as any).message).toContain('data$');
+    });
+
+    it('does NOT flag two different observables with async pipe', () => {
+        const ctx = makeContext('', '/src/app.component.ts');
+
+        const makeAsyncPipeNode = (obsName: string) => ({
+            expression: {
+                type: 'BinaryExpression',
+                operator: '|',
+                left: { type: 'Identifier', name: obsName },
+                right: { type: 'Identifier', name: 'async' },
+            },
+            sourceSpan: { start: 0, end: 20 },
+        });
+
+        const first = templateNoAsyncPipeDuplicationRule.handle(makeAsyncPipeNode('users$') as any, ctx);
+        expect(first).toBeNull();
+
+        const second = templateNoAsyncPipeDuplicationRule.handle(makeAsyncPipeNode('orders$') as any, ctx);
+        expect(second).toBeNull();
+    });
+
+    it('does NOT flag an expression without an async pipe', () => {
+        const ctx = makeContext('', '/src/app.component.ts');
+        const fakeNode = {
+            expression: { type: 'Identifier', name: 'title' },
+            sourceSpan: { start: 0, end: 5 },
+        } as any;
+        const result = templateNoAsyncPipeDuplicationRule.handle(fakeNode, ctx);
+        expect(result).toBeNull();
+    });
+
+    it('does NOT flag a non-async pipe (e.g. date pipe)', () => {
+        const ctx = makeContext('', '/src/app.component.ts');
+        const fakeNode = {
+            expression: {
+                type: 'BinaryExpression',
+                operator: '|',
+                left: { type: 'Identifier', name: 'today' },
+                right: { type: 'Identifier', name: 'date' },
+            },
+            sourceSpan: { start: 0, end: 15 },
+        } as any;
+        const result = templateNoAsyncPipeDuplicationRule.handle(fakeNode, ctx);
+        expect(result).toBeNull();
+    });
+
+    it('flags duplicate async pipe with logical OR expression', () => {
+        const ctx = makeContext('', '/src/async-logical-a.component.ts');
+
+        const makeLogicalAsyncNode = () => ({
+            expression: {
+                type: 'BinaryExpression',
+                operator: '|',
+                left: {
+                    type: 'LogicalExpression',
+                    operator: '||',
+                    left: { type: 'Identifier', name: 'data$' },
+                    right: { type: 'Identifier', name: 'fallback$' },
+                },
+                right: { type: 'Identifier', name: 'async' },
+            },
+            sourceSpan: { start: 0, end: 30 },
+        });
+
+        const first = templateNoAsyncPipeDuplicationRule.handle(makeLogicalAsyncNode() as any, ctx);
+        expect(first).toBeNull();
+
+        const second = templateNoAsyncPipeDuplicationRule.handle(makeLogicalAsyncNode() as any, ctx);
+        expect(second).not.toBeNull();
+    });
+
+    it('does NOT flag different logical expressions as duplicates', () => {
+        const ctx = makeContext('', '/src/async-logical-b.component.ts');
+
+        const makeLogicalAsyncNode = (rightName: string) => ({
+            expression: {
+                type: 'BinaryExpression',
+                operator: '|',
+                left: {
+                    type: 'LogicalExpression',
+                    operator: '||',
+                    left: { type: 'Identifier', name: 'a$' },
+                    right: { type: 'Identifier', name: rightName },
+                },
+                right: { type: 'Identifier', name: 'async' },
+            },
+            sourceSpan: { start: 0, end: 30 },
+        });
+
+        const first = templateNoAsyncPipeDuplicationRule.handle(makeLogicalAsyncNode('b$') as any, ctx);
+        expect(first).toBeNull();
+
+        const second = templateNoAsyncPipeDuplicationRule.handle(makeLogicalAsyncNode('c$') as any, ctx);
+        expect(second).toBeNull();
+    });
+
+    it('flags duplicate async pipe with non-pipe binary expression', () => {
+        const ctx = makeContext('', '/src/async-binary-c.component.ts');
+
+        const makeBinaryAsyncNode = () => ({
+            expression: {
+                type: 'BinaryExpression',
+                operator: '|',
+                left: {
+                    type: 'BinaryExpression',
+                    operator: '+',
+                    left: { type: 'Identifier', name: 'count$' },
+                    right: { type: 'Literal', value: 1 },
+                },
+                right: { type: 'Identifier', name: 'async' },
+            },
+            sourceSpan: { start: 0, end: 30 },
+        });
+
+        const first = templateNoAsyncPipeDuplicationRule.handle(makeBinaryAsyncNode() as any, ctx);
+        expect(first).toBeNull();
+
+        const second = templateNoAsyncPipeDuplicationRule.handle(makeBinaryAsyncNode() as any, ctx);
+        expect(second).not.toBeNull();
+    });
 });

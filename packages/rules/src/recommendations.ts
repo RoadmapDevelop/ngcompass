@@ -54,15 +54,15 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'rxjs-no-nested-subscribe':
         'Replace nested `.subscribe()` calls with a flattening operator: `switchMap` (cancel on new emission), `mergeMap` (concurrent), or `concatMap` (sequential) to compose streams declaratively.',
     'no-document-access':
-        'Inject `DOCUMENT` from `@angular/common` for DOM access, or wrap browser-only code in `afterNextRender()` / `isPlatformBrowser()` to ensure compatibility with Angular SSR.',
+        'Inject `DOCUMENT` from `@angular/common` for DOM access, or wrap browser-only code in `afterNextRender()` / `isPlatformBrowser()` / `!isPlatformServer()` to ensure compatibility with Angular SSR.',
     'template-no-unsafe-bindings':
         'Avoid binding unsanitized values to `[innerHTML]`, `[outerHTML]`, or `[srcdoc]`. Use Angular\'s DomSanitizer with a SafeHtml pipe, or restructure the template to avoid raw HTML injection.',
     'signal-prefer-model':
         'Replace the `@Input() x` + `@Output() xChange` two-way binding pair with the `model()` signal (Angular 17.2+) for concise, type-safe two-way data flow.',
     'prefer-after-render-over-after-view-init':
-        'Move DOM access from `ngAfterViewInit` into `afterNextRender()` so the code only runs in the browser and remains safe in Angular SSR environments.',
+        'Move DOM access from `ngAfterViewInit` / `ngAfterContentInit` into `afterNextRender()` so the code only runs in the browser and remains safe in Angular SSR environments.',
     'spec-no-focused-test':
-        'Remove focused test helpers (`fdescribe`, `fit`, `describe.only`, `it.only`) before committing. They silently exclude the rest of the test suite from CI runs.',
+        'Remove focused (`fdescribe`, `fit`, `describe.only`, `it.only`) and disabled (`xdescribe`, `xit`) test helpers before committing. Focused tests silently exclude the rest of the suite; disabled tests are easily forgotten.',
 };
 
 /**
@@ -327,9 +327,14 @@ constructor() {
   });
 }`,
 
-    'spec-no-focused-test': `// Before:
+    'spec-no-focused-test': `// Before (focused — skips all other tests):
 fdescribe('MyComponent', () => {
   fit('should render', () => { ... });
+});
+
+// Before (disabled — easily forgotten):
+xdescribe('MyComponent', () => {
+  xit('should render', () => { ... });
 });
 
 // After:

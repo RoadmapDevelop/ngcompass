@@ -1,72 +1,101 @@
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
 import { AstNode, unwrapNode, getNodeStart } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
 
-/**
- * Focused test functions that cause test runners to only execute the
- * focused subset, silently skipping all other tests.
- */
-const FOCUSED_FUNCTIONS = new Set([
-    'fdescribe',
-    'fit',
-    'describe.only',
-    'it.only',
-    'test.only',
-    'context.only',
-]);
+const FOCUSED_MAP: Record<string, string> = {
+    'fdescribe': 'describe',
+    'fit': 'it',
+    'describe.only': 'describe',
+    'it.only': 'it',
+    'test.only': 'test',
+    'context.only': 'context',
+    'xdescribe': 'describe',
+    'xit': 'it',
+    'xtest': 'test',
+    'xcontext': 'context',
+};
 
-function isFocusedCall(node: AstNode): string | null {
-    const callee = unwrapNode(node.callee);
-    if (!callee) return null;
+const FOCUSED_NAMES = new Set(Object.keys(FOCUSED_MAP));
+const SKIPPED_NAMES = new Set(['xdescribe', 'xit', 'xtest', 'xcontext']);
 
-    // Direct: fdescribe(...), fit(...)
-    if (callee.type === 'Identifier') {
-        const name = callee.name as string ?? '';
-        if (FOCUSED_FUNCTIONS.has(name)) return name;
-        return null;
+function getIdentifierName(node: AstNode): string | null {
+    if (node.type === 'Identifier') {
+        return (node.name as string) ?? null;
     }
-
-    // Member: describe.only(...), it.only(...), test.only(...)
-    if (
-        callee.type === 'MemberExpression' ||
-        callee.type === 'StaticMemberExpression' ||
-        callee.type === 'OptionalMemberExpression'
-    ) {
-        const prop = (callee.property as AstNode)?.name as string ?? '';
-        const obj = (callee.object as AstNode);
-        const objName = (obj?.type === 'Identifier' ? obj.name : '') as string ?? '';
-        const full = `${objName}.${prop}`;
-        if (FOCUSED_FUNCTIONS.has(full)) return full;
-    }
-
     return null;
 }
 
-/**
- * Flags focused test helpers (fdescribe, fit, describe.only, it.only) in spec files.
- * Focused tests cause CI to silently pass while only running a subset of the test suite.
- */
+function getMemberExpressionName(node: AstNode): string | null {
+    if (
+        node.type === 'MemberExpression' ||
+        node.type === 'StaticMemberExpression' ||
+        node.type === 'OptionalMemberExpression'
+    ) {
+        const obj = unwrapNode(node.object as AstNode);
+        const prop = (node.property as AstNode)?.name as string ?? '';
+        const objName = (obj?.type === 'Identifier' ? obj.name : '') as string ?? '';
+        
+        return objName ? `${objName}.${prop}` : null;
+    }
+    return null;
+}
+
+function getFocusedName(callee: AstNode): string | null {
+    const name = getIdentifierName(callee) || getMemberExpressionName(callee);
+    return (name && FOCUSED_NAMES.has(name)) ? name : null;
+}
+
+function isSpecFile(filePath: string): boolean {
+    return filePath.endsWith('.spec.ts') || filePath.endsWith('.test.ts');
+}
+
 export const specNoFocusedTestRule = createCallExpressionRule(
     'spec-no-focused-test',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        // Only run on spec / test files
-        const fp = context.filePath;
-        if (!fp.endsWith('.spec.ts') && !fp.endsWith('.test.ts')) return null;
+        if (!isSpecFile(context.filePath)) {
+            return null;
+        }
 
-        const n = node as unknown as AstNode;
-        const focusedName = isFocusedCall(n);
-        if (!focusedName) return null;
+        const callee = unwrapNode(node.callee as AstNode);
+        if (!callee) {
+            return null;
+        }
 
-        const start = getNodeStart(n);
+        const focusedName = getFocusedName(callee);
+
+        // Detect pending() calls
+        if (!focusedName) {
+            const name = getIdentifierName(callee);
+            if (name === 'pending') {
+                const start = getNodeStart(node as unknown as AstNode);
+                const { line, column } = context.locator.location(start);
+                return {
+                    filePath: context.filePath,
+                    ruleName: 'spec-no-focused-test',
+                    message: '`pending()` marks the enclosing test as pending. Remove it before committing.',
+                    line,
+                    column,
+                    severity: 'error',
+                    fix: RECOMMENDATIONS['spec-no-focused-test'],
+                };
+            }
+            return null;
+        }
+
+        const replacement = FOCUSED_MAP[focusedName];
+        const start = getNodeStart(node as unknown as AstNode);
         const { line, column } = context.locator.location(start);
+
+        const message = SKIPPED_NAMES.has(focusedName)
+            ? `\`${focusedName}\` disables a test that may be forgotten. Re-enable with \`${replacement}\` or remove the test entirely.`
+            : `\`${focusedName}\` is a focused test helper that silently skips all other tests in CI. Replace with \`${replacement}\`.`;
 
         return {
             filePath: context.filePath,
             ruleName: 'spec-no-focused-test',
-            message: `\`${focusedName}\` is a focused test helper that silently skips all other tests in CI. Replace with \`${focusedName.replace(/^f|\.only$/, '')}\`.`,
+            message,
             line,
             column,
             severity: 'error',

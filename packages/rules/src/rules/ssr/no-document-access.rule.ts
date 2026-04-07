@@ -1,97 +1,140 @@
-import { RuleFailure } from "@ngcompass/common";
-import { CallExpression } from "@ngcompass/ast";
-import { createCallExpressionRule } from '@ngcompass/engine';
+import { AnyAngularClassNode } from "@ngcompass/ast";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
+import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from "../../recommendations";
-import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getNodeStart } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
+import { AstNode, unwrapNode, isMemberExpressionLike, getNodeStart, getClassBody, childNodes, isCalleeNamed } from "../../rule-utils";
 
-/**
- * Global identifiers that are unavailable in SSR (Node.js) environments.
- */
-const BROWSER_ONLY_GLOBALS = new Set([
-    'document',
-    'window',
-    'localStorage',
-    'sessionStorage',
-    'navigator',
-    'location',
-]);
+const BROWSER_GLOBALS = new Set(['document', 'window', 'localStorage', 'sessionStorage', 'navigator', 'location']);
 
-/**
- * Angular APIs that are the correct SSR-safe alternatives.
- * Access via these is not flagged.
- */
-const SAFE_INJECTION_TOKENS = new Set([
-    'DOCUMENT', // @angular/common
-    'isPlatformBrowser',
-    'isPlatformServer',
-    'afterNextRender',
-    'afterRender',
-]);
+function detectGuardType(node: AstNode, browserGuardVars: Set<string>): 'browser' | 'server' | null {
+    const stack = [node];
+    while (stack.length) {
+        const n = unwrapNode(stack.pop()!);
+        if (!n) continue;
 
-/**
- * Returns the root identifier name of a member expression chain.
- * e.g.  `document.body.classList`  →  `"document"`
- *       `window.location.href`     →  `"window"`
- */
-function getRootIdentifierName(node: AstNode): string | null {
-    let current: MaybeAstNode = node;
-    while (current) {
-        if (current.type === 'Identifier') return (current.name as string) ?? null;
-        if (isMemberExpressionLike(current)) {
-            current = unwrapNode(current.object);
-        } else {
-            break;
+        // Direct isPlatformBrowser() call
+        if (n.type === 'CallExpression' && n.callee && isCalleeNamed(n.callee as AstNode, 'isPlatformBrowser')) return 'browser';
+
+        // Direct isPlatformServer() call
+        if (n.type === 'CallExpression' && n.callee && isCalleeNamed(n.callee as AstNode, 'isPlatformServer')) return 'server';
+
+        // Negated !isPlatformServer() === browser guard
+        if (n.type === 'UnaryExpression' && n.operator === '!' && n.argument) {
+            const arg = unwrapNode(n.argument);
+            if (arg?.type === 'CallExpression' && arg.callee && isCalleeNamed(arg.callee as AstNode, 'isPlatformServer')) return 'browser';
         }
+
+        // Variable-based guard: if (isBrowser) where isBrowser = isPlatformBrowser(...)
+        if (n.type === 'Identifier' && browserGuardVars.has(n.name as string)) return 'browser';
+
+        for (const child of childNodes(n)) stack.push(child);
     }
     return null;
 }
 
-/**
- * Returns the browser-only global name referenced by the call expression, or null.
- */
-function getBrowserGlobalFromCall(node: AstNode): string | null {
-    const callee = unwrapNode(node.callee);
-    if (!callee) return null;
-
-    // Method call on a browser global: document.querySelector(...)
-    if (isMemberExpressionLike(callee)) {
-        const root = getRootIdentifierName(callee);
-        if (root && BROWSER_ONLY_GLOBALS.has(root)) return root;
+function collectBrowserGuardVars(classBody: AstNode[]): Set<string> {
+    const vars = new Set<string>();
+    const stack: AstNode[] = [...classBody];
+    while (stack.length) {
+        const n = unwrapNode(stack.pop()!);
+        if (!n) continue;
+        if (n.type === 'VariableDeclarator' && n.init) {
+            const init = unwrapNode(n.init as AstNode);
+            if (init?.type === 'CallExpression' && init.callee && isCalleeNamed(init.callee as AstNode, 'isPlatformBrowser')) {
+                const id = (n as any).id ?? n.key;
+                if (id?.type === 'Identifier' && id.name) vars.add(id.name as string);
+            }
+        }
+        // Also detect property assignments: this.isBrowser = isPlatformBrowser(...)
+        if (n.type === 'AssignmentExpression' && n.right) {
+            const right = unwrapNode(n.right);
+            if (right?.type === 'CallExpression' && right.callee && isCalleeNamed(right.callee as AstNode, 'isPlatformBrowser')) {
+                const left = unwrapNode(n.left);
+                if (left && isMemberExpressionLike(left) && unwrapNode(left.object)?.type === 'ThisExpression') {
+                    const prop = (left.property as AstNode)?.name;
+                    if (prop) vars.add(prop as string);
+                }
+            }
+        }
+        for (const child of childNodes(n)) stack.push(child);
     }
+    return vars;
+}
 
-    // Safe Angular APIs — skip
-    if (callee.type === 'Identifier' && SAFE_INJECTION_TOKENS.has((callee.name as string) ?? '')) {
-        return null;
-    }
-
+function getRoot(node: AstNode): string | null {
+    let curr: any = node;
+    while (curr && isMemberExpressionLike(curr)) curr = unwrapNode(curr.object);
+    if (curr?.type === 'Identifier') return curr.name || null; // Assuming 'callee' was a typo for 'curr' and 'BYPASS_METHODS' is not intended here.
     return null;
 }
 
-/**
- * Flags direct access to browser-only globals (document, window, localStorage, etc.)
- * which throw in Angular Universal / @angular/ssr environments.
- * Safe alternatives: inject(DOCUMENT), afterNextRender(), isPlatformBrowser().
- */
-export const noDocumentAccessRule = createCallExpressionRule(
+export const noDocumentAccessRule = createAnyAngularClassRule(
     'no-document-access',
-    (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const n = node as unknown as AstNode;
-        const globalName = getBrowserGlobalFromCall(n);
-        if (!globalName) return null;
+    (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
+        const classBody = getClassBody(streamNode.node as unknown as AstNode);
+        if (classBody.length === 0) return null;
 
-        const start = getNodeStart(n);
-        const { line, column } = context.locator.location(start);
+        const browserGuardVars = collectBrowserGuardVars(classBody);
+        const failures: RuleFailure[] = [];
+        const reported = new Set<number>();
+        const stack: AstNode[] = [...classBody];
 
-        return {
-            filePath: context.filePath,
-            ruleName: 'no-document-access',
-            message: `Direct access to \`${globalName}\` breaks Angular SSR. Inject \`DOCUMENT\` from \`@angular/common\`, use \`afterNextRender()\`, or guard with \`isPlatformBrowser()\`.`,
-            line,
-            column,
-            severity: 'error',
-            fix: RECOMMENDATIONS['no-document-access'],
-            codeExample: CODE_EXAMPLES['no-document-access'],
-        };
+        while (stack.length) {
+            const n = unwrapNode(stack.pop()!);
+            if (!n) continue;
+
+            if (n.type === 'IfStatement' && n.test) {
+                const test = unwrapNode(n.test as AstNode);
+                if (test) {
+                    const guardType = detectGuardType(test, browserGuardVars);
+                    if (guardType === 'browser') {
+                        // Consequent is browser-only — skip it; process alternate (server fallback)
+                        if (n.alternate) stack.push(n.alternate as AstNode);
+                        continue;
+                    }
+                    if (guardType === 'server') {
+                        // Consequent is server code — check it; alternate is browser-only — skip it
+                        if (n.consequent) stack.push(n.consequent as AstNode);
+                        continue;
+                    }
+                }
+            }
+
+            // afterNextRender / afterRender callbacks are browser-only — skip the callback body
+            if (n.type === 'CallExpression' && n.callee) {
+                const callee = unwrapNode(n.callee as AstNode);
+                if (callee && (isCalleeNamed(callee, 'afterNextRender') || isCalleeNamed(callee, 'afterRender'))) {
+                    // Skip callback (first arg), but process remaining args (options)
+                    const args = (n.arguments ?? []) as AstNode[];
+                    for (let i = 1; i < args.length; i++) stack.push(args[i]);
+                    continue;
+                }
+            }
+
+            if (isMemberExpressionLike(n)) {
+                const rootName = getRoot(n);
+                if (rootName && BROWSER_GLOBALS.has(rootName)) {
+                    let root: any = n;
+                    while (root && isMemberExpressionLike(root)) root = unwrapNode(root.object);
+                    const start = getNodeStart(root as AstNode);
+                    if (start !== undefined && !reported.has(start)) {
+                        reported.add(start);
+                        const { line, column } = context.locator.location(start);
+                        failures.push({
+                            filePath: context.filePath,
+                            ruleName: 'no-document-access',
+                            message: `Direct access to \`${rootName}\` breaks Angular SSR. Inject \`DOCUMENT\`, use \`afterNextRender()\`, or guard with \`isPlatformBrowser()\`.`,
+                            line,
+                            column,
+                            severity: 'error',
+                            fix: RECOMMENDATIONS['no-document-access'],
+                            codeExample: CODE_EXAMPLES['no-document-access'],
+                        });
+                    }
+                }
+            }
+            for (const child of childNodes(n)) stack.push(child);
+        }
+        return failures.length ? failures : null;
     }
 );

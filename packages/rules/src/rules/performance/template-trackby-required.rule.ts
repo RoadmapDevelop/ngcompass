@@ -1,34 +1,15 @@
 import { TemplateAttributeNode, TemplateBlockNode, TemplateAnalysis } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
-import {
-    createTemplateRule,
-} from '@ngcompass/engine';
-
+import { createTemplateRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
+import { getTemplateAbsoluteOffset } from '../../rule-utils';
 
 const NGFOR_RULE_NAME = 'template-trackby-required-for-ngfor';
 const ATFOR_RULE_NAME = 'template-track-required-for-atfor';
 const COMBINED_RULE_NAME = 'template-trackby-required';
 
-const NGFOR_MESSAGE =
-    'Add a trackBy function to *ngFor to reduce unnecessary DOM updates for dynamic lists.';
-
-const ATFOR_MESSAGE =
-    'Add a track expression to @for to reduce unnecessary DOM updates for dynamic lists.';
-
-function getTemplateAbsoluteOffset(
-    context: RuleContext,
-    node: TemplateAttributeNode | TemplateBlockNode,
-): number {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const templateStartOffset = (context as any).template?.templateStartOffset;
-
-    if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
-        return node.sourceSpan.start + templateStartOffset;
-    }
-
-    return node.sourceSpan.start;
-}
+const NGFOR_MESSAGE = 'Add a trackBy function to *ngFor to reduce unnecessary DOM updates for dynamic lists.';
+const ATFOR_MESSAGE = 'Add a track expression to @for to reduce unnecessary DOM updates for dynamic lists.';
 
 function createFailure(
     context: RuleContext,
@@ -36,7 +17,7 @@ function createFailure(
     ruleName: string,
     message: string,
 ): RuleFailure {
-    const offset = getTemplateAbsoluteOffset(context, node);
+    const offset = getTemplateAbsoluteOffset(context, node.sourceSpan.start);
     const { line, column } = context.locator.location(offset);
 
     return {
@@ -58,14 +39,9 @@ function hasNonEmptyTrackBy(microsyntax: string): boolean {
 function hasNonEmptyForTrack(node: TemplateBlockNode): boolean {
     return node.parameters.some((param) => {
         const expression = param.expression?.trim() ?? '';
-        if (!expression) {
+        if (!expression || !/^track\b/.test(expression)) {
             return false;
         }
-
-        if (!/^track\b/.test(expression)) {
-            return false;
-        }
-
         return expression.replace(/^track\b/, '').trim().length > 0;
     });
 }
@@ -75,22 +51,15 @@ export const templateTrackByRequiredRule = createTemplateRule(
     (analysis: TemplateAnalysis, context: RuleContext): RuleFailure[] | null => {
         const failures: RuleFailure[] = [];
 
-        // Check *ngFor (attributes)
         for (const node of analysis.attributes) {
-            if (node.name === '*ngFor') {
-                const value = node.value ?? '';
-                if (!hasNonEmptyTrackBy(value)) {
-                    failures.push(createFailure(context, node, NGFOR_RULE_NAME, NGFOR_MESSAGE));
-                }
+            if (node.name === '*ngFor' && !hasNonEmptyTrackBy(node.value ?? '')) {
+                failures.push(createFailure(context, node, NGFOR_RULE_NAME, NGFOR_MESSAGE));
             }
         }
 
-        // Check @for (blocks)
         for (const node of analysis.blocks) {
-            if (node.name === 'for') {
-                if (!hasNonEmptyForTrack(node)) {
-                    failures.push(createFailure(context, node, ATFOR_RULE_NAME, ATFOR_MESSAGE));
-                }
+            if (node.name === 'for' && !hasNonEmptyForTrack(node)) {
+                failures.push(createFailure(context, node, ATFOR_RULE_NAME, ATFOR_MESSAGE));
             }
         }
 
@@ -98,5 +67,5 @@ export const templateTrackByRequiredRule = createTemplateRule(
     },
     {
         requires: { htmlAst: true },
-    },
+    }
 );

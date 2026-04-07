@@ -1,19 +1,10 @@
 import { TemplateAttributeNode } from "@ngcompass/ast";
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { createTemplateAttributeRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { RuleContext } from "@ngcompass/common";
+import { getTemplateAbsoluteOffset } from "../../rule-utils";
 
-function getTemplateAbsoluteOffset(context: RuleContext, node: TemplateAttributeNode): number {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const templateStartOffset = (context as any).template?.templateStartOffset;
-    if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
-        return node.sourceSpan.start + templateStartOffset;
-    }
-    return node.sourceSpan.start;
-}
-
-const LEGACY_STRUCTURAL_DIRECTIVES = new Map<string, string>([
+const LEGACY_DIRECTIVES = new Map<string, string>([
     ['*ngIf', '@if'],
     ['*ngFor', '@for'],
     ['*ngSwitch', '@switch'],
@@ -22,27 +13,31 @@ const LEGACY_STRUCTURAL_DIRECTIVES = new Map<string, string>([
     ['*ngSwitchDefault', '@default'],
 ]);
 
-/**
- * Flags legacy structural directives (*ngIf, *ngFor, *ngSwitch) and suggests
- * migrating to Angular 17+ built-in control flow syntax (@if, @for, @switch).
- */
-export const templatePreferControlFlowRule = createTemplateAttributeRule(
-    'template-prefer-control-flow',
-    (node: TemplateAttributeNode, context: RuleContext): RuleFailure | null => {
-        const modern = LEGACY_STRUCTURAL_DIRECTIVES.get(node.name);
-        if (!modern) return null;
+const RULE_NAME = 'template-prefer-control-flow';
 
-        const offset = getTemplateAbsoluteOffset(context, node);
+function getModernEquivalent(directiveName: string): string | null {
+    return LEGACY_DIRECTIVES.get(directiveName) ?? null;
+}
+
+export const templatePreferControlFlowRule = createTemplateAttributeRule(
+    RULE_NAME,
+    (node: TemplateAttributeNode, context: RuleContext): RuleFailure | null => {
+        const modern = getModernEquivalent(node.name);
+        if (!modern) {
+            return null;
+        }
+
+        const offset = getTemplateAbsoluteOffset(context, node.sourceSpan.start);
         const { line, column } = context.locator.location(offset);
 
         return {
             filePath: context.filePath,
-            ruleName: 'template-prefer-control-flow',
+            ruleName: RULE_NAME,
             message: `Replace \`${node.name}\` with the Angular 17+ built-in \`${modern}\` control flow block for better performance and type-narrowing.`,
             line,
             column,
             severity: 'error',
-            fix: RECOMMENDATIONS['template-prefer-control-flow'],
+            fix: RECOMMENDATIONS[RULE_NAME],
         };
     },
     {

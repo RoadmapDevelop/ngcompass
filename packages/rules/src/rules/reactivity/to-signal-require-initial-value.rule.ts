@@ -1,71 +1,42 @@
-import { hasObjectProperty, ObjectExpression } from "@ngcompass/ast";
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
 import { AstNode, getObjectProperty, isLiteralTrue, isLiteralNullOrUndefined, isCalleeNamed, getNodeStart, unwrapNode } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
 
+const RULE_NAME = 'toSignal-require-initialValue';
 
-function hasValidRequireSync(options: AstNode): boolean {
-    const prop = getObjectProperty(options, 'requireSync');
-    if (!prop) return false;
-    return isLiteralTrue(prop.value as AstNode);
+function isOk(options: AstNode): boolean {
+    const initial = getObjectProperty(options, 'initialValue');
+    if (initial && !isLiteralNullOrUndefined(initial.value as AstNode)) return true;
+    
+    const sync = getObjectProperty(options, 'requireSync');
+    return !!sync && isLiteralTrue(sync.value as AstNode);
 }
 
-function hasNonNullInitialValue(options: AstNode): boolean {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (!hasObjectProperty(options as any as ObjectExpression, 'initialValue')) return false;
-    const prop = getObjectProperty(options, 'initialValue');
-    if (!prop) return true;
-    return !isLiteralNullOrUndefined(prop.value as AstNode);
-}
-
-/**
- * Requires an explicit initial state configuration for `toSignal(...)`.
- */
 export const toSignalRequireInitialValueRule = createCallExpressionRule(
-    'toSignal-require-initialValue',
+    RULE_NAME,
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const call = node as unknown as AstNode;
+        const astNode = node as unknown as AstNode;
+        if (!isCalleeNamed(astNode.callee, 'toSignal')) return null;
 
-        if (!isCalleeNamed(call.callee, 'toSignal')) return null;
+        const args = Array.isArray(astNode.arguments) ? astNode.arguments : [];
+        const options = args[1] ? unwrapNode(args[1]) : null;
 
-        const args: AstNode[] = Array.isArray(call.arguments) ? call.arguments : [];
-
-        if (args.length < 2) {
-            const start = getNodeStart(call);
-            const { line, column } = context.locator.location(start);
-
+        if (!options || options.type !== 'ObjectExpression' || !isOk(options)) {
+            const { line, column } = context.locator.location(getNodeStart(astNode));
             return {
                 filePath: context.filePath,
-                ruleName: 'toSignal-require-initialValue',
+                ruleName: RULE_NAME,
                 message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
                 line,
                 column,
                 severity: 'warn',
-                fix: RECOMMENDATIONS['toSignal-require-initialValue'],
+                fix: RECOMMENDATIONS[RULE_NAME],
             };
         }
 
-        const optionsArg = unwrapNode(args[1]);
-        if (!optionsArg || optionsArg.type !== 'ObjectExpression') return null;
-
-        const ok = hasNonNullInitialValue(optionsArg) || hasValidRequireSync(optionsArg);
-        if (ok) return null;
-
-        const start = getNodeStart(call);
-        const { line, column } = context.locator.location(start);
-
-        return {
-            filePath: context.filePath,
-            ruleName: 'toSignal-require-initialValue',
-            message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
-            line,
-            column,
-            severity: 'warn',
-            fix: RECOMMENDATIONS['toSignal-require-initialValue'],
-        };
+        return null;
     }
 );
 
