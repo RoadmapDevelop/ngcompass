@@ -175,6 +175,55 @@ describe('signal-prefer-output-function', () => {
         expect(signalPreferOutputFunctionRule.name).toBe('signal-prefer-output-function');
         expect(signalPreferOutputFunctionRule.streamType).toBe('AnyAngularClass');
     });
+
+    it('flags @Output() EventEmitter in a component', () => {
+        const source = `
+class AppComponent {
+    @Output() clicked = new EventEmitter<void>();
+}`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/output-flag-a.component.ts'
+        );
+        const result = signalPreferOutputFunctionRule.handle(classStreamNode, ctx) as any;
+        expect(result).not.toBeNull();
+        const failures = Array.isArray(result) ? result : [result];
+        expect(failures.length).toBeGreaterThan(0);
+        expect(failures[0].ruleName).toBe('signal-prefer-output-function');
+        expect(failures[0].message).toContain('clicked');
+        expect(failures[0].message).toContain('output()');
+    });
+
+    it('flags multiple @Output() EventEmitters and reports all', () => {
+        const source = `
+class ButtonComponent {
+    @Output() clicked = new EventEmitter<void>();
+    @Output() hovered = new EventEmitter<MouseEvent>();
+}`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/output-multi-b.component.ts'
+        );
+        const result = signalPreferOutputFunctionRule.handle(classStreamNode, ctx) as any;
+        const failures = Array.isArray(result) ? result : (result ? [result] : []);
+        expect(failures.length).toBe(2);
+    });
+
+    it('does NOT flag a property without @Output() decorator', () => {
+        const source = `class AppComponent { emitter = new EventEmitter<void>(); }`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/output-no-dec-c.component.ts'
+        );
+        const result = signalPreferOutputFunctionRule.handle(classStreamNode, ctx);
+        expect(result).toBeNull();
+    });
+
+    it('does NOT flag in a non-component/directive file', () => {
+        const source = `class DataPipe { @Output() change = new EventEmitter<void>(); }`;
+        const { classStreamNode, ctx } = makeAngularClassNode(
+            source, '/src/output-pipe-d.pipe.ts'
+        );
+        const result = signalPreferOutputFunctionRule.handle(classStreamNode, ctx);
+        expect(result).toBeNull();
+    });
 });
 
 // ---------------------------------------------------------------------------

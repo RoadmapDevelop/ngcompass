@@ -131,10 +131,25 @@ export class RuleContextFactory {
             }
         }
 
-        let templateReferences: ReadonlySet<string> | undefined;
-        if (loadedTemplate) {
+        // Resolve the template to extract references.
+        // Priority: the already-loaded inline template > external templatePath.
+        // For components with `templateUrl`, the runner loads the .html file separately
+        // as a task but `loadedTemplate` here is the result of parsing the .ts file,
+        // which contains no inline template → undefined.  We fall back to loading the
+        // external file explicitly so template-reference-aware rules work on both
+        // inline and external templates.
+        let effectiveTemplate = loadedTemplate;
+        if (!effectiveTemplate && templatePath) {
             try {
-                templateReferences = extractTemplateReferences(loadedTemplate);
+                effectiveTemplate = await this.context.getTemplate(templatePath);
+            } catch {
+            }
+        }
+
+        let templateReferences: ReadonlySet<string> | undefined;
+        if (effectiveTemplate) {
+            try {
+                templateReferences = extractTemplateReferences(effectiveTemplate);
             } catch {
             }
         }
@@ -251,11 +266,17 @@ function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string
         if (!node || typeof node !== 'object') return;
         const n = node as Record<string, unknown>;
 
-        // angular-html-parser represents ALL Angular bindings ([prop], (event),
-        // *dir, plain attributes) as raw { name, value } objects in `attrs`.
+        // angular-html-parser represents ALL Angular bindings as raw { name, value }
+        // objects in `attrs`.  Event-binding attrs (name begins with `(`, e.g.
+        // `(click)="handler()"`) are intentionally skipped: identifiers inside event
+        // handlers are used imperatively and do not represent template-consumed state
+        // (e.g. `(click)="refresh$.next()"` must not add `refresh$` to the refs set).
         if (Array.isArray(n['attrs'])) {
             for (const attr of n['attrs'] as unknown[]) {
-                const value = (attr as Record<string, unknown>)['value'];
+                const a = attr as Record<string, unknown>;
+                const attrName = typeof a['name'] === 'string' ? a['name'] : '';
+                if (attrName.startsWith('(')) continue; // skip event bindings
+                const value = a['value'];
                 if (typeof value === 'string' && value) {
                     extractIdentifiersFromExprString(value, refs);
                 }

@@ -1,188 +1,101 @@
 import { AnyAngularClassNode } from "@ngcompass/ast";
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { AstNode, unwrapNode, getCalleeName, childNodes, getStaticPropertyName, getClassBody, getNodeStart } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
+import {
+    AstNode,
+    unwrapNode,
+    getCalleeName,
+    childNodes,
+    getStaticPropertyName,
+    getClassBody,
+    getNodeStart
+} from "../../rule-utils";
 
+const RULE_NAME = 'rxjs-prefer-toSignal-for-template-state';
+const OBSERVABLE_TYPES = new Set(['Observable', 'Subject', 'BehaviorSubject', 'ReplaySubject', 'AsyncSubject']);
+const TEARDOWN_NAMES = new Set(['destroy$', 'destroyed$', 'unsub$', 'teardown$', 'dispose$']);
 
-const TEARDOWN_NAMES = new Set([
-    'destroy$', 'destroyed$', 'ondestroy$', 'ngondestroy$',
-    'unsubscribe$', 'unsub$', 'teardown$', 'dispose$', 'cleanup$',
-]);
-
-const OBSERVABLE_TYPE_NAMES = new Set([
-    'Observable', 'Subject', 'BehaviorSubject', 'ReplaySubject', 'AsyncSubject',
-]);
-
-function lower(s: string): string {
-    return s.toLowerCase();
-}
-
-function getPropertyIdentifierName(member: AstNode): string {
-    const key = member?.key;
-    if (!key) return '';
-    if (key.type === 'Identifier') return (key.name as string) ?? '';
-    if (key.type === 'Literal' && typeof key.value === 'string') return key.value;
-    return '';
-}
-
-function getTypeReferenceName(typeNode: AstNode | null | undefined): string {
-    const t = unwrapNode(typeNode);
-    if (!t) return '';
-    if (t.type === 'TSTypeReference' || t.type === 'TypeReference') {
-        const tn = t.typeName ?? t.name;
-        if (tn && typeof tn === 'object') {
-            if ((tn).type === 'Identifier') return ((tn).name as string) ?? '';
-            if ((tn).type === 'TSQualifiedName') return (((tn).right as AstNode)?.name as string) ?? '';
-        }
-        if (typeof tn === 'string') return tn;
-    }
-    return '';
-}
-
-function isLikelyObservableByType(member: AstNode): boolean {
-    const typeAnnotation = member?.typeAnnotation;
-    const typeNode = (typeAnnotation?.typeAnnotation ?? typeAnnotation);
-    const name = getTypeReferenceName(typeNode);
-    return Boolean(name) && OBSERVABLE_TYPE_NAMES.has(name);
-}
-
-/**
- * Checks whether an initializer expression contains a .pipe() call anywhere in its AST.
- *
- * Uses an explicit stack instead of recursion to avoid call-stack overflow on deeply
- * nested initializers and to guarantee O(N) single-pass traversal.
- */
-function hasPipeCallInInitializer(init: AstNode | null | undefined): boolean {
-    const root = unwrapNode(init);
-    if (!root) return false;
-
-    const stack: AstNode[] = [root];
-
-    while (stack.length > 0) {
-        const current = unwrapNode(stack.pop());
-        if (!current) continue;
-
-        if (current.type === 'CallExpression' && getCalleeName(current) === 'pipe') return true;
-
-        for (const child of childNodes(current)) {
-            stack.push(child);
-        }
-    }
-
-    return false;
-}
-
-function isObservableConstructorNewExpression(init: AstNode | null | undefined): boolean {
-    const node = unwrapNode(init);
-    if (!node || node.type !== 'NewExpression') return false;
-    const callee = unwrapNode(node.callee);
-    if (!callee) return false;
-    if (callee.type === 'Identifier') return OBSERVABLE_TYPE_NAMES.has((callee.name as string) ?? '');
-    if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression' || callee.type === 'OptionalMemberExpression') {
-        return OBSERVABLE_TYPE_NAMES.has(getStaticPropertyName(callee));
-    }
-    return false;
-}
-
-function isAlreadySignal(init: AstNode | null | undefined): boolean {
-    const node = unwrapNode(init);
-    if (!node || node.type !== 'CallExpression') return false;
-    const calleeName = getCalleeName(node);
-    return calleeName === 'toSignal' || calleeName === 'signal' || calleeName === 'computed';
-}
-
-function isLikelyObservable(member: AstNode): boolean {
-    if (isLikelyObservableByType(member)) return true;
-    const init = (member.value ?? member.initializer) as AstNode | undefined;
-    if (!init) return false;
-    if (isAlreadySignal(init)) return false;
-    if (isObservableConstructorNewExpression(init)) return true;
-    if (hasPipeCallInInitializer(init)) return true;
-    return false;
-}
-
-function getDecoratorNames(classNode: AstNode): Set<string> {
-    const names = new Set<string>();
-    const decorators = classNode?.decorators;
-    if (!Array.isArray(decorators)) return names;
-    for (const d of decorators) {
+function isOutputMember(member: AstNode): boolean {
+    const decorators = (member as any).decorators || (member as any).modifiers?.filter((m: any) => m.type === 'Decorator');
+    return Array.isArray(decorators) && decorators.some(d => {
         const expr = unwrapNode(d?.expression);
-        if (!expr) continue;
-        if (expr.type === 'CallExpression') {
-            const callee = unwrapNode(expr.callee);
-            if (callee?.type === 'Identifier' && callee.name) names.add(callee.name);
-            continue;
-        }
-        if (expr.type === 'Identifier' && expr.name) names.add(expr.name);
+        const name = expr?.type === 'CallExpression' ? getCalleeName(expr) : (expr?.type === 'Identifier' ? expr.name : null);
+        return name === 'Output';
+    });
+}
+
+function getTypeName(member: AstNode): string {
+    const typeNode = unwrapNode((member as any).typeAnnotation?.typeAnnotation);
+    if (!typeNode || (typeNode.type !== 'TSTypeReference' && typeNode.type !== 'TypeReference')) return '';
+
+    const tn = typeNode.typeName ?? typeNode.name;
+    if (typeof tn === 'string') return tn;
+    if (tn?.type === 'Identifier') return tn.name ?? '';
+    if (tn?.type === 'TSQualifiedName') return unwrapNode(tn.right)?.name ?? '';
+    return '';
+}
+
+function isObservableSource(member: AstNode): boolean {
+    if (OBSERVABLE_TYPES.has(getTypeName(member))) return true;
+
+    const init = unwrapNode((member as any).value ?? (member as any).initializer);
+    if (!init) return false;
+
+    const callee = getCalleeName(init);
+    if (callee === 'toSignal' || callee === 'signal' || callee === 'computed') return false;
+
+    if (init.type === 'NewExpression') {
+        const ctor = unwrapNode(init.callee);
+        const name = ctor?.type === 'Identifier' ? ctor.name : getStaticPropertyName(ctor);
+        return !!name && OBSERVABLE_TYPES.has(name);
     }
-    return names;
+
+    const stack = [init];
+    while (stack.length > 0) {
+        const curr = unwrapNode(stack.pop()!);
+        if (!curr) continue;
+        if (curr.type === 'CallExpression' && getCalleeName(curr) === 'pipe') return true;
+        for (const child of childNodes(curr)) stack.push(child);
+    }
+    return false;
 }
 
-function isComponentOrDirective(classNode: AstNode): boolean {
-    const names = getDecoratorNames(classNode);
-    return names.has('Component') || names.has('Directive');
-}
-
-/**
- * Suggests converting Observable-like class properties used for view-facing state to Signals via `toSignal()`.
- *
- * RULE-ACC-001: When `context.crossRef.templateReferences` is available (CTX-003), only flag
- * properties that are actually referenced in the template — avoiding false positives for
- * Observable properties used for side effects, shared state, or internal pub/sub.
- * Falls back to the original heuristic when cross-ref context is unavailable.
- */
 export const rxjsPreferToSignalRule = createAnyAngularClassRule(
-    'rxjs-prefer-toSignal-for-template-state',
+    RULE_NAME,
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        const classNode = streamNode.node as unknown as AstNode;
-        if (!isComponentOrDirective(classNode)) return null;
+        if ((streamNode as any).metadata?.type !== 'Component') return null;
 
-        const classBody = getClassBody(classNode);
-        if (classBody.length === 0) return null;
-
-        // RULE-ACC-001: If we have template cross-reference data, use it to restrict
-        // flagging to observables that are actually consumed in the template.
         const templateRefs = context.crossRef?.templateReferences;
+        if (templateRefs === undefined) return null;
 
+        const classBody = getClassBody(streamNode.node as unknown as AstNode);
         const failures: RuleFailure[] = [];
 
         for (const member of classBody) {
-            if (!member || member.type !== 'PropertyDefinition') continue;
+            if (member.type !== 'PropertyDefinition') continue;
 
-            const propName = getPropertyIdentifierName(member);
-            if (!propName || !propName.endsWith('$')) continue;
+            const name = (member.key as any)?.name ?? '';
+            if (!name || !name.endsWith('$') || TEARDOWN_NAMES.has(name.toLowerCase())) continue;
+            if (isOutputMember(member)) continue;
 
-            if (TEARDOWN_NAMES.has(lower(propName))) continue;
-            if (!isLikelyObservable(member)) continue;
+            const baseName = name.slice(0, -1);
+            if (!templateRefs.has(name) && !templateRefs.has(baseName)) continue;
+            if (!isObservableSource(member)) continue;
 
-            // RULE-ACC-001: Cross-ref gate — only flag if the property (or its base name
-            // without the `$` suffix) appears in the template's referenced identifiers.
-            // When templateRefs is undefined (no project context), fall through and flag anyway.
-            if (templateRefs !== undefined) {
-                const baseName = propName.slice(0, -1); // strip trailing `$`
-                if (!templateRefs.has(propName) && !templateRefs.has(baseName)) {
-                    continue; // Not consumed in this component's template — skip
-                }
-            }
-
-            const offset = getNodeStart(member);
-            const { line, column } = context.locator.location(offset);
-
+            const { line, column } = context.locator.location(getNodeStart(member));
             failures.push({
                 filePath: context.filePath,
-                ruleName: 'rxjs-prefer-toSignal-for-template-state',
-                message: `Property "${propName}" appears to be Observable-like. Consider converting it to a Signal with toSignal() when used for template/view state.`,
+                ruleName: RULE_NAME,
+                message: `Property "${name}" is used in the template. Replace it with toSignal(${name}) for better performance and zoneless support.`,
                 line,
                 column,
                 severity: 'warn',
-                fix: RECOMMENDATIONS['rxjs-prefer-toSignal-for-template-state'],
+                fix: RECOMMENDATIONS[RULE_NAME],
             });
         }
 
         return failures.length ? failures : null;
     },
-    { requires: { projectContext: true } }
+    { requires: { projectContext: true, htmlAst: true } }
 );
-

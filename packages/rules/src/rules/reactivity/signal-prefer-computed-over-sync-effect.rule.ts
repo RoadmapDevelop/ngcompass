@@ -1,167 +1,98 @@
-import { RuleFailure } from "@ngcompass/common";
+import { RuleFailure, RuleContext } from "@ngcompass/common";
 import { CallExpression } from "@ngcompass/ast";
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from "../../recommendations";
-import { AstNode, MaybeAstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, getTsSymbolAtNode, getCalleeName, childNodes, isCalleeNamed, getCallbackArg, getFunctionBody, getNodeStart } from "../../rule-utils";
-import { RuleContext } from "@ngcompass/common";
-
+import {
+    AstNode,
+    MaybeAstNode,
+    unwrapNode,
+    isMemberExpressionLike,
+    getStaticPropertyName,
+    getTsSymbolAtNode,
+    getCalleeName,
+    childNodes,
+    isCalleeNamed,
+    getCallbackArg,
+    getFunctionBody,
+    getNodeStart
+} from "../../rule-utils";
 
 const WRITE_METHODS = new Set(['set', 'update', 'mutate']);
+const ASYNC_METHODS = new Set(['setTimeout', 'setInterval', 'queueMicrotask', 'requestAnimationFrame', 'then', 'catch', 'finally', 'subscribe']);
+const LINKED_SIGNAL_METHOD = 'linkedSignal';
 
-const ASYNC_BOUNDARY_CALLEES = new Set([
-    'setTimeout', 'setInterval', 'queueMicrotask', 'requestAnimationFrame',
-    'then', 'catch', 'finally', 'subscribe',
-]);
-
-// linkedSignal callees - if present, don't suggest computed()
-const LINKED_SIGNAL_CALLEES = new Set(['linkedSignal']);
-
-function isSignalWriteCall(callExprRaw: MaybeAstNode): boolean {
-    const call = unwrapNode(callExprRaw);
+function isSignalWrite(node: MaybeAstNode): boolean {
+    const call = unwrapNode(node);
     if (!call || call.type !== 'CallExpression') return false;
     const callee = unwrapNode(call.callee);
-    if (!isMemberExpressionLike(callee)) return false;
-    return WRITE_METHODS.has(getStaticPropertyName(callee));
+    return isMemberExpressionLike(callee) && WRITE_METHODS.has(getStaticPropertyName(callee) || '');
 }
 
-function isLikelySignalRead(nodeRaw: MaybeAstNode, context?: RuleContext): boolean {
-    const node = unwrapNode(nodeRaw);
-    if (!node || node.type !== 'CallExpression') return false;
+function isSignalRead(node: MaybeAstNode, context: RuleContext, inEffect: boolean): boolean {
+    const call = unwrapNode(node);
+    if (!call || call.type !== 'CallExpression' || (Array.isArray(call.arguments) && call.arguments.length > 0)) return false;
 
-    // Signal reads are always zero-arg calls
-    const args = node.arguments;
-    if (Array.isArray(args) && args.length > 0) return false;
-
-    const callee = unwrapNode(node.callee);
+    const callee = unwrapNode(call.callee);
     if (!callee) return false;
 
-    // TypeChecker Integration
-    if (context?.typeChecker) {
-        // We will try to get the symbol or type of the callee to see if it's a Signal
+    if (context.typeChecker) {
         try {
-            const symbol = getTsSymbolAtNode(callee, context);
-            if (symbol) {
-                // Heuristic: check if the type name includes 'Signal'
-                const type = context.typeChecker.getTypeOfSymbolAtLocation(symbol, symbol.valueDeclaration!);
-                if (type) {
-                    const typeStr = context.typeChecker.typeToString(type);
-                    if (typeStr.includes('Signal')) {
-                        return true;
-                    }
-                }
+            const sym = getTsSymbolAtNode(callee, context);
+            if (sym) {
+                const type = context.typeChecker.getTypeOfSymbolAtLocation(sym, sym.valueDeclaration!);
+                if (type && context.typeChecker.typeToString(type).includes('Signal')) return true;
             }
-        } catch { /* TypeChecker unavailable — fall through to heuristic path */ }
+        } catch {}
     }
 
-    // RULE-ACC-007: Tightened static fallback — only patterns that strongly suggest
-    // a component signal read are accepted, to reduce false positives from utility
-    // calls like `logger.flush()`, `zone.run()`, or bare `doSomething()`.
-
-    // Direct zero-arg call on an Identifier: `count()`, `isLoading()`
-    // These are common signal getter patterns in Angular — accept on static path.
-    if (callee.type === 'Identifier') return true;
-
-    // Member zero-arg call: only accept `this.prop()` — the implicit-receiver form
-    // that is idiomatic for reading component signals.  `obj.method()` where `obj`
-    // is not `this` is intentionally excluded to avoid treating service or util
-    // zero-arg calls as signal reads.
-    if (isMemberExpressionLike(callee)) {
-        const obj = unwrapNode((callee).object);
-        if (obj?.type === 'ThisExpression') return true;
-        return false;
-    }
-
-    return false;
+    if (isMemberExpressionLike(callee)) return unwrapNode(callee.object)?.type === 'ThisExpression';
+    return inEffect && callee.type === 'Identifier';
 }
 
-type EffectAnalysis = {
-    hasLikelySignalRead: boolean;
-    hasSignalWrite: boolean;
-    hasAsyncBoundary: boolean;
-    hasLinkedSignal: boolean;
-    firstWriteNode: AstNode | null;
-};
-
-function analyzeEffectCallbackBody(root: AstNode, context?: RuleContext): EffectAnalysis {
-    const analysis: EffectAnalysis = {
-        hasLikelySignalRead: false,
-        hasSignalWrite: false,
-        hasAsyncBoundary: false,
-        hasLinkedSignal: false,
-        firstWriteNode: null,
-    };
-
+function analyzeEffect(root: AstNode, context: RuleContext): { hasRead: boolean; hasWrite: boolean; hasAsync: boolean; hasLinked: boolean; firstWrite: AstNode | null } {
+    const res = { hasRead: false, hasWrite: false, hasAsync: false, hasLinked: false, firstWrite: null as AstNode | null };
     const stack: AstNode[] = [root];
 
     while (stack.length) {
-        const node = stack.pop()!;
-        const n = unwrapNode(node);
-        if (!n) continue;
+        const node = unwrapNode(stack.pop()!);
+        if (!node) continue;
 
-        if (n.type === 'AwaitExpression' || n.type === 'YieldExpression') {
-            analysis.hasAsyncBoundary = true;
-        }
+        if (node.type === 'AwaitExpression' || node.type === 'YieldExpression') res.hasAsync = true;
+        if (node.type === 'CallExpression') {
+            const name = getCalleeName(node);
+            if (name && ASYNC_METHODS.has(name)) res.hasAsync = true;
+            if (name === LINKED_SIGNAL_METHOD) res.hasLinked = true;
 
-        if (n.type === 'CallExpression') {
-            const calleeName = getCalleeName(n);
-
-            if (calleeName && ASYNC_BOUNDARY_CALLEES.has(calleeName)) {
-                analysis.hasAsyncBoundary = true;
-            }
-
-            if (calleeName && LINKED_SIGNAL_CALLEES.has(calleeName)) {
-                analysis.hasLinkedSignal = true;
-            }
-
-            if (isSignalWriteCall(n)) {
-                analysis.hasSignalWrite = true;
-                if (!analysis.firstWriteNode) analysis.firstWriteNode = n;
-            } else if (isLikelySignalRead(n, context)) {
-                analysis.hasLikelySignalRead = true;
+            if (isSignalWrite(node)) {
+                res.hasWrite = true;
+                if (!res.firstWrite) res.firstWrite = node;
+            } else if (isSignalRead(node, context, true)) {
+                res.hasRead = true;
             }
         }
-
-        for (const child of childNodes(n)) {
-            stack.push(child);
-        }
+        for (const child of childNodes(node)) stack.push(child);
     }
-
-    return analysis;
+    return res;
 }
 
-/**
- * Suggests replacing certain synchronous derived-state `effect(...)` patterns with `computed(...)`.
- * Improved: Better signal read detection (zero-arg calls only) and linkedSignal awareness.
- */
 export const signalPreferComputedRule = createCallExpressionRule(
     'signal-prefer-computed-over-sync-effect',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const call = node as unknown as AstNode;
+        const astNode = node as unknown as AstNode;
+        if (!isCalleeNamed(astNode.callee, 'effect')) return null;
 
-        if (!isCalleeNamed(call.callee, 'effect')) return null;
-
-        const callback = getCallbackArg(call);
-        if (!callback) return null;
-
-        const body = getFunctionBody(callback);
+        const callback = getCallbackArg(astNode);
+        const body = callback ? getFunctionBody(callback) : null;
         if (!body) return null;
 
-        const analysis = analyzeEffectCallbackBody(body, context);
+        const { hasRead, hasWrite, hasAsync, hasLinked, firstWrite } = analyzeEffect(body, context);
+        if (!hasWrite || !hasRead || hasAsync || hasLinked) return null;
 
-        if (!analysis.hasSignalWrite) return null;
-        if (!analysis.hasLikelySignalRead) return null;
-        if (analysis.hasAsyncBoundary) return null;
-        // Don't suggest computed() when linkedSignal is more appropriate
-        if (analysis.hasLinkedSignal) return null;
-
-        const start = analysis.firstWriteNode ? getNodeStart(analysis.firstWriteNode) : getNodeStart(call);
-        const { line, column } = context.locator.location(start);
-
+        const { line, column } = context.locator.location(getNodeStart(firstWrite || astNode));
         return {
             filePath: context.filePath,
             ruleName: 'signal-prefer-computed-over-sync-effect',
-            message:
-                'Prefer computed() over effect() for synchronous derived state. This effect appears to synchronously read reactive values and write derived state; computed() avoids extra cycles and is easier to reason about.',
+            message: 'Prefer computed() over effect() for synchronous derived state. This effect appears to synchronously read reactive values and write derived state; computed() avoids extra cycles and is easier to reason about.',
             line,
             column,
             severity: 'warn',
