@@ -4,8 +4,6 @@
  * Common types, interfaces, and utilities shared across all packages
  */
 
-export const common = '@ngcompass/common';
-// Core types
 export * from './constants';
 export {
     InitResult,
@@ -17,13 +15,15 @@ export {
     OutputFormat,
     ConfigIssue,
     HealthReport,
-    RuleConfig,
     AnalyzerConfig,
     PluginManifest,
     TelemetryConfig,
     TelemetryEventBase,
+    ConfigOverride,
 } from './interfaces.js';
 export * from './errors';
 export * from './types';
 export * from './ast/utils';
 export * from './logger';
+export * from './utils/stable-serialize';
+export * from './utils/locator';

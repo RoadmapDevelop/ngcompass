@@ -85,7 +85,8 @@ export type InfrastructureErrorType =
   | 'IOError'
   | 'WorkerCrash'
   | 'CacheCorruption'
-  | 'SerializationError';
+  | 'SerializationError'
+  | 'RuleExecutionError';
 
 /**
  * Structured record of an infrastructure failure.

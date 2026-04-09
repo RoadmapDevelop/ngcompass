@@ -2,6 +2,7 @@
     "name": "@ngcompass/reporters",
     "version": "0.0.1",
     "description": "Reporters for ngcompass analysis results",
+    "sideEffects": false,
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -17,9 +18,9 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-        "build:prod": "NODE_ENV=production tsup src/index.ts --format cjs,esm --dts --clean --minify",
-        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",
@@ -30,8 +31,8 @@
     },
     "dependencies": {
         "@babel/code-frame": "^7.29.0",
+        "@ngcompass/cache": "workspace:*",
         "@ngcompass/common": "workspace:*",
-        "@ngcompass/core": "workspace:*",
         "picocolors": "^1.1.1"
     },
     "keywords": [
@@ -43,6 +44,7 @@
     "license": "MIT",
     "devDependencies": {
         "@types/babel__code-frame": "^7.27.0",
-        "@types/node": "^25.1.0"
+        "@types/node": "^25.1.0",
+        "typescript": "catalog:"
     }
 }

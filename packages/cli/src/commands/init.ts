@@ -1,10 +1,9 @@
 import { Command } from 'commander';
-import { initConfig, CacheContext } from '@ngcompass/core';
 import { getConfigReporter } from '@ngcompass/reporters';
+import { CacheContext } from '@ngcompass/cache';
+import { initConfig } from '@ngcompass/config';
+import { exitWithError } from './exit.js';
 
-/**
- * Registers the 'init' command.
- */
 export function registerInitCommand(program: Command, _cache: CacheContext) {
     program
         .command('init')
@@ -22,11 +21,11 @@ export function registerInitCommand(program: Command, _cache: CacheContext) {
                 await reporter.renderInitResult(result);
 
                 if (!result.success && !result.alreadyExists) {
-                    process.exit(1);
+                    exitWithError();
                 }
             } catch (error: any) {
                 console.error(error.message);
-                process.exit(1);
+                exitWithError();
             }
         });
 }

@@ -1,4 +1,5 @@
 import { Severity } from './types.js';
+import type { RuleConfig } from './types.js';
 
 // ============================================================
 // PLUGIN MANIFEST (RFC §7.6)
@@ -61,17 +62,7 @@ export interface TelemetryConfig {
     onEvent?: (event: TelemetryEventBase) => void;
 }
 
-// ============================================================
-// RULE CONFIGURATION
-// ============================================================
 
-/**
- * Rule configuration with severity and options
- */
-export interface RuleConfig {
-    severity: Severity | 'off';
-    options?: Record<string, unknown>;
-}
 
 /**
  * Reporting output formats
@@ -124,7 +115,7 @@ export interface ConfigOverride {
  * Profile-specific configuration (dev/ci)
  * Profiles can override most settings except nested profiles
  */
-export interface ProfileConfig extends Partial<Omit<AnalyzerConfig, 'profiles'>> { }
+export type ProfileConfig = Partial<Omit<AnalyzerConfig, 'profiles'>>;
 
 /**
  * Main analyzer configuration interface
@@ -266,14 +257,14 @@ export interface AnalyzerConfig {
  * Structured configuration issue
  */
 export interface ConfigIssue {
-    code: string;
-    message: string;
-    path?: (string | number)[];
-    severity: 'error' | 'warning';
-    file?: string;
-    line?: number;
-    column?: number;
-    suggestion?: string;
+    readonly code: string;
+    readonly message: string;
+    readonly path?: ReadonlyArray<string | number>;
+    readonly severity: 'error' | 'warning';
+    readonly file?: string;
+    readonly line?: number;
+    readonly column?: number;
+    readonly suggestion?: string;
 }
 
 /**
@@ -282,7 +273,7 @@ export interface ConfigIssue {
 export interface HealthReport {
     valid: boolean;
     issues: ConfigIssue[];
-    config?: any;
+    config?: unknown;
 }
 
 /**

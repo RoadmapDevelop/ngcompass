@@ -2,8 +2,6 @@ import pc from 'picocolors';
 import path from 'node:path';
 import process from 'node:process';
 import type {
-    RuleFailure,
-    RuleResult,
     ParseError,
     ConsoleReporterOptions,
     Reporter,
@@ -13,6 +11,7 @@ import type { ReporterOutput } from '../output.js';
 import { processOutput } from '../output.js';
 import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
 import { renderCodeFrame, defaultSourceReader, type SourceReader } from '../code-frame.js';
+import { RuleFailure, RuleResult } from '@ngcompass/common';
 
 // ---------------------------------------------------------------------------
 // Named constants — no magic numbers or inline literals
@@ -58,9 +57,8 @@ const TRAILING_PERIOD_RE = /\.$/;
  */
 function buildIndexedSeparator(index: number, total: number): string {
     const label = `[${index}/${total}]`;
-    const FIXED_WIDTH = 160;
-    // Dotted line with label at the end, total width 160
-    const dotCount = Math.max(1, FIXED_WIDTH - label.length);
+    const width = Math.min(process.stdout.columns ?? 80, 120);
+    const dotCount = Math.max(1, width - label.length);
     const content = '·'.repeat(dotCount) + label;
     return pc.dim(pc.gray(content));
 }
@@ -100,7 +98,8 @@ function countSeverities(failures: readonly RuleFailure[]): SeverityCounts {
 /**
  * Groups failures by relative file path, keyed to `cwd`.
  *
- * Uses a reduce accumulator so the Map is built declaratively.
+ * O(n) — iterates failures once and pushes into an existing bucket rather than
+ * creating a new spread array on every iteration (avoids O(n²) allocations).
  * `path.relative` is applied once per failure to avoid repeated computation
  * inside the render loop.
  */
@@ -108,11 +107,17 @@ function groupFailuresByFile(
     failures: readonly RuleFailure[],
     cwd: string,
 ): Map<string, RuleFailure[]> {
-    return failures.reduce<Map<string, RuleFailure[]>>((map, failure) => {
+    const map = new Map<string, RuleFailure[]>();
+    for (const failure of failures) {
         const relativePath = path.relative(cwd, failure.filePath);
-        const existing = map.get(relativePath) ?? [];
-        return map.set(relativePath, [...existing, failure]);
-    }, new Map());
+        const existing = map.get(relativePath);
+        if (existing) {
+            existing.push(failure);
+        } else {
+            map.set(relativePath, [failure]);
+        }
+    }
+    return map;
 }
 
 /** Returns a new array of failures sorted by source position. */
@@ -135,7 +140,6 @@ function computeLocationWidth(failures: RuleFailure[]): number {
 
 function buildSummaryLine(errorCount: number, warningCount: number): string {
     const total = errorCount + warningCount;
-    // Error problem count is red, warning-only is yellow
     const xColor = errorCount > 0 ? pc.red : pc.yellow;
     return (
         `${xColor('×')} ${total} problem${total !== 1 ? 's' : ''} ` +
@@ -202,7 +206,7 @@ function buildCardMessageLine(failure: RuleFailure): string {
     const isError = isErrorSeverity(failure.severity);
     const message = failure.message.replace(TRAILING_PERIOD_RE, '');
     const coloredMsg = isError ? pc.red(message) : pc.yellow(message);
-    return `${coloredMsg}  ${pc.dim(pc.dim(failure.ruleName))}`;
+    return `${coloredMsg}  ${pc.dim(failure.ruleName)}`;
 }
 
 /**
@@ -290,7 +294,6 @@ export class ConsoleReporter implements Reporter {
         const byFile = groupFailuresByFile(allFailures, this.cwd);
         const sortedFilePaths = Array.from(byFile.keys()).sort();
 
-        // Counts are computed as a pure step before any I/O (CQS).
         const { errorCount, warningCount } = countSeverities(allFailures);
 
         this.out.write('');
@@ -303,6 +306,7 @@ export class ConsoleReporter implements Reporter {
     }
 
     error(error: Error): void {
+        if (this.verbose) return; // Do not log base errors when debug logs are streaming
         this.out.error(pc.red('× Analysis failed'));
         this.out.error(error.message);
         if (error.stack) {
@@ -311,20 +315,14 @@ export class ConsoleReporter implements Reporter {
         }
     }
 
-    step(message: string): void { this.out.write(pc.bold(message)); }
-    info(message: string): void { this.out.write(pc.dim(message)); }
+    step(message: string): void { if (!this.verbose) this.out.write(pc.bold(message)); }
+    info(message: string): void { if (!this.verbose) this.out.write(pc.dim(message)); }
 
     /**
-     * Emits a debug message only when `verbose` mode is active.
-     *
-     * Why `this.verbose` and not `process.env.DEBUG`:
-     * routing through the injected option keeps debug output under the caller's
-     * control without introducing a hidden environment-variable side-channel.
+     * No-op: debug logging is not handled by the reporter.
      */
-    debug(message: string): void {
-        if (this.verbose) {
-            this.out.write(pc.gray(`[DEBUG] ${message}`));
-        }
+    debug(_message: string): void {
+        // no-op
     }
 
     /**
@@ -346,7 +344,7 @@ export class ConsoleReporter implements Reporter {
 
     /** Flattens results into a single typed failure list (no narrowing needed later). */
     private extractAllFailures(results: ReadonlyArray<RuleResult>): RuleFailure[] {
-        return results.flatMap(result => result.failures as RuleFailure[]);
+        return results.flatMap(result => [...result.failures]);
     }
 
     /**
@@ -439,15 +437,15 @@ export class ConsoleReporter implements Reporter {
         // Resolve source lines once per file — avoids repeated I/O per individual failure card.
         const sourceLines = this.sourceReader.readLines(sorted[0]?.filePath ?? '');
 
-        sorted.forEach((failure, offset) => {
+        for (let offset = 0; offset < sorted.length; offset++) {
             this.renderRichCard({
-                failure,
+                failure: sorted[offset],
                 index: startIndex + offset + 1,
                 total,
                 relFilePath: filePath,
                 sourceLines,
             });
-        });
+        }
 
         return startIndex + sorted.length;
     }
@@ -476,31 +474,19 @@ export class ConsoleReporter implements Reporter {
      */
     private renderRichCard(card: FailureCard): void {
         this.out.write('');
-        // ── [X/TOTAL]─
         this.out.write(buildIndexedSeparator(card.index, card.total));
         this.out.write('');
-
-        // FAIL  path/to/file.ts
         this.out.write(buildCardHeader(card.failure, card.relFilePath));
-
-        // Error message  rule-name
         this.out.write(buildCardMessageLine(card.failure));
-
-        // > path/to/file.ts:line:col
         this.out.write(buildCardLocationLine(card.failure, card.relFilePath));
         this.out.write('');
-
-        // Syntax-highlighted code frame with left padding
         this.renderCardCodeFrame(card);
         this.out.write('');
-
-
         this.renderCardRecommendation(card.failure);
 
     }
 
     private renderCardCodeFrame({ sourceLines, failure }: FailureCard): void {
-        // Skip silently when the source file could not be read (e.g. temp or deleted file).
         if (sourceLines.length === 0) return;
 
         const frameLines = renderCodeFrame(sourceLines, failure.line, failure.column, failure.filePath);
@@ -511,7 +497,7 @@ export class ConsoleReporter implements Reporter {
 
     private renderCardRecommendation(failure: RuleFailure): void {
         if (!failure.fix) return;
-        this.out.write(`${pc.cyan('❯')} ${pc.cyan(failure.fix)}`);
+        this.out.write(`${pc.cyan('i')} ${pc.cyan(failure.fix)}`);
         this.out.write('');
     }
 }

@@ -20,5 +20,6 @@
     "allowSyntheticDefaultImports": true,
     "types": ["vitest/globals", "node"]
   },
+  "include": ["packages/**/src/**/*.ts"],
   "exclude": ["node_modules", "dist", "**/dist"]
 }

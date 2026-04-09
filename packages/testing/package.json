@@ -2,6 +2,7 @@
     "name": "@ngcompass/testing",
     "version": "0.0.1",
     "description": "Testing utilities for ngcompass",
+    "sideEffects": false,
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -17,13 +18,14 @@
         "dist"
     ],
     "scripts": {
-        "build": "tsup src/index.ts --format cjs,esm --dts --clean",
-        "build:prod": "NODE_ENV=production tsup src/index.ts --format cjs,esm --dts --clean --minify",
-        "dev": "tsup src/index.ts --format cjs,esm --dts --watch",
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",
         "test:coverage": "vitest run --coverage --passWithNoTests",
+        "test:e2e": "playwright test",
         "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist .turbo"
@@ -39,6 +41,10 @@
     "author": "ngcompass",
     "license": "MIT",
     "devDependencies": {
-        "@types/node": "^25.1.0"
+        "@ngcompass/config": "workspace:*",
+        "@ngcompass/scanner": "workspace:*",
+        "@playwright/test": "^1.50.1",
+        "@types/node": "^25.1.0",
+        "typescript": "catalog:"
     }
 }
