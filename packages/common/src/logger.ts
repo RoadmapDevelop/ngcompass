@@ -5,6 +5,8 @@
  * Follows industry standards (ESLint, TypeScript debug patterns).
  */
 
+import pc from 'picocolors';
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type Namespace =
     | 'discovery'
@@ -35,6 +37,45 @@ interface LoggerConfig {
     showTimings: boolean;
 }
 
+/**
+ * Runtime set of every valid debug namespace.
+ *
+ * `satisfies Namespace[]` is a compile-time guard: TypeScript will error if any string
+ * literal here drifts out of sync with the `Namespace` union above, so this array stays
+ * authoritative without duplication risk.
+ *
+ * Declared as `ReadonlySet<string>` (not `Set<Namespace>`) so that
+ * `KNOWN_NAMESPACES.has(runtimeString)` is accepted by TypeScript without a cast.
+ */
+const KNOWN_NAMESPACES: ReadonlySet<string> = new Set<string>(
+    [
+        'discovery', 'loader', 'validator', 'cache', 'scanner', 'parser',
+        'rules', 'workers', 'reporter', 'watch', 'autofix', 'init', 'config',
+        'planner', 'incremental', 'dry-run', 'engine', 'plugin-loader', 'env-fingerprint',
+    ] satisfies Namespace[]
+);
+
+const COLORS = [
+    pc.cyan,
+    pc.green,
+    pc.yellow,
+    pc.blue,
+    pc.magenta,
+    pc.magentaBright,
+    pc.cyanBright,
+    pc.greenBright,
+    pc.yellowBright,
+    pc.blueBright
+];
+
+function getNamespaceColor(namespace: string) {
+    let hash = 0;
+    for (let i = 0; i < namespace.length; i++) {
+        hash = namespace.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return COLORS[Math.abs(hash) % COLORS.length];
+}
+
 class Logger {
     private config: LoggerConfig;
     private timers: Map<string, number>;
@@ -46,10 +87,15 @@ class Logger {
 
     private initializeFromEnv(): LoggerConfig {
         const debugEnv = process.env.DEBUG || '';
-        const enabled = debugEnv.includes('ngcompass') || debugEnv === '*';
 
-        // Parse namespaces from DEBUG=ngcompass:loader,ngcompass:cache
+        // Parse namespaces first — enabled is derived from the result, not from a
+        // fragile string-includes check that would silently enable everything on a typo.
         const namespaces = this.parseNamespaces(debugEnv);
+
+        // Logger is active only when at least one namespace matched or 'all' was requested.
+        // An empty set means the user wrote e.g. DEBUG=ngcompass:typo and no namespace
+        // was recognised — we stay silent rather than flooding with unintended output.
+        const enabled = namespaces === 'all' || namespaces.size > 0;
 
         return {
             enabled,
@@ -74,19 +120,19 @@ class Logger {
         return this.config.enabled;
     }
 
-    public debug(namespace: Namespace, message: string, ...args: any[]) {
+    public debug(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('debug', namespace, message, ...args);
     }
 
-    public info(namespace: Namespace, message: string, ...args: any[]) {
+    public info(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('info', namespace, message, ...args);
     }
 
-    public warn(namespace: Namespace, message: string, ...args: any[]) {
+    public warn(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('warn', namespace, message, ...args);
     }
 
-    public error(namespace: Namespace, message: string, ...args: any[]) {
+    public error(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('error', namespace, message, ...args);
     }
 
@@ -114,18 +160,21 @@ class Logger {
         return duration;
     }
 
-    private log(_level: LogLevel, namespace: Namespace, message: string, ...args: any[]) {
+    private log(_level: LogLevel, namespace: Namespace, message: string, ...args: unknown[]) {
         if (!this.config.enabled) return;
         if (this.config.namespaces !== 'all' && !this.config.namespaces.has(namespace)) return;
 
-        const prefix = `[ngcompass:${namespace}]`;
-        const timestamp = this.config.showTimestamps ? `[${new Date().toISOString()}]` : '';
+        const now = new Date();
+        const timeStr = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}`;
+        const colorFn = getNamespaceColor(namespace);
+        const prefix = `${pc.gray(`[${timeStr}]`)} ${colorFn(`[ngcompass:${namespace}]`)}`;
+        const timestamp = this.config.showTimestamps ? pc.gray(`[${now.toISOString()}] `) : '';
 
-        // Use stderr to keep stdout clean for actual output
         console.error(`${timestamp}${prefix} ${message}`, ...args);
     }
 
     private parseNamespaces(debugEnv: string): Set<Namespace> | 'all' {
+        // Wildcard or bare tool name → enable every namespace.
         if (debugEnv === '*' || debugEnv === 'ngcompass' || debugEnv === 'ngcompass:*') {
             return 'all';
         }
@@ -134,13 +183,25 @@ class Logger {
         const namespaces = new Set<Namespace>();
 
         for (const part of parts) {
-            if (part.startsWith('ngcompass:')) {
-                const ns = part.replace('ngcompass:', '') as Namespace;
-                namespaces.add(ns);
+            if (!part.startsWith('ngcompass:')) continue;
+
+            const ns = part.slice('ngcompass:'.length);
+
+            if (KNOWN_NAMESPACES.has(ns)) {
+                namespaces.add(ns as Namespace);
+            } else if (ns.length > 0) {
+                // Warn once per unrecognised token so the user can fix the typo.
+                // Uses console.warn directly (not the logger itself) to avoid recursion.
+                console.warn(
+                    `[ngcompass] Unknown debug namespace: "${ns}". ` +
+                    `Valid namespaces: ${[...KNOWN_NAMESPACES].join(', ')}`
+                );
             }
         }
 
-        return namespaces.size > 0 ? namespaces : 'all';
+        // Always return the set — never fall back to 'all' for an empty/unmatched result.
+        // An empty set here means nothing matched; initializeFromEnv will set enabled=false.
+        return namespaces;
     }
 }
 
@@ -148,16 +209,16 @@ class Logger {
 const logger = new Logger();
 
 // Convenience exports
-export const debug = (namespace: Namespace, message: string, ...args: any[]) =>
+export const debug = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.debug(namespace, message, ...args);
 
-export const info = (namespace: Namespace, message: string, ...args: any[]) =>
+export const info = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.info(namespace, message, ...args);
 
-export const warn = (namespace: Namespace, message: string, ...args: any[]) =>
+export const warn = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.warn(namespace, message, ...args);
 
-export const error = (namespace: Namespace, message: string, ...args: any[]) =>
+export const error = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.error(namespace, message, ...args);
 
 export const time = (label: string) =>

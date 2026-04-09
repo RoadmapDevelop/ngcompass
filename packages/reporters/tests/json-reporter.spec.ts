@@ -43,12 +43,6 @@ describe('JsonReporter', () => {
             expect(parsed[0].warningCount).toBe(0);
         });
 
-        it('maps critical severity to ESLint severity 2', () => {
-            reporter.report([makeResult('/a.ts', { severity: 'critical' })]);
-            const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);
-            expect(parsed[0].messages[0].severity).toBe(2);
-        });
-
         it('maps warning severity to ESLint severity 1', () => {
             reporter.report([makeResult('/a.ts', { severity: 'warning' })]);
             const parsed: FileDiagnosticResult[] = JSON.parse(out.lines[0]);

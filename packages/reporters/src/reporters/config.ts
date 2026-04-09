@@ -30,7 +30,7 @@ const SUGGESTION_INDENT = '          '; // 10 spaces
  * Returns an empty string when `pathSegments` is absent or empty, allowing callers
  * to omit the "at <path>" clause cleanly.
  */
-function formatPath(pathSegments?: (string | number)[]): string {
+function formatPath(pathSegments?: readonly (string | number)[]): string {
     if (!pathSegments || pathSegments.length === 0) return '';
     return pathSegments
         .map(segment => (typeof segment === 'number' ? `[${segment}]` : segment))
