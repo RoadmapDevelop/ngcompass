@@ -12,7 +12,7 @@
  * - Resource Efficiency: Maintains strict execution budgets for individual rules.
  */
 
-import type { RuleContext, RuleResult, RuleFailure } from './types.js';
+import type { RuleContext, RuleResult, RuleFailure } from '@ngcompass/common';
 import { walkProgram, toAngularClassStream, toAnyAngularClassStream, toDecoratedPropertyStream, toCallExpressionStream, toNewExpressionStream } from '@ngcompass/ast';
 import type { RuleHandler } from './rule-handler.js';
 import type { TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode } from '@ngcompass/ast';

@@ -38,7 +38,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         ttl: config.disk?.ttl
     });
 
-    const resultDriver = createAtomicDriver<unknown>({
+    const resultDriver = createDiskDriver<unknown>({
         path: path.join(config.disk?.path ?? defaultBaseDir, 'results')
     });
 
@@ -120,7 +120,11 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
             }
         },
         flush: async () => {
-            await metaDriver.flush();
+            await Promise.all([
+                results.flush(),
+                analysis.flush(),
+                metaDriver.flush(),
+            ]);
         },
         getCachePath: () => config.disk?.path ?? defaultBaseDir,
         getInfo: async () => {

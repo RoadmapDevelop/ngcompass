@@ -44,6 +44,9 @@ export interface ResultCache {
     getWithMetadata: <T>(hash: string) => Promise<CacheEntry<T> | undefined>;
     getManyWithMetadata: <T>(hashes: ReadonlyArray<string>) => Promise<ReadonlyMap<string, CacheEntry<T>>>;
     updateMetadata: (hash: string, updates: Partial<CacheMetadata>) => Promise<void>;
+
+    // Write-behind flush
+    flush: () => Promise<void>;
 }
 
 /**
@@ -64,11 +67,10 @@ export interface ResultCache {
 const RESULT_BATCH_SIZE = 200;
 
 /**
- * Maximum number of metadata entries to write in a single parallel batch.
- * Kept lower than RESULT_BATCH_SIZE because metadata writes are paired with
- * result reads — running both at 200 would double the concurrent fd usage.
+ * Maximum number of entries to write in a single parallel batch.
+ * cacache manages its own fd pool, so we can safely match RESULT_BATCH_SIZE.
  */
-const METADATA_BATCH_SIZE = 100;
+const WRITE_BATCH_SIZE = 200;
 
 export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => {
 
@@ -112,9 +114,49 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
         await driver.set(getMetadataKey(hash), updated);
     };
 
+    // ─── Write-behind buffer ────────────────────────────────────────────
+    // Accumulates entries in memory during analysis; drains to disk on flush().
+    const pendingWrites = new Map<string, unknown>();
+
+    /**
+     * Drain all pending writes to the driver in batches.
+     */
+    const drainPendingWrites = async (): Promise<void> => {
+        if (pendingWrites.size === 0) return;
+
+        const entries = [...pendingWrites.entries()];
+        pendingWrites.clear();
+
+        const now = Date.now();
+
+        for (let i = 0; i < entries.length; i += WRITE_BATCH_SIZE) {
+            const batch = entries.slice(i, i + WRITE_BATCH_SIZE);
+
+            // Phase 1: write all results in parallel
+            await Promise.all(batch.map(([hash, result]) => driver.set(hash, result)));
+
+            // Phase 2: write all metadata in parallel (skip read-before-write)
+            await Promise.all(batch.map(([hash]) =>
+                driver.set(getMetadataKey(hash), {
+                    taskId: hash,
+                    timestamp: now,
+                    hits: 0,
+                    lastAccess: now,
+                } satisfies CacheMetadata)
+            ));
+        }
+
+        debug('cache', `Flushed ${entries.length} buffered results to disk`);
+    };
+
     return {
         // Single operations
         get: async <T>(hash: string): Promise<T | undefined> => {
+            // Check write-behind buffer first
+            if (pendingWrites.has(hash)) {
+                return pendingWrites.get(hash) as T;
+            }
+
             const result = await driver.get(hash) as T | undefined;
             if (result !== undefined) {
                 // Track cache hit (fire and forget)
@@ -132,10 +174,12 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
         },
 
         has: async (hash: string): Promise<boolean> => {
+            if (pendingWrites.has(hash)) return true;
             return driver.has(hash);
         },
 
         delete: async (hash: string): Promise<void> => {
+            pendingWrites.delete(hash);
             await driver.delete(hash);
             try {
                 await driver.delete(getMetadataKey(hash));
@@ -157,6 +201,12 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
                 const batch = hashes.slice(i, i + RESULT_BATCH_SIZE);
                 await Promise.all(
                     batch.map(async (hash) => {
+                        // Check write-behind buffer first
+                        if (pendingWrites.has(hash)) {
+                            results.set(hash, pendingWrites.get(hash) as T);
+                            return;
+                        }
+
                         const result = await driver.get(hash) as T | undefined;
                         if (result !== undefined) {
                             results.set(hash, result);
@@ -175,16 +225,12 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
         setMany: async <T>(entries: ReadonlyArray<readonly [string, T]>): Promise<void> => {
             if (entries.length === 0) return;
 
-            // Batched concurrency to avoid overwhelming OS with unbounded parallel writes
-            for (let i = 0; i < entries.length; i += METADATA_BATCH_SIZE) {
-                const batch = entries.slice(i, i + METADATA_BATCH_SIZE);
-                await Promise.all(
-                    batch.map(async ([hash, result]) => {
-                        await driver.set(hash, result);
-                        await getOrCreateMetadata(hash);
-                    })
-                );
+            // Buffer entries in memory — actual disk I/O deferred to flush()
+            for (const [hash, result] of entries) {
+                pendingWrites.set(hash, result);
             }
+
+            debug('cache', `Buffered ${entries.length} results (total pending: ${pendingWrites.size})`);
         },
 
         hasMany: async (hashes: ReadonlyArray<string>): Promise<ReadonlySet<string>> => {
@@ -193,15 +239,18 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
                 return new Set<string>();
             }
 
-            // Short-circuit: if the cache directory is empty/missing, skip all 137K+ fs.access calls
-            try {
-                const stats = await driver.getStats();
-                if (stats.entries === 0) {
+            // Short-circuit: if the cache directory is empty/missing, skip all fs.access calls
+            const hasPending = hashes.some(h => pendingWrites.has(h));
+            if (!hasPending) {
+                try {
+                    const stats = await driver.getStats();
+                    if (stats.entries === 0) {
+                        return new Set<string>();
+                    }
+                } catch {
+                    // If getStats fails (e.g. dir missing), cache is empty
                     return new Set<string>();
                 }
-            } catch {
-                // If getStats fails (e.g. dir missing), cache is empty
-                return new Set<string>();
             }
 
             const existing = new Set<string>();
@@ -211,6 +260,10 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
                 const batch = hashes.slice(i, i + RESULT_BATCH_SIZE);
                 await Promise.all(
                     batch.map(async (hash) => {
+                        if (pendingWrites.has(hash)) {
+                            existing.add(hash);
+                            return;
+                        }
                         const exists = await driver.has(hash);
                         if (exists) {
                             existing.add(hash);
@@ -224,7 +277,10 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
 
         // Metadata operations
         getWithMetadata: async <T>(hash: string): Promise<CacheEntry<T> | undefined> => {
-            const result = await driver.get(hash) as T | undefined;
+            const result = (pendingWrites.has(hash)
+                ? pendingWrites.get(hash)
+                : await driver.get(hash)) as T | undefined;
+
             if (result === undefined) {
                 return undefined;
             }
@@ -250,7 +306,10 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
                 const batch = hashes.slice(i, i + RESULT_BATCH_SIZE);
                 await Promise.all(
                     batch.map(async (hash) => {
-                        const result = await driver.get(hash) as T | undefined;
+                        const result = (pendingWrites.has(hash)
+                            ? pendingWrites.get(hash)
+                            : await driver.get(hash)) as T | undefined;
+
                         if (result !== undefined) {
                             const metadata = await getOrCreateMetadata(hash);
                             const updated: CacheMetadata = {
@@ -265,10 +324,10 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
                 );
             }
 
-            // Batch update all metadata at once (non-blocking)
+            // Batch update all metadata at once
             if (metadataUpdates.length > 0) {
-                for (let i = 0; i < metadataUpdates.length; i += METADATA_BATCH_SIZE) {
-                    const batch = metadataUpdates.slice(i, i + METADATA_BATCH_SIZE);
+                for (let i = 0; i < metadataUpdates.length; i += WRITE_BATCH_SIZE) {
+                    const batch = metadataUpdates.slice(i, i + WRITE_BATCH_SIZE);
                     await Promise.all(
                         batch.map(async ([hash, updated]) => {
                             await driver.set(getMetadataKey(hash), updated);
@@ -288,5 +347,7 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
             };
             await driver.set(getMetadataKey(hash), updated);
         },
+
+        flush: drainPendingWrites,
     };
 };

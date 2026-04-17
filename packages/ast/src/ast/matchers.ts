@@ -282,26 +282,35 @@ export const getInputSignalAliasUnsafe = (callExpr: CallExpression): string | un
 
     const isRequired = callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression';
 
-    if (isRequired) {
-        // input.required({ alias: 'alias' })
+    return isRequired
+        ? getRequiredInputAlias(args)
+        : getOptionalInputAlias(args);
+};
+
+/** Extracts alias from input.required({ alias: 'alias' }). */
+const getRequiredInputAlias = (args: readonly any[]): string | undefined => {
+    const first = args[0];
+    if (!first || first.type !== 'ObjectExpression') return undefined;
+    return getLiteralStringValueUnsafe(
+        getObjectPropertyUnsafe(first as ObjectExpression, 'alias') as Expression,
+    );
+};
+
+/** Extracts alias from input('alias') or input(defaultVal, { alias: 'alias' }). */
+const getOptionalInputAlias = (args: readonly any[]): string | undefined => {
+    if (args.length === 1) {
         const first = args[0];
-        if (first && first.type === 'ObjectExpression') {
-            return getLiteralStringValueUnsafe(getObjectPropertyUnsafe(first as ObjectExpression, 'alias') as Expression);
+        if (first.type === 'StringLiteral' || first.type === 'Literal') {
+            return getLiteralStringValueUnsafe(first);
         }
-    } else {
-        // input('alias')
-        if (args.length === 1) {
-            const first = args[0];
-            if (first.type === 'StringLiteral' || first.type === 'Literal') {
-                return getLiteralStringValueUnsafe(first);
-            }
-        }
-        // input(val, { alias: 'alias' })
-        if (args.length >= 2) {
-            const second = args[1];
-            if (second && second.type === 'ObjectExpression') {
-                return getLiteralStringValueUnsafe(getObjectPropertyUnsafe(second as ObjectExpression, 'alias') as Expression);
-            }
+    }
+
+    if (args.length >= 2) {
+        const second = args[1];
+        if (second && second.type === 'ObjectExpression') {
+            return getLiteralStringValueUnsafe(
+                getObjectPropertyUnsafe(second as ObjectExpression, 'alias') as Expression,
+            );
         }
     }
 

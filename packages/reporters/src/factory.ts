@@ -3,6 +3,7 @@ import { JsonReporter } from './reporters/json-reporter.js';
 import { HtmlReporter } from './reporters/html-reporter.js';
 import { TextConfigReporter } from './reporters/config.js';
 import { TextCacheReporter } from './reporters/cache.js';
+import { RulesReporter, type RulesReporterOptions } from './reporters/rules-reporter.js';
 import type { Reporter, ConfigReporter, CacheReporter, ReporterFormat, ConsoleReporterOptions } from './types.js';
 
 /**
@@ -58,4 +59,13 @@ export function getConfigReporter(): ConfigReporter {
  */
 export function getCacheReporter(): CacheReporter {
     return new TextCacheReporter();
+}
+
+/**
+ * Creates a rules reporter instance.
+ *
+ * Used by `compass rules` to render the rule list to stdout.
+ */
+export function getRulesReporter(options?: RulesReporterOptions): RulesReporter {
+    return new RulesReporter(options);
 }
