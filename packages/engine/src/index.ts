@@ -6,9 +6,6 @@
  * worker pool management, and analytical utilities.
  */
 
-// Core analytical contracts and primitive types.
-export * from './types.js';
-
 // Rule handler definition
 export * from './rule-handler.js';
 

@@ -497,7 +497,7 @@ export class ConsoleReporter implements Reporter {
 
     private renderCardRecommendation(failure: RuleFailure): void {
         if (!failure.fix) return;
-        this.out.write(`${pc.cyan('i')} ${pc.cyan(failure.fix)}`);
+        this.out.write(`${pc.gray('»')} ${pc.gray(failure.fix)}`);
         this.out.write('');
     }
 }

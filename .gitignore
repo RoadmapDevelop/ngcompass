@@ -33,5 +33,13 @@ pnpm-debug.log*
 .cache
 .eslintcache
 
-#Turbo
-.turbo  
+# Turbo
+.turbo
+
+# Debug artifacts
+tmp/
+debug-*.js
+debug-*.ts
+test-output.txt
+packages/*/test-results/
+.test-cache-config/

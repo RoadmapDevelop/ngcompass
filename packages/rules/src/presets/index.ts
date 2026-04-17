@@ -35,3 +35,16 @@ export const getBuiltinPreset = (name: string): PresetConfig | undefined => {
     const normalized = name.replace(/^ngcompass:/, '') as BuiltinPreset;
     return builtinPresets.get(normalized);
 };
+
+/**
+ * Returns all preset names that include the given rule.
+ */
+export function getPresetsForRule(ruleName: string): string[] {
+    const result: string[] = [];
+    for (const [presetName, preset] of builtinPresets) {
+        if (ruleName in preset.rules) {
+            result.push(presetName);
+        }
+    }
+    return result;
+}

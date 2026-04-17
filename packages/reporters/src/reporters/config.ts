@@ -3,7 +3,6 @@ import {
     type HealthReport,
     type InitResult,
     type ConfigIssue,
-    PACKAGE_VERSION,
     type ConfigReport,
 } from '@ngcompass/common';
 import type { ConfigReporter } from '../types.js';
@@ -148,14 +147,10 @@ export class TextConfigReporter implements ConfigReporter {
      * @param report - Aggregated health issues, one per config concern.
      */
     renderHealthReport(report: HealthReport): void {
-        this.renderHeader();
         this.renderIssues(report);
         this.renderSummary(report);
     }
 
-    private renderHeader(): void {
-        this.out.write(`${pc.bold('ngcompass')} ${pc.gray(PACKAGE_VERSION)}`);
-    }
 
     private renderIssues(report: HealthReport): void {
         if (report.issues.length === 0) return;

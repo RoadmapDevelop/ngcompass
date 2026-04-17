@@ -1,17 +1,3 @@
-/**
- * Component Analyzer (Cached, Tri-State, Zero-Copy)
- *
- * PERFORMANCE GUARANTEE:
- * - First call: O(D) where D = decorator properties
- * - Subsequent calls: O(1) WeakMap lookup
- * - Zero allocation after cache warm-up
- *
- * RULES MUST NEVER:
- * - Parse decorators themselves
- * - Retry inference on non-literal values
- * - Call this analyzer multiple times (it's cached!)
- */
-
 import type { ClassDeclaration } from '../ast/types.js';
 import {
     hasDecorator,
@@ -22,28 +8,21 @@ import {
     getLiteralStringValueUnsafe,
     getLiteralBooleanValueUnsafe,
 } from '../ast/matchers.js';
-import type { ArrayExpression, ObjectExpression, Expression, Identifier } from '../ast/types.js';
+import type { ArrayExpression, ObjectExpression, Expression, Identifier, Decorator } from '../ast/types.js';
 
 // ============================================
 // TRI-STATE METADATA (Literal | Non-Literal | Missing)
 // ============================================
 
-/**
- * Tri-state value (no Option<T> wrapper for performance).
- */
 export type LiteralValue<T> = { readonly kind: 'literal'; readonly value: T };
 export type NonLiteralValue = { readonly kind: 'non-literal' };
 export type MissingValue = { readonly kind: 'missing' };
 
 export type MetadataValue<T> = LiteralValue<T> | NonLiteralValue | MissingValue;
 
-// Pre-allocated singletons (zero allocation)
 const NON_LITERAL: NonLiteralValue = { kind: 'non-literal' };
 const MISSING: MissingValue = { kind: 'missing' };
 
-/**
- * Creates literal value (only allocation when literal is found).
- */
 const literal = <T>(value: T): LiteralValue<T> => ({ kind: 'literal', value });
 
 // ============================================
@@ -55,20 +34,12 @@ export enum ChangeDetectionStrategy {
     OnPush = 1,
 }
 
-/**
- * Host directive metadata.
- */
 export interface HostDirectiveMetadata {
     readonly directive: string | undefined;
     readonly inputs: ReadonlyArray<{ readonly internal: string; readonly external: string }>;
     readonly outputs: ReadonlyArray<{ readonly internal: string; readonly external: string }>;
 }
 
-/**
- * Component metadata (tri-state for all fields).
- *
- * PERFORMANCE: Allocated once per component, cached in WeakMap.
- */
 export interface ComponentMetadata {
     readonly className: string | undefined;
     readonly selector: MetadataValue<string>;
@@ -77,25 +48,16 @@ export interface ComponentMetadata {
     readonly templateUrl: MetadataValue<string>;
     readonly template: MetadataValue<string>;
     readonly hostDirectives: MetadataValue<ReadonlyArray<HostDirectiveMetadata>>;
-    readonly decoratorStart: number;  // Position of decorator for error reporting
+    readonly decoratorStart: number;
     readonly type: 'Component' | 'Directive';
 }
 
 // ============================================
-// CACHE (Per-File Execution)
+// CACHE
 // ============================================
 
-/**
- * Component metadata cache (WeakMap for automatic GC).
- *
- * CRITICAL: This is the ONLY place component analysis happens.
- * Rules MUST call this, never parse decorators themselves.
- */
 const componentCache = new WeakMap<ClassDeclaration, ComponentMetadata | null>();
 
-/**
- * Cache statistics (scoped accumulator – avoids loose mutable globals).
- */
 interface CacheStatsAccumulator {
     hits: number;
     misses: number;
@@ -103,34 +65,24 @@ interface CacheStatsAccumulator {
 
 const cacheStats: CacheStatsAccumulator = { hits: 0, misses: 0 };
 
-export const getComponentCacheStats = (): Readonly<CacheStatsAccumulator> => ({ hits: cacheStats.hits, misses: cacheStats.misses });
-export const resetComponentCacheStats = (): void => { cacheStats.hits = 0; cacheStats.misses = 0; };
+export const getComponentCacheStats = (): Readonly<CacheStatsAccumulator> =>
+    ({ hits: cacheStats.hits, misses: cacheStats.misses });
+
+export const resetComponentCacheStats = (): void => {
+    cacheStats.hits = 0;
+    cacheStats.misses = 0;
+};
 
 // ============================================
 // MAIN ANALYZER (Cached)
 // ============================================
 
 /**
- * Analyzes @Component decorator metadata.
- *
- * @returns ComponentMetadata if @Component found, null otherwise
- *
- * PERFORMANCE:
- * - First call: O(D) where D = decorator properties
- * - Subsequent calls: O(1) WeakMap lookup
- *
- * RULES MUST:
- * - Call this once per component
- * - Handle null (not a component)
- * - Handle tri-state values (literal/non-literal/missing)
- *
- * RULES MUST NOT:
- * - Retry inference on non-literal values
- * - Parse decorators themselves
- * - Allocate collections
+ * Analyzes @Component / @Directive decorator metadata.
+ * Returns null if the class has neither decorator.
+ * Results are cached in a WeakMap — O(1) on subsequent calls.
  */
 export const analyzeComponent = (classNode: ClassDeclaration): ComponentMetadata | null => {
-    // Check cache (O(1))
     const cached = componentCache.get(classNode);
     if (cached !== undefined) {
         cacheStats.hits++;
@@ -139,43 +91,55 @@ export const analyzeComponent = (classNode: ClassDeclaration): ComponentMetadata
 
     cacheStats.misses++;
 
-    // Not a component or directive? Cache negative result.
-    const isComp = hasDecorator(classNode, 'Component');
-    const isDir = !isComp && hasDecorator(classNode, 'Directive');
-
-    if (!isComp && !isDir) {
+    const decoratorName = resolveAngularDecoratorName(classNode);
+    if (!decoratorName) {
         componentCache.set(classNode, null);
         return null;
     }
 
-    const decoratorName = isComp ? 'Component' : 'Directive';
-
-    // Find @Component decorator
-    const decorators = classNode.decorators;
-    if (!decorators) {
+    const decorator = findDecoratorByName(classNode.decorators!, decoratorName);
+    if (!decorator) {
         componentCache.set(classNode, null);
         return null;
     }
 
-    let angularDecorator = undefined;
+    const metadata = buildComponentMetadata(classNode, decorator, decoratorName);
+    componentCache.set(classNode, metadata);
+    return metadata;
+};
+
+// ============================================
+// PRIVATE — DECORATOR RESOLUTION
+// ============================================
+
+/** Returns 'Component', 'Directive', or undefined if neither is present. */
+const resolveAngularDecoratorName = (classNode: ClassDeclaration): 'Component' | 'Directive' | undefined => {
+    if (hasDecorator(classNode, 'Component')) return 'Component';
+    if (hasDecorator(classNode, 'Directive')) return 'Directive';
+    return undefined;
+};
+
+/** Finds the first decorator whose name matches `name`. */
+const findDecoratorByName = (decorators: readonly Decorator[], name: string): Decorator | undefined => {
     for (let i = 0; i < decorators.length; i++) {
-        const name = getDecoratorNameUnsafe(decorators[i]);
-        if (name === decoratorName) {
-            angularDecorator = decorators[i];
-            break;
-        }
+        if (getDecoratorNameUnsafe(decorators[i]) === name) return decorators[i];
     }
+    return undefined;
+};
 
-    if (!angularDecorator) {
-        componentCache.set(classNode, null);
-        return null;
-    }
+// ============================================
+// PRIVATE — METADATA BUILDER
+// ============================================
 
-    // Extract metadata object
-    const metadataObject = getDecoratorObjectArgUnsafe(angularDecorator);
+const buildComponentMetadata = (
+    classNode: ClassDeclaration,
+    decorator: Decorator,
+    decoratorName: 'Component' | 'Directive',
+): ComponentMetadata => {
+    const isComp = decoratorName === 'Component';
+    const metadataObject = getDecoratorObjectArgUnsafe(decorator);
 
-    // Build metadata (allocated once, cached)
-    const metadata: ComponentMetadata = {
+    return {
         className: classNode.id?.name,
         selector: metadataObject ? extractSelector(metadataObject) : MISSING,
         changeDetection: isComp && metadataObject ? extractChangeDetection(metadataObject) : MISSING,
@@ -183,179 +147,146 @@ export const analyzeComponent = (classNode: ClassDeclaration): ComponentMetadata
         templateUrl: isComp && metadataObject ? extractTemplateUrl(metadataObject) : MISSING,
         template: isComp && metadataObject ? extractTemplate(metadataObject) : MISSING,
         hostDirectives: metadataObject ? extractHostDirectives(metadataObject) : MISSING,
-        decoratorStart: angularDecorator.start ?? angularDecorator.span?.start ?? 0,  // Track decorator position
+        decoratorStart: decorator.start ?? decorator.span?.start ?? 0,
         type: decoratorName,
     };
-
-    componentCache.set(classNode, metadata);
-    return metadata;
 };
 
 // ============================================
-// PRIVATE EXTRACTORS (Tri-State, Zero-Copy)
+// PRIVATE — EXTRACTORS
 // ============================================
 
-const extractSelector = (metadataObject: any): MetadataValue<string> => {
-    const selectorNode = getObjectPropertyUnsafe(metadataObject, 'selector');
-    if (!selectorNode) return MISSING;
-
-    const value = getLiteralStringValueUnsafe(selectorNode);
-    if (value !== undefined) return literal(value);
-
-    return NON_LITERAL;
+const extractSelector = (obj: ObjectExpression): MetadataValue<string> => {
+    const node = getObjectPropertyUnsafe(obj, 'selector');
+    if (!node) return MISSING;
+    const value = getLiteralStringValueUnsafe(node);
+    return value !== undefined ? literal(value) : NON_LITERAL;
 };
 
-const extractChangeDetection = (metadataObject: any): MetadataValue<ChangeDetectionStrategy> => {
-    const cdNode = getObjectPropertyUnsafe(metadataObject, 'changeDetection');
-    if (!cdNode) return MISSING;
+const extractChangeDetection = (obj: ObjectExpression): MetadataValue<ChangeDetectionStrategy> => {
+    const node = getObjectPropertyUnsafe(obj, 'changeDetection');
+    if (!node) return MISSING;
 
-    // Identifier: OnPush or Default
-    if (cdNode.type === 'Identifier') {
-        const name = (cdNode as any).name;
+    if (node.type === 'Identifier') {
+        const name = (node as any).name;
         if (name === 'OnPush') return literal(ChangeDetectionStrategy.OnPush);
         if (name === 'Default') return literal(ChangeDetectionStrategy.Default);
         return NON_LITERAL;
     }
 
-    // Member: ChangeDetectionStrategy.OnPush
-    if (matchesMemberExpression(cdNode, 'ChangeDetectionStrategy', 'OnPush')) {
+    if (matchesMemberExpression(node, 'ChangeDetectionStrategy', 'OnPush'))
         return literal(ChangeDetectionStrategy.OnPush);
-    }
 
-    if (matchesMemberExpression(cdNode, 'ChangeDetectionStrategy', 'Default')) {
+    if (matchesMemberExpression(node, 'ChangeDetectionStrategy', 'Default'))
         return literal(ChangeDetectionStrategy.Default);
-    }
 
     return NON_LITERAL;
 };
 
-const extractStandalone = (metadataObject: any): MetadataValue<boolean> => {
-    const standaloneNode = getObjectPropertyUnsafe(metadataObject, 'standalone');
-    if (!standaloneNode) return MISSING;
-
-    const value = getLiteralBooleanValueUnsafe(standaloneNode);
-    if (value !== undefined) return literal(value);
-
-    return NON_LITERAL;
+const extractStandalone = (obj: ObjectExpression): MetadataValue<boolean> => {
+    const node = getObjectPropertyUnsafe(obj, 'standalone');
+    if (!node) return MISSING;
+    const value = getLiteralBooleanValueUnsafe(node);
+    return value !== undefined ? literal(value) : NON_LITERAL;
 };
 
-const extractTemplateUrl = (metadataObject: any): MetadataValue<string> => {
-    const templateUrlNode = getObjectPropertyUnsafe(metadataObject, 'templateUrl');
-    if (!templateUrlNode) return MISSING;
-
-    const value = getLiteralStringValueUnsafe(templateUrlNode);
-    if (value !== undefined) return literal(value);
-
-    return NON_LITERAL;
+const extractTemplateUrl = (obj: ObjectExpression): MetadataValue<string> => {
+    const node = getObjectPropertyUnsafe(obj, 'templateUrl');
+    if (!node) return MISSING;
+    const value = getLiteralStringValueUnsafe(node);
+    return value !== undefined ? literal(value) : NON_LITERAL;
 };
 
-const extractTemplate = (metadataObject: any): MetadataValue<string> => {
-    const templateNode = getObjectPropertyUnsafe(metadataObject, 'template');
-    if (!templateNode) return MISSING;
-
-    const value = getLiteralStringValueUnsafe(templateNode);
-    if (value !== undefined) return literal(value);
-
-    return NON_LITERAL;
+const extractTemplate = (obj: ObjectExpression): MetadataValue<string> => {
+    const node = getObjectPropertyUnsafe(obj, 'template');
+    if (!node) return MISSING;
+    const value = getLiteralStringValueUnsafe(node);
+    return value !== undefined ? literal(value) : NON_LITERAL;
 };
 
-const extractHostDirectives = (metadataObject: any): MetadataValue<ReadonlyArray<HostDirectiveMetadata>> => {
-    const hostNode = getObjectPropertyUnsafe(metadataObject, 'hostDirectives');
-    if (!hostNode) return MISSING;
+const extractHostDirectives = (obj: ObjectExpression): MetadataValue<ReadonlyArray<HostDirectiveMetadata>> => {
+    const node = getObjectPropertyUnsafe(obj, 'hostDirectives');
+    if (!node) return MISSING;
+    if (node.type !== 'ArrayExpression') return NON_LITERAL;
 
-    if (hostNode.type !== 'ArrayExpression') return NON_LITERAL;
-
-    const hostArr = hostNode as ArrayExpression;
+    const elements = (node as ArrayExpression).elements;
     const results: HostDirectiveMetadata[] = [];
-    const elements = hostArr.elements;
 
     for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
         if (!el) continue;
-
-        // Case 1: Class reference [MyDir]
-        if (el.type === 'Identifier') {
-            results.push({ directive: (el as Identifier).name, inputs: [], outputs: [] });
-            continue;
-        }
-
-        // Case 2: Object { directive: MyDir, inputs: [...], outputs: [...] }
-        if (el.type === 'ObjectExpression') {
-            const objEl = el as ObjectExpression;
-            const dirNode = getObjectPropertyUnsafe(objEl, 'directive');
-            const directive = dirNode?.type === 'Identifier' ? (dirNode as Identifier).name : undefined;
-
-            const inputs = extractRenames(getObjectPropertyUnsafe(objEl, 'inputs'));
-            const outputs = extractRenames(getObjectPropertyUnsafe(objEl, 'outputs'));
-
-            results.push({ directive, inputs, outputs });
-            continue;
-        }
-
-        // Unknown type
+        const parsed = parseHostDirectiveElement(el);
+        if (parsed) results.push(parsed);
     }
 
     return literal(results);
 };
 
-const extractRenames = (node: Expression | undefined): ReadonlyArray<{ internal: string, external: string }> => {
+/** Parses a single element from the hostDirectives array. */
+const parseHostDirectiveElement = (el: Expression): HostDirectiveMetadata | null => {
+    // Case 1: bare class reference — [MyDir]
+    if (el.type === 'Identifier') {
+        return { directive: (el as Identifier).name, inputs: [], outputs: [] };
+    }
+
+    // Case 2: object — { directive: MyDir, inputs: [...], outputs: [...] }
+    if (el.type === 'ObjectExpression') {
+        const obj = el as ObjectExpression;
+        const dirNode = getObjectPropertyUnsafe(obj, 'directive');
+        const directive = dirNode?.type === 'Identifier' ? (dirNode as Identifier).name : undefined;
+        return {
+            directive,
+            inputs: extractRenames(getObjectPropertyUnsafe(obj, 'inputs')),
+            outputs: extractRenames(getObjectPropertyUnsafe(obj, 'outputs')),
+        };
+    }
+
+    return null;
+};
+
+const extractRenames = (node: Expression | undefined): ReadonlyArray<{ internal: string; external: string }> => {
     if (!node || node.type !== 'ArrayExpression') return [];
 
-    const arrNode = node as ArrayExpression;
-    const renames: { internal: string, external: string }[] = [];
-    const elements = arrNode.elements;
+    const elements = (node as ArrayExpression).elements;
+    const renames: { internal: string; external: string }[] = [];
 
     for (let i = 0; i < elements.length; i++) {
         const el = elements[i];
         if (!el) continue;
-
         const value = getLiteralStringValueUnsafe(el);
         if (!value) continue;
-
-        if (value.includes(':')) {
-            const [internal, external] = value.split(':').map(s => s.trim());
-            renames.push({ internal, external });
-        } else {
-            renames.push({ internal: value, external: value });
-        }
+        renames.push(parseRenameString(value));
     }
 
     return renames;
 };
 
-// ============================================
-// HIGH-LEVEL CHECKS (Convenience Functions)
-// ============================================
-
-/**
- * Checks if class is an Angular component.
- *
- * PERFORMANCE: O(1) after first call (cached).
- */
-export const isComponent = (classNode: ClassDeclaration): boolean => {
-    return analyzeComponent(classNode) !== null;
+/** Parses "internalName: externalName" or "name" into a rename pair. */
+const parseRenameString = (value: string): { internal: string; external: string } => {
+    if (value.includes(':')) {
+        const [internal, external] = value.split(':').map(s => s.trim());
+        return { internal, external };
+    }
+    return { internal: value, external: value };
 };
 
-/**
- * Checks if component uses OnPush (literal value only).
- *
- * PERFORMANCE: O(1) after first call.
- */
+// ============================================
+// HIGH-LEVEL CONVENIENCE CHECKS
+// ============================================
+
+export const isComponent = (classNode: ClassDeclaration): boolean =>
+    analyzeComponent(classNode) !== null;
+
 export const usesOnPush = (classNode: ClassDeclaration): boolean => {
     const component = analyzeComponent(classNode);
     if (!component) return false;
-
     const cd = component.changeDetection;
     return cd.kind === 'literal' && cd.value === ChangeDetectionStrategy.OnPush;
 };
 
-/**
- * Checks if component is standalone: true (literal value only).
- */
 export const isStandalone = (classNode: ClassDeclaration): boolean => {
     const component = analyzeComponent(classNode);
     if (!component) return false;
-
     const standalone = component.standalone;
     return standalone.kind === 'literal' && standalone.value === true;
 };
