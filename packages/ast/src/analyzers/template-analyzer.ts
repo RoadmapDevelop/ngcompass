@@ -2,12 +2,14 @@
 export interface HtmlParserResult {
     rootNodes: readonly unknown[];
 }
+
 import type { TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode } from '../node-streams.js';
 import { parseSync } from 'oxc-parser';
 
-/**
- * Traverses HTML AST and extracts Angular expressions.
- */
+// ============================================
+// PUBLIC API
+// ============================================
+
 export const analyzeTemplate = (htmlResult: HtmlParserResult): {
     expressions: TemplateExpressionNode[];
     attributes: TemplateAttributeNode[];
@@ -20,128 +22,13 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
     const visit = (node: any) => {
         if (!node) return;
 
-        // Recurse into children first (generated AST from angular-html-parser).
-        // for-of replaces forEach to avoid allocating a closure on every call.
         if (node.children) {
             for (const child of node.children) visit(child);
         }
 
-        // 1. Attributes (Inputs, Structural Directives)
-        if (node.attrs) {
-            for (const attr of node.attrs) {
-                const name: string = attr.name;
-                const value: string = attr.value;
-                const attrOffset = attr.valueSpan?.start?.offset ?? 0;
-
-                // Always register to the attributes stream
-                attributes.push({
-                    name,
-                    value,
-                    sourceSpan: {
-                        start: attr.sourceSpan?.start?.offset ?? 0,
-                        end: attr.sourceSpan?.end?.offset ?? 0,
-                    },
-                });
-
-                if (!value) continue;
-
-                // *ngIf="expr"  — structural directives use microsyntax
-                if (name.startsWith('*')) {
-                    parseAndAdd(value, attrOffset, expressions);
-                    // [prop]="expr" — property binding
-                } else if (name.startsWith('[') && name.endsWith(']')) {
-                    parseAndAdd(value, attrOffset, expressions);
-                    // bind-prop="expr" — long-form property binding
-                } else if (name.startsWith('bind-')) {
-                    parseAndAdd(value, attrOffset, expressions);
-                }
-            }
-        }
-
-        // 2. Text and Interpolations
-        const isText = node.kind === 'text' || node.type === 'text' || node.constructor?.name === 'Text';
-        if (isText && node.value) {
-            // Use tokens when available (some angular-html-parser versions provide them)
-            if (node.tokens) {
-                for (const token of node.tokens) {
-                    if (token.type === 8 && token.parts?.length === 3) {
-                        const expr = token.parts[1];
-                        const startOffset = token.sourceSpan.start.offset + token.parts[0].length;
-                        parseAndAdd(expr, startOffset, expressions);
-                    }
-                }
-            } else {
-                // Manual interpolation extraction: scan for {{ ... }} pairs
-                const textValue = node.value as string;
-                const nodeStart = node.sourceSpan?.start?.offset ?? 0;
-                let lastIndex = 0;
-
-                let start = textValue.indexOf('{{', lastIndex);
-                while (start !== -1) {
-                    const end = textValue.indexOf('}}', start + 2);
-                    if (end === -1) break;
-
-                    parseAndAdd(
-                        textValue.substring(start + 2, end),
-                        nodeStart + start + 2,
-                        expressions
-                    );
-
-                    lastIndex = end + 2;
-                    start = textValue.indexOf('{{', lastIndex);
-                }
-            }
-        }
-
-        // 3. Control Flow Blocks (@for, @if, etc.)
-        if (node.kind === 'block' || node.constructor?.name === 'Block') {
-            const blockName = node.name;
-            const parameters = node.parameters ?? [];
-
-            blocks.push({
-                name: blockName,
-                parameters: parameters.map((p: any) => ({
-                    expression: p.expression,
-                    sourceSpan: {
-                        start: p.sourceSpan?.start?.offset ?? 0,
-                        end: p.sourceSpan?.end?.offset ?? 0,
-                    }
-                })),
-                sourceSpan: {
-                    start: node.sourceSpan?.start?.offset ?? 0,
-                    end: node.sourceSpan?.end?.offset ?? 0,
-                }
-            });
-
-            for (const param of parameters) {
-                if (param.expression) {
-                    const offset = param.sourceSpan?.start?.offset ?? 0;
-
-                    // Special handling for @for microsyntax: (item of items; track item.id)
-                    // The parser might provide the whole string. 
-                    // For now, we'll try to parse the expression part.
-                    if (blockName === 'for') {
-                        if (param.expression.includes(' track ')) {
-                            const trackPart = param.expression.split(' track ')[1];
-                            const trackOffset = offset + param.expression.indexOf(' track ') + 7;
-                            parseAndAdd(trackPart, trackOffset, expressions);
-                        } else if (param.expression.startsWith('track ')) {
-                            const trackPart = param.expression.substring(6);
-                            const trackOffset = offset + 6;
-                            parseAndAdd(trackPart, trackOffset, expressions);
-                        }
-                        // Also try to parse the collection expression
-                        if (param.expression.includes(' of ')) {
-                            const collectionPart = param.expression.split(' of ')[1].split(';')[0];
-                            const collectionOffset = offset + param.expression.indexOf(' of ') + 4;
-                            parseAndAdd(collectionPart, collectionOffset, expressions);
-                        }
-                    } else {
-                        parseAndAdd(param.expression, offset, expressions);
-                    }
-                }
-            }
-        }
+        visitAttributes(node, attributes, expressions);
+        visitTextNode(node, expressions);
+        visitBlock(node, blocks, expressions);
     };
 
     for (const rootNode of htmlResult.rootNodes) visit(rootNode);
@@ -149,39 +36,187 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
     return { expressions, attributes, blocks };
 };
 
-const parseAndAdd = (code: string, offset: number, outcomes: TemplateExpressionNode[]) => {
+// ============================================
+// VISITORS — one job each
+// ============================================
+
+const visitAttributes = (
+    node: any,
+    attributes: TemplateAttributeNode[],
+    expressions: TemplateExpressionNode[],
+): void => {
+    if (!node.attrs) return;
+
+    for (const attr of node.attrs) {
+        const name: string = attr.name;
+        const value: string = attr.value;
+        const attrOffset = attr.valueSpan?.start?.offset ?? 0;
+
+        attributes.push({
+            name,
+            value,
+            sourceSpan: {
+                start: attr.sourceSpan?.start?.offset ?? 0,
+                end: attr.sourceSpan?.end?.offset ?? 0,
+            },
+        });
+
+        if (!value) continue;
+
+        if (isBindingAttribute(name)) {
+            parseAndAdd(value, attrOffset, expressions);
+        }
+    }
+};
+
+const visitTextNode = (node: any, expressions: TemplateExpressionNode[]): void => {
+    const isText = node.kind === 'text' || node.type === 'text' || node.constructor?.name === 'Text';
+    if (!isText || !node.value) return;
+
+    if (node.tokens) {
+        extractInterpolationsFromTokens(node, expressions);
+    } else {
+        extractInterpolationsManually(node, expressions);
+    }
+};
+
+const visitBlock = (
+    node: any,
+    blocks: TemplateBlockNode[],
+    expressions: TemplateExpressionNode[],
+): void => {
+    if (node.kind !== 'block' && node.constructor?.name !== 'Block') return;
+
+    const blockName: string = node.name;
+    const parameters: any[] = node.parameters ?? [];
+
+    blocks.push({
+        name: blockName,
+        parameters: parameters.map((p: any) => ({
+            expression: p.expression,
+            sourceSpan: {
+                start: p.sourceSpan?.start?.offset ?? 0,
+                end: p.sourceSpan?.end?.offset ?? 0,
+            },
+        })),
+        sourceSpan: {
+            start: node.sourceSpan?.start?.offset ?? 0,
+            end: node.sourceSpan?.end?.offset ?? 0,
+        },
+    });
+
+    for (const param of parameters) {
+        if (!param.expression) continue;
+        const offset = param.sourceSpan?.start?.offset ?? 0;
+
+        if (blockName === 'for') {
+            extractForBlockExpressions(param.expression, offset, expressions);
+        } else {
+            parseAndAdd(param.expression, offset, expressions);
+        }
+    }
+};
+
+// ============================================
+// INTERPOLATION EXTRACTION
+// ============================================
+
+/** Extracts {{ expr }} from angular-html-parser token list when available. */
+const extractInterpolationsFromTokens = (node: any, expressions: TemplateExpressionNode[]): void => {
+    for (const token of node.tokens) {
+        if (token.type === 8 && token.parts?.length === 3) {
+            const expr = token.parts[1];
+            const startOffset = token.sourceSpan.start.offset + token.parts[0].length;
+            parseAndAdd(expr, startOffset, expressions);
+        }
+    }
+};
+
+/** Extracts {{ expr }} via manual scan when token list is not available. */
+const extractInterpolationsManually = (node: any, expressions: TemplateExpressionNode[]): void => {
+    const textValue = node.value as string;
+    const nodeStart = node.sourceSpan?.start?.offset ?? 0;
+    let lastIndex = 0;
+
+    let start = textValue.indexOf('{{', lastIndex);
+    while (start !== -1) {
+        const end = textValue.indexOf('}}', start + 2);
+        if (end === -1) break;
+
+        parseAndAdd(
+            textValue.substring(start + 2, end),
+            nodeStart + start + 2,
+            expressions,
+        );
+
+        lastIndex = end + 2;
+        start = textValue.indexOf('{{', lastIndex);
+    }
+};
+
+// ============================================
+// @for MICROSYNTAX
+// ============================================
+
+/**
+ * Extracts the collection and track expressions from an @for block parameter.
+ * Example: "item of items; track item.id"
+ */
+const extractForBlockExpressions = (
+    expression: string,
+    offset: number,
+    expressions: TemplateExpressionNode[],
+): void => {
+    if (expression.includes(' track ')) {
+        const trackPart = expression.split(' track ')[1];
+        const trackOffset = offset + expression.indexOf(' track ') + 7;
+        parseAndAdd(trackPart, trackOffset, expressions);
+    } else if (expression.startsWith('track ')) {
+        parseAndAdd(expression.substring(6), offset + 6, expressions);
+    }
+
+    if (expression.includes(' of ')) {
+        const collectionPart = expression.split(' of ')[1].split(';')[0];
+        const collectionOffset = offset + expression.indexOf(' of ') + 4;
+        parseAndAdd(collectionPart, collectionOffset, expressions);
+    }
+};
+
+// ============================================
+// HELPERS
+// ============================================
+
+/** Returns true for attribute names that contain Angular binding expressions. */
+const isBindingAttribute = (name: string): boolean =>
+    name.startsWith('*') ||
+    (name.startsWith('[') && name.endsWith(']')) ||
+    name.startsWith('bind-');
+
+/**
+ * Parses a template expression fragment and appends the result to `outcomes`.
+ * Wraps the fragment in parentheses so object literals are not mistaken for blocks.
+ */
+const parseAndAdd = (code: string, offset: number, outcomes: TemplateExpressionNode[]): void => {
     if (!code.trim()) return;
 
     try {
-        // Wrap in parentheses so that object literals like { color: 'red' } are parsed as
-        // ObjectExpression (inside an ExpressionStatement) rather than as a BlockStatement.
-        // This is safe for all Angular template expressions — identifiers, calls, ternaries,
-        // binary pipes (a | b), etc. all remain valid when wrapped.
-        const wrappedCode = `(${code})`;
-        const ret = parseSync('template.ts', wrappedCode, { sourceType: 'module', lang: 'ts' });
+        const ret = parseSync('template.ts', `(${code})`, { sourceType: 'module', lang: 'ts' });
 
-        if (ret.program.body.length > 0) {
-            const stmt = ret.program.body[0];
-            // Expect ExpressionStatement provided it's an expression
-            if (stmt.type === 'ExpressionStatement' && stmt.expression) {
-                // Unwrap the ParenthesizedExpression node that oxc-parser creates when
-                // the source text is wrapped in `(...)`.  Without unwrapping, rules that
-                // test for e.g. ObjectExpression / ArrayExpression / BinaryExpression
-                // would see a ParenthesizedExpression root and miss the match.
-                let expr: any = stmt.expression;
-                if (expr.type === 'ParenthesizedExpression' && expr.expression) {
-                    expr = expr.expression;
-                }
-                outcomes.push({
-                    expression: expr,
-                    sourceSpan: {
-                        start: offset,
-                        end: offset + code.length
-                    }
-                });
-            }
+        if (ret.program.body.length === 0) return;
+
+        const stmt = ret.program.body[0];
+        if (stmt.type !== 'ExpressionStatement' || !stmt.expression) return;
+
+        let expr: any = stmt.expression;
+        if (expr.type === 'ParenthesizedExpression' && expr.expression) {
+            expr = expr.expression;
         }
-    } catch (e) {
-        // Ignore parse errors for fragments
+
+        outcomes.push({
+            expression: expr,
+            sourceSpan: { start: offset, end: offset + code.length },
+        });
+    } catch {
+        // Ignore parse errors for expression fragments
     }
 };

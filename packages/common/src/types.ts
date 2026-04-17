@@ -240,6 +240,22 @@ export interface RuleRegistry {
 }
 
 // ==============================================================================
+// RULE LIST (for `compass rules` command)
+// ==============================================================================
+
+/**
+ * A single entry in the rules list output.
+ * Consumed by the RulesReporter to render a grouped, filterable rule catalog.
+ */
+export interface RuleListEntry {
+    readonly name: string;
+    readonly description: string;
+    readonly domain: string;
+    readonly severity: string;
+    readonly presets: readonly string[];
+}
+
+// ==============================================================================
 // RULE EXECUTION TYPES
 // ==============================================================================
 

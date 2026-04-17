@@ -4,7 +4,7 @@
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
   "type": "module",
-  "packageManager": "pnpm@10.26.0",
+  "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "turbo build",
     "build:prod": "NODE_ENV=production turbo build:prod",

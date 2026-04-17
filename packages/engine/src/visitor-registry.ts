@@ -8,7 +8,7 @@
  */
 
 import type { RuleHandler, StreamType } from './rule-handler.js';
-import type { RuleFailure, RuleContext } from './types.js';
+import type { RuleFailure, RuleContext } from '@ngcompass/common';
 
 // ============================================
 // STREAM → NODE TYPE MAPPING

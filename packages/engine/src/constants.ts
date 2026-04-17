@@ -8,18 +8,6 @@
  */
 
 /**
- * The minimum number of tasks required to trigger parallel execution via the
- * worker thread pool. Below this threshold, local serial execution is preferred
- * to avoid orchestration overhead.
- */
-export const WORKER_POOL_TASK_THRESHOLD = 150;
-
-/**
- * The concurrency limit for local (non-worker) execution paths.
- */
-export const LOCAL_CONCURRENCY_LIMIT = 4;
-
-/**
  * The minimum number of worker threads to maintain in the execution pool,
  * ensuring availability regardless of the host system's CPU topology.
  */

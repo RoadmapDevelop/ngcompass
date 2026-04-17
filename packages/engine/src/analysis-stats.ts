@@ -45,7 +45,7 @@ export const calculateStats = (
  * @param severity The severity metadata to evaluate.
  * @returns True if the severity is classified as an error.
  */
-export const isErrorSeverity = (severity: unknown): boolean => {
+const isErrorSeverity = (severity: unknown): boolean => {
     return severity === "error";
 };
 
@@ -55,7 +55,7 @@ export const isErrorSeverity = (severity: unknown): boolean => {
  * @param severity The severity metadata to evaluate.
  * @returns True if the severity is classified as a warning.
  */
-export const isWarningSeverity = (severity: unknown): boolean => {
+const isWarningSeverity = (severity: unknown): boolean => {
     return severity === "warn";
 };
 

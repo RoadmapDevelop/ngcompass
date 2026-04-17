@@ -35,9 +35,12 @@
  * ```
  */
 
-import type { PluginManifest } from '@ngcompass/common';
+import type { PluginManifest, RuleListEntry } from '@ngcompass/common';
 import type { RuleHandler } from '@ngcompass/engine';
 import { RuleMetadata, RuleRegistryEntry } from '@ngcompass/common';
+import { RECOMMENDATIONS } from '../recommendations.js';
+import { getPresetsForRule } from '../presets/index.js';
+import { allPreset } from '../presets/all.js';
 
 // ============================================
 // PUBLIC TYPES
@@ -254,3 +257,25 @@ export const getAllRuleNames = (): ReadonlyArray<string> => {
 export const getRuleRegistryMap = (): ReadonlyMap<string, RuleRegistryEntry> => {
     return getGlobalRegistry().toReadonlyMap();
 };
+
+/**
+ * Returns all registered rules as RuleListEntry objects.
+ * Used by the `compass rules` CLI command.
+ */
+export function getRuleListEntries(): RuleListEntry[] {
+    const registry = getGlobalRegistry();
+    const entries: RuleListEntry[] = [];
+
+    for (const name of registry.getRuleNames()) {
+        const meta = registry.getMetadata(name);
+        entries.push({
+            name,
+            description: RECOMMENDATIONS[name] ?? meta?.description ?? `Rule: ${name}`,
+            domain: meta?.category ?? 'general',
+            severity: (allPreset.rules as Record<string, string>)[name] ?? 'warn',
+            presets: getPresetsForRule(name),
+        });
+    }
+
+    return entries;
+}
