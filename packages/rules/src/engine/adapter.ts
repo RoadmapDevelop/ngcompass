@@ -26,14 +26,14 @@ import type { RulePlugin } from '../registry/rule-registry.js';
  * Delegates to RuleRegistry.register() — the single source of truth
  * for both rule handlers and metadata. No dual-registration needed.
  */
-export const registerNewEngineRule = (handler: RuleHandler<unknown>): void => {
+export const registerNewEngineRule = (handler: RuleHandler<unknown>, category?: string): void => {
     const plugin: RulePlugin = {
         name: handler.name,
         handler,
         meta: {
-            category: 'best-practice',
             dependencyType: 'component',
             ...handler.meta,
+            category: category ?? handler.meta?.category ?? 'best-practice',
             requires: {
                 ...handler.meta?.requires
             }

@@ -49,13 +49,7 @@ const runWithLimit = async <T>(
     return results;
 };
 
-/**
- * Categorizes a collection of files into groups based on their file extensions.
- *
- * @param files - The collection of absolute file paths to analyze.
- * @returns A map associating each discovered extension with its respective count.
- */
-export const groupFilesByExtension = (
+const groupFilesByExtension = (
     files: ReadonlyArray<string>
 ): ReadonlyMap<string, number> =>
     files.reduce((map, file) => {
@@ -65,15 +59,7 @@ export const groupFilesByExtension = (
         return map;
     }, new Map<string, number>());
 
-/**
- * Computes the aggregate size of a collection of files in bytes.
- *
- * Utilizes concurrency control to ensure stability during large-scale operations.
- *
- * @param files - The collection of absolute file paths to analyze.
- * @returns A promise resolving to the total aggregate size in bytes.
- */
-export const calculateTotalSize = async (
+const calculateTotalSize = async (
     files: ReadonlyArray<string>
 ): Promise<number> => {
     const tasks = files.map(f => () => stat(f));
@@ -109,36 +95,3 @@ export const calculateStats = async (
     };
 };
 
-/**
- * Formats file count by extension for display.
- *
- * Pure function - transforms data for output.
- *
- * @param byExtension - Map of extension to count
- * @returns Formatted string representation
- */
-export const formatExtensionBreakdown = (
-    byExtension: ReadonlyMap<string, number>
-): string => {
-    const entries = Array.from(byExtension.entries())
-        .sort(([, a], [, b]) => b - a); // Sort by count descending
-
-    return entries
-        .map(([ext, count]) => `${ext}: ${count}`)
-        .join(', ');
-};
-
-/**
- * Generates a high-level summary from detailed scan statistics.
- *
- * @param stats - The detailed statistics to summarize.
- * @returns A consolidated summary object.
- */
-export const calculateSummary = (stats: ScanStatistics) => ({
-    totalFiles: stats.totalFiles,
-    uniqueExtensions: stats.byExtension.size,
-    avgTimePerFile: stats.totalFiles > 0
-        ? stats.scanTime / stats.totalFiles
-        : 0,
-    cacheHit: stats.cacheHit
-});

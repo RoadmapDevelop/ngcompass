@@ -26,8 +26,9 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
                 if (!result.report.valid) {
                     exitWithError();
                 }
-            } catch (error: any) {
-                console.error(`Error: ${error.message}`);
+            } catch (error: unknown) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.error(`Error: ${errorMessage}`);
                 exitWithError();
             }
         });

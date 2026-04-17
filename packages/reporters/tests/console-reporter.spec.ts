@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ConsoleReporter } from '../src/reporters/console-reporter.js';
 import { createTestOutput } from '../src/output.js';
-import type { RuleResult, ResultSummary } from '../src/types.js';
+import type { RuleResult } from '@ngcompass/common';
+import type { ResultSummary } from '../src/types.js';
 
 function makeResult(failures: RuleResult['failures']): RuleResult {
     return { ruleName: 'test-rule', failures };
@@ -59,7 +60,7 @@ describe('ConsoleReporter', () => {
             reporter.report([
                 makeResult([
                     makeFailure({ severity: 'error' }),
-                    makeFailure({ severity: 'warning', line: 10 }),
+                    makeFailure({ severity: 'warn', line: 10 }),
                 ]),
             ]);
             const summary = out.lines.find(l => l.includes('problem'))!;
@@ -79,6 +80,15 @@ describe('ConsoleReporter', () => {
             const headerLines = out.lines.filter(l => l.match(/(FAIL|WARN)\s+.*\.component\.ts/));
             expect(headerLines[0]).toContain('a.component.ts');
             expect(headerLines[1]).toContain('z.component.ts');
+        });
+        it('outputs recommendation with » icon when fix is present', () => {
+            reporter.report([
+                makeResult([
+                    makeFailure({ fix: 'Step one. Step two.' }),
+                ]),
+            ]);
+            const output = out.lines.join('\n');
+            expect(output).toMatch(/».*Step one. Step two/);
         });
     });
 

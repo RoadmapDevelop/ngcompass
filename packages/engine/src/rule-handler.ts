@@ -7,7 +7,7 @@
  * AST traversals or resource allocations.
  */
 
-import type { RuleFailure, RuleContext } from './types.js';
+import type { RuleFailure, RuleContext } from '@ngcompass/common';
 import type { AngularClassNode, AnyAngularClassNode, DecoratedPropertyNode, TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode, TemplateAnalysis } from '@ngcompass/ast';
 import type { CallExpression, NewExpression } from '@ngcompass/ast';
 import { RuleMetadata } from '@ngcompass/common';

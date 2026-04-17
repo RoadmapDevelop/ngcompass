@@ -116,7 +116,16 @@
       "Bash(find C:Users30694Desktoptest_compassngcompass -name .ngcompass -o -name *.cache -o -name ngcompass-cache*)",
       "Bash(pnpm --filter @ngcompass/rules test --run)",
       "Bash(ls -1 /c/Users/30694/Desktop/ngcompass_/packages/rules/src/rules/*/)",
-      "Bash(npx vitest:*)"
+      "Bash(npx vitest:*)",
+      "Bash(pnpm --filter @ngcompass/reporters test)",
+      "Bash(pnpm --filter @ngcompass/cache test)",
+      "Bash(pnpm --filter @ngcompass/cli test)",
+      "Bash(pnpm --filter @ngcompass/ast build)",
+      "Bash(pnpm --filter @ngcompass/ast test)",
+      "Bash(pnpm --filter @ngcompass/scanner build)",
+      "Bash(pnpm --filter @ngcompass/cache build)",
+      "Bash(pnpm --filter @ngcompass/scanner test)",
+      "Bash(pnpm --filter @ngcompass/cache --ignore-filter='**/.claude/**' test)"
     ]
   }
 }

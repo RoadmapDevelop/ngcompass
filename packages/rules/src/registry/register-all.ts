@@ -44,43 +44,44 @@ import { specNoFocusedTestRule } from '../rules/testing/spec-no-focused-test.rul
 
 export function registerAllBuiltinRules() {
     // Correctness — bugs, memory leaks, lifecycle violations
-    registerNewEngineRule(componentNoManualDetectChangesRule);
-    registerNewEngineRule(signalNoSideEffectsInComputedRule);
-    registerNewEngineRule(signalEffectDestroyScopedRule);
-    registerNewEngineRule(rxjsNoNestedSubscribeRule);
+    registerNewEngineRule(componentNoManualDetectChangesRule, 'correctness');
+    registerNewEngineRule(signalNoSideEffectsInComputedRule, 'correctness');
+    registerNewEngineRule(signalEffectDestroyScopedRule, 'correctness');
+    registerNewEngineRule(rxjsNoNestedSubscribeRule, 'correctness');
 
-    registerNewEngineRule(preferOnPushRule);
-    registerNewEngineRule(templateNoCallExpressionRule);
-    registerNewEngineRule(templateTrackByRequiredRule);
-    registerNewEngineRule(templateNoObjectLiteralBindingRule);
-    registerNewEngineRule(templateNoArrayLiteralBindingRule);
+    // Performance — rendering bottlenecks, change-detection overhead
+    registerNewEngineRule(preferOnPushRule, 'performance');
+    registerNewEngineRule(templateNoCallExpressionRule, 'performance');
+    registerNewEngineRule(templateTrackByRequiredRule, 'performance');
+    registerNewEngineRule(templateNoObjectLiteralBindingRule, 'performance');
+    registerNewEngineRule(templateNoArrayLiteralBindingRule, 'performance');
 
     // Security — XSS, injection, sanitization bypass
-    registerNewEngineRule(noBypassSanitizationRule);
-    registerNewEngineRule(templateNoUnsafeBindingsRule);
+    registerNewEngineRule(noBypassSanitizationRule, 'security');
+    registerNewEngineRule(templateNoUnsafeBindingsRule, 'security');
 
     // SSR — platform safety for Angular Universal / @angular/ssr
-    registerNewEngineRule(noDocumentAccessRule);
-    registerNewEngineRule(preferAfterRenderOverAfterViewInitRule);
+    registerNewEngineRule(noDocumentAccessRule, 'ssr');
+    registerNewEngineRule(preferAfterRenderOverAfterViewInitRule, 'ssr');
 
     // Reactivity — RxJS patterns, signal reactivity, observable lifecycle
-    registerNewEngineRule(rxjsNoSubscribeInComponentRule);
-    registerNewEngineRule(rxjsRequireTakeUntilDestroyedRule);
-    registerNewEngineRule(rxjsAvoidSubjectRule);
-    registerNewEngineRule(rxjsPreferToSignalRule);
-    registerNewEngineRule(toSignalRequireInitialValueRule);
-    registerNewEngineRule(signalPreferComputedRule);
+    registerNewEngineRule(rxjsNoSubscribeInComponentRule, 'reactivity');
+    registerNewEngineRule(rxjsRequireTakeUntilDestroyedRule, 'reactivity');
+    registerNewEngineRule(rxjsAvoidSubjectRule, 'reactivity');
+    registerNewEngineRule(rxjsPreferToSignalRule, 'reactivity');
+    registerNewEngineRule(toSignalRequireInitialValueRule, 'reactivity');
+    registerNewEngineRule(signalPreferComputedRule, 'reactivity');
 
     // Modern API — idiomatic Angular 17+ APIs
-    registerNewEngineRule(preferInjectRule);
-    registerNewEngineRule(signalPreferInputSignalRule);
-    registerNewEngineRule(signalPreferOutputFunctionRule);
-    registerNewEngineRule(signalPreferModelRule);
+    registerNewEngineRule(preferInjectRule, 'modern-api');
+    registerNewEngineRule(signalPreferInputSignalRule, 'modern-api');
+    registerNewEngineRule(signalPreferOutputFunctionRule, 'modern-api');
+    registerNewEngineRule(signalPreferModelRule, 'modern-api');
 
     // Template — structure, syntax, and template patterns
-    registerNewEngineRule(templatePreferControlFlowRule);
-    registerNewEngineRule(templateNoAsyncPipeDuplicationRule);
+    registerNewEngineRule(templatePreferControlFlowRule, 'template');
+    registerNewEngineRule(templateNoAsyncPipeDuplicationRule, 'template');
 
     // Testing — spec quality, CI blind spots
-    registerNewEngineRule(specNoFocusedTestRule);
+    registerNewEngineRule(specNoFocusedTestRule, 'testing');
 }

@@ -57,6 +57,7 @@ export {
     getRuleMetadata,
     getAllRuleNames,
     getRuleRegistryMap as ruleRegistry,
+    getRuleListEntries,
 } from './registry/rule-registry.js';
 
 export {
@@ -78,7 +79,7 @@ export { normalizeRuleConfig, isRuleEnabled, normalizeAllRules } from './resolut
 export { mergeRuleConfig, mergeRulesConfigs, applyOverrides } from './resolution/merger.js';
 
 // Presets
-export { builtinPresets, isBuiltinPreset, getBuiltinPreset } from './presets/index.js';
+export { builtinPresets, isBuiltinPreset, getBuiltinPreset, getPresetsForRule } from './presets/index.js';
 
 // Recommendations and rule utilities
 export * from './recommendations.js';
