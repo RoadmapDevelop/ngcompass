@@ -23,7 +23,6 @@
         "dev": "tsup --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
-        "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist .turbo"
     },

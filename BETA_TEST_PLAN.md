@@ -104,7 +104,7 @@ Behavior:
 `.github/workflows/ci.yml`:
 - **Triggers:** push to `main`/`develop`; PRs.
 - **Matrix:** Node 18 / 20 / 22 on **`ubuntu-latest` only**.
-- **Steps:** checkout → pnpm install (frozen) → `turbo lint typecheck test build` (concurrency 4) → coverage gate on Node 20 only → `pnpm audit --prod` → upload to Codecov on Node 20.
+- **Steps:** checkout → pnpm install (frozen) → `turbo typecheck test build` (concurrency 4) → coverage gate on Node 20 only → `pnpm audit --prod` → upload to Codecov on Node 20.
 
 ### 1.8 Build & distribution
 

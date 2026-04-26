@@ -7,7 +7,6 @@ import { MemoryDriverConfig, SyncDriver } from './types.js';
 export const createMemoryDriver = <T>(
     config: MemoryDriverConfig = {}
 ): SyncDriver<T> => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const cache = new LRUCache<string, any>({
         max: config.maxItems ?? 500,
         maxSize: config.maxSize ?? 50 * 1024 * 1024, // Default 50MB

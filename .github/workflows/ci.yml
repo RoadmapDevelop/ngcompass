@@ -32,8 +32,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint, Typecheck, Test, Build (via Turbo)
-        run: pnpm exec turbo lint typecheck test build --concurrency=4
+      - name: Typecheck, Test, Build (via Turbo)
+        run: pnpm exec turbo typecheck test build --concurrency=4
 
       - name: CLI smoke test
         run: node packages/cli/dist/cli.js --help

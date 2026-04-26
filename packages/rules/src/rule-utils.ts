@@ -806,7 +806,6 @@ let _tsModuleLoaded = false;
 function requireTypescript(): typeof import('typescript') | undefined {
     if (!_tsModuleLoaded) {
         try {
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
             _tsModule = require('typescript') as typeof import('typescript');
         } catch {
             // TypeScript is optional — rules fall back to AST heuristics
@@ -832,7 +831,6 @@ export function getTsSymbolAtNode(
     try {
         // Lazy-create a TS SourceFile from file content if not already present
         if (!context.sourceFile && context.fileContent) {
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (context as any).sourceFile = ts.createSourceFile(
                 context.filePath,
                 context.fileContent,

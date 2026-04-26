@@ -8,7 +8,6 @@ export class AnalyzerError extends Error {
     this.name = 'AnalyzerError';
     // Capture stack trace if available (V8/Node.js specific)
     if ('captureStackTrace' in Error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
       (Error as any).captureStackTrace(this, this.constructor);
     }
   }

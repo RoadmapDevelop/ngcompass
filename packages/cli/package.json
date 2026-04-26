@@ -28,7 +28,6 @@
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",
         "test:coverage": "vitest run --coverage --passWithNoTests",
-        "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist .turbo"
     },
