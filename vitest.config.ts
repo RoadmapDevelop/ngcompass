@@ -31,7 +31,7 @@ export default defineConfig({
   test: {
     globals: true, // Use global describe, it, expect
     environment: 'node',
-    include: ['packages/**/*.{test,spec}.ts'],
+    include: ['**/*.{test,spec}.ts'],
     exclude: [
       '**/node_modules/**',
       '**/dist/**',
@@ -41,7 +41,7 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html', 'json-summary'],
-      include: ['packages/*/src/**/*.ts'],
+      include: ['**/src/**/*.ts'],
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
