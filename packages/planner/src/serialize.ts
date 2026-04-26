@@ -1,7 +1,7 @@
 import type { ExecutionPlanOutput, Task, FileAnalysisUnit, RuleTask, FileInput } from "./types.js";
 import { buildIndexes } from "./indexes.js";
 
-type CompactOptionValue = unknown;
+type CompactOptionValue = Readonly<Record<string, unknown>>;
 type CompactInput = [fileId: number, hashId: number, needsAstFlag: number];
 type CompactRuleTask = [
     ruleId: number,

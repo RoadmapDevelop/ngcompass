@@ -31,7 +31,7 @@ function hasManualTeardown(filePath: string, fileContent: string): boolean {
 const RULE_NAME = 'rxjs-no-subscribe-in-component';
 
 function isFireAndForget(node: AstNode): boolean {
-    const callee = unwrapNode((node as any).callee);
+    const callee = unwrapNode(node.callee);
     if (!callee || !isMemberExpressionLike(callee)) return false;
 
     const receiver = unwrapNode(callee.object);
@@ -42,9 +42,9 @@ function isFireAndForget(node: AstNode): boolean {
         if (isMemberExpressionLike(pipeCallee) && getStaticPropertyName(pipeCallee) === 'pipe') {
             const args = Array.isArray(receiver.arguments) ? receiver.arguments : [];
             const hasSingleEmission = args.some(arg => {
-                const call = unwrapNode(arg as AstNode);
+                const call = unwrapNode(arg);
                 if (call?.type !== 'CallExpression') return false;
-                const name = (unwrapNode(call.callee) as any)?.name;
+                const name = unwrapNode(call.callee)?.name;
                 return name === 'take' || name === 'first';
             });
             if (hasSingleEmission) return true;
@@ -59,7 +59,7 @@ function getFailureMessage(node: CallExpression, context: RuleContext): string {
     const templateRefs = context.crossRef?.templateReferences;
     if (!templateRefs) return generic;
 
-    const callee = unwrapNode((node as any).callee);
+    const callee = unwrapNode((node as unknown as AstNode).callee);
     const receiver = unwrapNode(callee?.object);
     const propName = receiver ? getStaticPropertyName(receiver) : null;
     if (!propName) return generic;
@@ -80,7 +80,7 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
         const astNode = node as unknown as AstNode;
         if (!isSubscribeCall(astNode) || isFireAndForget(astNode)) return null;
 
-        const callee = unwrapNode((astNode as any).callee);
+        const callee = unwrapNode(astNode.callee);
         const receiver = unwrapNode(callee?.object);
         if (receiver && hasTeardownInReceiverChain(receiver)) return null;
 

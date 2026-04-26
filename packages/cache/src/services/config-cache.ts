@@ -11,10 +11,10 @@ export interface ConfigCache {
  * Strategy: Persistent Disk (Atomic files).
  * Key: Raw Configuration Hash.
  */
-export const createConfigCache = (driver: AsyncDriver<any>): ConfigCache => {
+export const createConfigCache = (driver: AsyncDriver<unknown>): ConfigCache => {
     return {
         get: async (hash: string): Promise<ConfigValidationResult | undefined> => {
-            return driver.get(hash);
+            return driver.get(hash) as Promise<ConfigValidationResult | undefined>;
         },
 
         set: async (hash: string, report: ConfigValidationResult): Promise<void> => {

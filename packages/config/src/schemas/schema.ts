@@ -86,7 +86,7 @@ const BaseAnalyzerConfigSchema = z.object({
  * Derived from the Zod schemas to ensure type sync.
  */
 export type AnalyzerConfig = z.infer<typeof BaseAnalyzerConfigSchema> & {
-    profiles?: Record<string, any>;
+    profiles?: Record<string, unknown>;
 };
 
 /**

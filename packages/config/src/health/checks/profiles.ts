@@ -27,7 +27,7 @@ export function validateProfiles(
         return { issues };
     }
 
-    const profiles = config.profiles as Record<string, any>;
+    const profiles = config.profiles;
     const profileNames = Object.keys(profiles);
 
     /**
@@ -74,11 +74,11 @@ export function validateProfiles(
         }
 
         const profile = profiles[name];
-        const hasParent = profile && typeof profile === "object" && "extends" in profile;
+        const parent = profile && typeof profile === "object" && "extends" in profile
+            ? (profile as { extends?: unknown }).extends
+            : undefined;
 
-        if (hasParent) {
-            const parent = profile.extends;
-
+        if (typeof parent === "string") {
             if (chain.includes(parent)) {
                 issues.push({
                     ...MESSAGES.PROFILE_CIRCULAR_INHERITANCE([...chain, name, parent]),

@@ -10,7 +10,7 @@ import { processOutput, type ReporterOutput } from '../output.js';
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';
 const SEVERITY_ORDER = ['critical', 'high', 'error', 'moderate', 'warning', 'low', 'info', 'hint'] as const;
 
-type SeverityCount = Partial<Record<(typeof SEVERITY_ORDER)[number] | string, number>>;
+type SeverityCount = Partial<Record<string, number>>;
 
 type FileBucket = {
     filePath: string;

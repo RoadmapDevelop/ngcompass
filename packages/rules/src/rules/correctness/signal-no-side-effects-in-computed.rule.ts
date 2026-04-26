@@ -42,15 +42,15 @@ function isMemberStateWrite(node: MaybeAstNode): boolean {
     if (!current) return false;
 
     if (current.type === 'AssignmentExpression') {
-        const left = unwrapNode((current as any).left);
+        const left = unwrapNode(current.left);
         return !!left && isMemberExpressionLike(left);
     }
     if (current.type === 'UpdateExpression') {
-        const argument = unwrapNode((current as any).argument);
+        const argument = unwrapNode(current.argument);
         return !!argument && isMemberExpressionLike(argument);
     }
     if (current.type === 'UnaryExpression' && current.operator === 'delete') {
-        const argument = unwrapNode((current as any).argument);
+        const argument = unwrapNode(current.argument);
         return !!argument && isMemberExpressionLike(argument);
     }
     return false;
@@ -60,7 +60,7 @@ function findFirstViolation(root: AstNode): { node: AstNode; type: 'write' | 'ef
     const stack: AstNode[] = [root];
 
     while (stack.length > 0) {
-        const node = unwrapNode(stack.pop()!);
+        const node = unwrapNode(stack.pop());
         if (!node) continue;
 
         if (node !== root) {

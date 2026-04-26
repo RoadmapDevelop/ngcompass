@@ -122,15 +122,16 @@ export const hashFiles = async (
 const stableStringify = (value: unknown): string => {
     const seen = new WeakSet<object>();
 
-    const normalize = (v: any): any => {
+    const normalize = (v: unknown): unknown => {
         if (v && typeof v === "object") {
             if (seen.has(v)) return "[Circular]";
             seen.add(v);
 
             if (Array.isArray(v)) return v.map(normalize);
 
-            const out: Record<string, any> = {};
-            for (const k of Object.keys(v).sort()) out[k] = normalize(v[k]);
+            const obj = v as Record<string, unknown>;
+            const out: Record<string, unknown> = {};
+            for (const k of Object.keys(obj).sort()) out[k] = normalize(obj[k]);
             return out;
         }
         return v;

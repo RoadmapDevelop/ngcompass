@@ -114,7 +114,7 @@ export const getDirectoryFingerprint = async (dir: string): Promise<string> => {
     try {
         const entries = await readdir(dir, { withFileTypes: true });
         const statResults = await Promise.allSettled(
-            entries.map((entry: { name: any; }) => stat(path.join(dir, entry.name)))
+            entries.map((entry) => stat(path.join(dir, entry.name)))
         );
 
         let totalSize = 0;

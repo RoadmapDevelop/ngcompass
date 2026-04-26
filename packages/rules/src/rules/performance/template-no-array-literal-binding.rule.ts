@@ -47,7 +47,7 @@ function createFailure(
 export const templateNoArrayLiteralBindingRule = createTemplateExpressionRule(
     RULE_NAME,
     (node: TemplateExpressionNode, context: RuleContext): RuleFailure[] | null => {
-        const expression = (node as any).expression;
+        const expression = node.expression as unknown as AstNode;
 
         if (!hasArrayLiteral(expression)) {
             return null;

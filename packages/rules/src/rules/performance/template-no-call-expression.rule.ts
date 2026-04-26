@@ -78,9 +78,9 @@ function isAllowedCall(node: MaybeAstNode): boolean {
     return !!methodName && ALLOWED_MEMBER_CALL_NAMES.has(methodName);
 }
 
-function isSignalSymbol(symbol: any, typeChecker: any): boolean {
+function isSignalSymbol(symbol: ts.Symbol, typeChecker: ts.TypeChecker): boolean {
     if (!symbol) return false;
-    const decl = symbol.valueDeclaration || symbol.declarations?.[0];
+    const decl = symbol.valueDeclaration ?? symbol.declarations?.[0];
     if (!decl) return false;
 
     const type = typeChecker.getTypeOfSymbolAtLocation(symbol, decl);
@@ -92,23 +92,23 @@ function isSignalSymbol(symbol: any, typeChecker: any): boolean {
 
 function isSignalReference(name: string, context: RuleContext): boolean {
     const looksLikeGetter = name.startsWith('get') || name.startsWith('is') || name.startsWith('has');
-    
+
     if (context.typeChecker && context.crossRef?.componentPath) {
         try {
             const typeChecker = context.typeChecker;
             const componentPath = context.crossRef.componentPath;
-            const program = (typeChecker as any).getProgram();
+            const program = (typeChecker as ts.TypeChecker & { getProgram: () => ts.Program }).getProgram();
             const sourceFile = program.getSourceFile(componentPath);
 
             if (sourceFile) {
                 const classDecl = sourceFile.statements.find(
-                    (s: any): s is any => ts.isClassDeclaration(s)
+                    (s): s is ts.ClassDeclaration => ts.isClassDeclaration(s)
                 );
 
                 if (classDecl && classDecl.name) {
                     const classType = typeChecker.getTypeAtLocation(classDecl);
                     const member = typeChecker.getPropertyOfType(classType, name);
-                    
+
                     if (member) {
                         return isSignalSymbol(member, typeChecker);
                     }
@@ -168,7 +168,7 @@ function createFailure(
 export const templateNoCallExpressionRule = createTemplateExpressionRule(
     RULE_NAME,
     (node: TemplateExpressionNode, context: RuleContext): RuleFailure[] | null => {
-        const expression = (node as any).expression;
+        const expression = node.expression as unknown as AstNode;
 
         if (!hasFlaggedCallExpression(expression, context)) {
             return null;

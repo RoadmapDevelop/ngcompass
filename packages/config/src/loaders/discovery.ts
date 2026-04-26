@@ -26,9 +26,12 @@ const SEARCH_PLACES = [
  */
 const jitiLoader = (filepath: string): Promise<unknown> => {
     const jiti = createJiti(process.cwd()); // Use cwd context
-    return jiti.import(filepath).then((mod: any) => {
+    return jiti.import(filepath).then((mod: unknown) => {
         // Handle export default vs export =
-        return mod.default || mod;
+        if (mod && typeof mod === 'object' && 'default' in mod) {
+            return (mod as { default: unknown }).default ?? mod;
+        }
+        return mod;
     });
 };
 
