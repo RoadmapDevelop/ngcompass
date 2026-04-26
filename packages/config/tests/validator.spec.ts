@@ -36,6 +36,8 @@ function mockContext(overrides: Partial<ValidationContext> = {}): ValidationCont
                 const idx = norm.lastIndexOf('/');
                 return idx <= 0 ? '/' : norm.slice(0, idx);
             },
+            resolve: (...parts: string[]) => parts.join('/').replace(/\\/g, '/').replace(/\/+/g, '/'),
+            isAbsolute: (p: string) => p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p),
         },
         ...overrides,
     };
@@ -46,15 +48,9 @@ function mockConfig(overrides: Partial<ValidatedConfig> = {}): ValidatedConfig {
         include: ['src/**/*.ts'],
         exclude: ['node_modules/**'],
         rules: { 'some-rule': 'warn' },
-        autoFix: false,
-        autoFixOnSave: false,
-        watch: false,
-        watchOptions: {},
         outputFormat: 'json' as any,
         failOnSeverity: 'error' as any,
         maxWarnings: 10,
-        reportUnusedDisableDirectives: false,
-        failOnInfrastructureError: false,
         ignorePatterns: [],
         overrides: [],
         maxWorkers: 2,
@@ -146,7 +142,7 @@ describe('validateConfiguration — result shape', () => {
 
     it('returns config: undefined when there are errors', async () => {
         const result = await validateConfiguration(
-            { include: ['src/**/*.ts'], autoFix: true, autoFixOnSave: true },
+            { include: ['src/**/*.ts'], maxWarnings: -1 },
             mockContext(),
         );
         expect(result.config).toBeUndefined();
@@ -158,7 +154,7 @@ describe('validateConfiguration — result shape', () => {
         // Run twice; even if the same issue code appears from schema and semantic path,
         // the report should not contain the exact same (code+message+path) pair twice.
         const result = await validateConfiguration(
-            { include: ['src/**/*.ts'], autoFix: true, autoFixOnSave: true },
+            { include: ['src/**/*.ts'], maxWarnings: -1 },
             mockContext(),
         );
 
@@ -170,9 +166,9 @@ describe('validateConfiguration — result shape', () => {
 
     it('sorts errors before warnings in the issue list', async () => {
         // A config with both an error and a warning-level issue.
-        // autoFix + autoFixOnSave = error; missing exclude = warning.
+        // negative maxWarnings = error; missing exclude = warning.
         const result = await validateConfiguration(
-            { include: ['src/**/*.ts'], exclude: [], autoFix: true, autoFixOnSave: true },
+            { include: ['src/**/*.ts'], exclude: [], maxWarnings: -1 },
             mockContext(),
         );
 
@@ -193,7 +189,7 @@ describe('validateConfiguration — result shape', () => {
 describe('validateConfiguration — file attribution', () => {
     it('sets the file field on issues when filePath is provided without fileContent', async () => {
         const result = await validateConfiguration(
-            { include: ['src/**/*.ts'], autoFix: true, autoFixOnSave: true },
+            { include: ['src/**/*.ts'], maxWarnings: -1 },
             mockContext(),
             '/project/ngcompass.config.ts',
             // no fileContent
@@ -281,10 +277,10 @@ describe('validateCrossFields', () => {
         expect(issues.some(i => i.code === 'negative-max-warnings')).toBe(false);
     });
 
-    it('flags autoFix + autoFixOnSave together', () => {
-        const config = mockConfig({ autoFix: true, autoFixOnSave: true });
+    it('flags negative maxWarnings in direct cross-field validation', () => {
+        const config = mockConfig({ maxWarnings: -1 });
         const { issues } = validateCrossFields(config, mockContext());
-        expect(issues.some(i => i.code === 'mutually-exclusive-autofix')).toBe(true);
+        expect(issues.some(i => i.code === 'negative-max-warnings')).toBe(true);
     });
 
     it('includes path prefix in issue paths when basePath is provided', () => {
@@ -322,6 +318,20 @@ describe('validatePaths', () => {
     it('produces no issues for a valid, writable outputPath', () => {
         const config = mockConfig({ outputPath: '/project/reports' } as any);
         const { issues } = validatePaths(config, mockContext());
+        const errors = issues.filter(i => i.severity === 'error');
+        expect(errors).toHaveLength(0);
+    });
+
+    it('resolves relative outputPath directories against cwd', () => {
+        const config = mockConfig({ outputPath: 'reports/ngcompass.html' } as any);
+        const ctx = mockContext({
+            cwd: '/project',
+            fs: {
+                existsSync: (p: string) => p === '/project/reports',
+                accessSync: () => undefined,
+            },
+        });
+        const { issues } = validatePaths(config, ctx);
         const errors = issues.filter(i => i.severity === 'error');
         expect(errors).toHaveLength(0);
     });

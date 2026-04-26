@@ -26,7 +26,9 @@ export const createDiskDriver = <T>(
 
                 // Optional: debug logging for cache driver timing
                 if (process.env.DEBUG_CACHE) {
-                    console.log(`[disk-driver] read: ${(tReadEnd - tReadStart).toFixed(2)}ms, deser: ${(tDeserEnd - tDeserStart).toFixed(2)}ms, size: ${(result.data.length / 1024).toFixed(1)}KB`);
+                    process.stdout.write(
+                        `[disk-driver] read: ${(tReadEnd - tReadStart).toFixed(2)}ms, deser: ${(tDeserEnd - tDeserStart).toFixed(2)}ms, size: ${(result.data.length / 1024).toFixed(1)}KB\n`
+                    );
                 }
 
                 return deserialized;

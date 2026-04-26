@@ -35,6 +35,8 @@ function createMockContext(overrides?: Partial<ValidationContext>): ValidationCo
                 const lastIndex = normalized.lastIndexOf('/');
                 return lastIndex <= 0 ? '/' : normalized.slice(0, lastIndex);
             },
+            resolve: (...parts: string[]) => parts.join('/').replace(/\\/g, '/').replace(/\/+/g, '/'),
+            isAbsolute: (p: string) => p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p),
         },
         ...overrides,
     };
@@ -48,15 +50,9 @@ function createMockConfig(overrides: Partial<ValidatedConfig> = {}): ValidatedCo
         include: ['src/**/*.ts'],
         exclude: ['node_modules/**', 'dist/**'],
         rules: {},
-        autoFix: false,
-        autoFixOnSave: false,
-        watch: false,
-        watchOptions: {},
         outputFormat: 'json' as any,
         failOnSeverity: 'error' as any,
         maxWarnings: 10,
-        reportUnusedDisableDirectives: false,
-        failOnInfrastructureError: false,
         ignorePatterns: [],
         overrides: [],
         maxWorkers: 2,
@@ -79,9 +75,9 @@ describe('Validator: Full Pipeline', () => {
         expect(errors).toHaveLength(0);
     });
 
-    it('should fail validation when mutually exclusive options are enabled', async () => {
+    it('should fail validation when maxWarnings is negative', async () => {
         const result = await validateConfiguration(
-            { include: ['src/**/*.ts'], autoFix: true, autoFixOnSave: true },
+            { include: ['src/**/*.ts'], maxWarnings: -1 },
             createMockContext()
         );
         expect(result.report.valid).toBe(false);
@@ -91,11 +87,11 @@ describe('Validator: Full Pipeline', () => {
     it('should correctly attribute issues to the source file path', async () => {
         const filePath = '/project/ngcompass.config.ts';
         const result = await validateConfiguration(
-            { include: ['src/**/*.ts'], autoFix: true, autoFixOnSave: true },
+            { include: ['src/**/*.ts'], maxWarnings: -1 },
             createMockContext(),
             filePath
         );
-        const issue = result.report.issues.find(i => i.code === 'mutually-exclusive-autofix');
+        const issue = result.report.issues.find(i => i.code === 'negative-max-warnings');
         expect(issue?.file).toBe(filePath);
     });
 

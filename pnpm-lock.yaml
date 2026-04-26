@@ -105,6 +105,9 @@ importers:
       '@ngcompass/common':
         specifier: workspace:*
         version: link:../common
+      '@ngcompass/config':
+        specifier: workspace:*
+        version: link:../config
       cacache:
         specifier: ^20.0.3
         version: 20.0.3

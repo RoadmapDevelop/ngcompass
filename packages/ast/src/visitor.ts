@@ -4,6 +4,14 @@
  */
 const NON_CHILD_KEYS = new Set(['parent', 'span', 'loc', 'range', 'start', 'end', 'type']);
 
+interface TraversableNode {
+    readonly type: string;
+}
+
+function isTraversableNode(value: unknown): value is TraversableNode {
+    return typeof value === 'object' && value !== null && typeof (value as { type?: unknown }).type === 'string';
+}
+
 /**
  * Iterative pre-order DFS walker for Oxc AST.
  *
@@ -22,17 +30,20 @@ const NON_CHILD_KEYS = new Set(['parent', 'span', 'loc', 'range', 'start', 'end'
  * @param root    - The Program (or any sub-tree root) to walk
  * @param visitor - Called for each node. Return `false` to skip that node's children.
  */
-export function walkProgram(root: any, visitor: (node: any) => void | boolean): void {
+export function walkProgram(
+    root: TraversableNode | null | undefined,
+    visitor: (node: TraversableNode) => void | boolean
+): void {
     if (!root) return;
 
     // Explicit stack replaces the call stack — no recursion depth limit.
     // We push children in reverse insertion order so that the first property's
     // subtree is processed before subsequent ones (matching recursive pre-order).
-    const stack: any[] = [root];
+    const stack: TraversableNode[] = [root];
 
     while (stack.length > 0) {
         const node = stack.pop();
-        if (!node || typeof node !== 'object' || !node.type) continue;
+        if (!node) continue;
 
         const shouldContinue = visitor(node);
         if (shouldContinue === false) continue;
@@ -41,23 +52,24 @@ export function walkProgram(root: any, visitor: (node: any) => void | boolean): 
         // A local temp array here is unavoidable for reversal, but it is tiny
         // (typically 2–8 entries) compared to the 50–100 key array that
         // Object.keys() was allocating on every node previously.
-        const children: any[] = [];
+        const children: TraversableNode[] = [];
 
-        for (const key in node) {
+        const nodeRecord = node as unknown as Record<string, unknown>;
+        for (const key in nodeRecord) {
             // Skip non-child properties without allocating an array
             if (NON_CHILD_KEYS.has(key)) continue;
 
-            const val = node[key];
+            const val = nodeRecord[key];
             if (!val || typeof val !== 'object') continue;
 
             if (Array.isArray(val)) {
                 for (let i = 0; i < val.length; i++) {
                     const child = val[i];
-                    if (child && typeof child === 'object' && child.type) {
+                    if (isTraversableNode(child)) {
                         children.push(child);
                     }
                 }
-            } else if (val.type) {
+            } else if (isTraversableNode(val)) {
                 children.push(val);
             }
         }

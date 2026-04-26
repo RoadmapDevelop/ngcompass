@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
   pull_request:
@@ -12,10 +13,11 @@ env:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
         node: [18.x, 20.x, 22.x]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -33,12 +35,22 @@ jobs:
       - name: Lint, Typecheck, Test, Build (via Turbo)
         run: pnpm exec turbo lint typecheck test build --concurrency=4
 
+      - name: CLI smoke test
+        run: node packages/cli/dist/cli.js --help
+
+      - name: Coverage gate
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
+        run: |
+          pnpm test:coverage
+          node scripts/check-coverage.js
+
       - name: Security audit
         # --prod scopes audit to runtime dependencies only (devDep vulns don't ship to users)
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
         run: pnpm audit --audit-level high --prod
 
       - name: Upload coverage
-        if: matrix.node == '20.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
         uses: codecov/codecov-action@v4
         with:
           directory: .

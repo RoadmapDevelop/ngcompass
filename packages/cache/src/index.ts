@@ -22,3 +22,7 @@ export type { CacheConfig } from './drivers/types.js';
 
 // Context (CacheContext factory)
 export * from './context.js';
+
+// Runtime cache helpers used by the CLI
+export * from './runtime-cache.js';
+

@@ -30,5 +30,5 @@ for (const pkg of packages) {
     newPkgJson.sideEffects = false; // Just to be sure it's overwritten correctly if it already existed
     
     fs.writeFileSync(pkgJsonPath, JSON.stringify(newPkgJson, null, 4) + '\n');
-    console.log('Updated ' + pkg);
+    process.stdout.write(`Updated ${pkg}\n`);
 }

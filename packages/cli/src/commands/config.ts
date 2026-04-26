@@ -7,12 +7,12 @@ import { exitWithError } from './exit.js';
 export function registerConfigCommand(program: Command, cache: CacheContext) {
     const configGroup = program
         .command('config')
-        .description('Manage and validate configuration');
+        .description('Inspect and validate ngcompass configuration');
 
     configGroup
         .command('health')
-        .description('Validate the current configuration for semantic correctness')
-        .option('-p, --profile <name>', 'Select configuration profile')
+        .description('Run semantic validation checks for the active configuration')
+        .option('-p, --profile <name>', 'Configuration profile to validate')
         .action(async (options) => {
             try {
                 const result = await validateConfig({

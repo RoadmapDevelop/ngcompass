@@ -42,6 +42,18 @@
     ],
     "author": "ngcompass",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/SigoudisEftimis/ngcompass_.git",
+        "directory": "packages/reporters"
+    },
+    "homepage": "https://github.com/SigoudisEftimis/ngcompass_#readme",
+    "bugs": {
+        "url": "https://github.com/SigoudisEftimis/ngcompass_/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "devDependencies": {
         "@types/babel__code-frame": "^7.27.0",
         "@types/node": "^25.1.0",

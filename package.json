@@ -1,8 +1,16 @@
 {
   "name": "ngcompass",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SigoudisEftimis/ngcompass_.git"
+  },
+  "homepage": "https://github.com/SigoudisEftimis/ngcompass_#readme",
+  "bugs": {
+    "url": "https://github.com/SigoudisEftimis/ngcompass_/issues"
+  },
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {

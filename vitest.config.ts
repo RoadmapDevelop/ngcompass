@@ -31,6 +31,13 @@ export default defineConfig({
   test: {
     globals: true, // Use global describe, it, expect
     environment: 'node',
+    include: ['packages/**/*.{test,spec}.ts'],
+    exclude: [
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      '**/.claude/**',
+    ],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html', 'json-summary'],
@@ -38,6 +45,7 @@ export default defineConfig({
       exclude: [
         '**/node_modules/**',
         '**/dist/**',
+        '**/.claude/**',
         '**/*.test.ts',
         '**/*.spec.ts',
         '**/types.ts', // Type definitions don't need coverage

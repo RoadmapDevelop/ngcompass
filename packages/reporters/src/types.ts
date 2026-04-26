@@ -12,7 +12,7 @@ import type { ConfigReport, HealthReport, InitResult, RuleResult } from '@ngcomp
 import type { CacheInfo } from '@ngcompass/cache';
 
 /** Supported output encodings for analysis results. */
-export type ReporterFormat = 'console' | 'json' | 'html';
+export type ReporterFormat = 'console' | 'json' | 'html' | 'ui';
 
 export interface ConsoleReporterOptions {
     /** Enables additional diagnostic output (verbose/fix recommendations). */
@@ -27,7 +27,7 @@ export interface ConsoleReporterOptions {
     /**
      * Output file path for the HTML reporter.
      * Defaults to `ngcompass-report.html` in the current working directory.
-     * Only used when `ReporterFormat` is `'html'`.
+     * Only used when `ReporterFormat` is `'html'` or `'ui'`.
      */
     readonly outputPath?: string;
 }

@@ -1,13 +1,33 @@
 import type { ExecutionPlanOutput, Task, FileAnalysisUnit, RuleTask, FileInput } from "./types.js";
 import { buildIndexes } from "./indexes.js";
 
+type CompactOptionValue = unknown;
+type CompactInput = [fileId: number, hashId: number, needsAstFlag: number];
+type CompactRuleTask = [
+    ruleId: number,
+    severity: RuleTask['severity'],
+    optId: number,
+    cacheKeyId: number,
+    ts: CompactInput,
+    tpl?: CompactInput,
+    styles?: CompactInput[],
+    spec?: CompactInput,
+    needsTypeChecker?: number,
+];
+type CompactUnit = [
+    fileId: number,
+    fileType: FileAnalysisUnit['file']['type'],
+    fileHashId: number,
+    tasks: CompactRuleTask[],
+];
+
 interface CompactPlan {
     v: number;
     r: string[];
-    o: any[];
+    o: CompactOptionValue[];
     f: string[];
     h: string[];
-    t: any[];
+    t: CompactUnit[];
 }
 
 /**
@@ -20,7 +40,7 @@ export const serializePlan = (output: ExecutionPlanOutput): CompactPlan => {
     const rules = new StringInterner();
     const files = new StringInterner();
     const hashes = new StringInterner();
-    const options = new ReferenceInterner<any>();
+    const options = new ReferenceInterner<CompactOptionValue>();
 
     const units = Object.values(output.plan).map((unit) => serializeUnit(unit, rules, files, hashes, options));
 
@@ -78,8 +98,8 @@ const serializeUnit = (
     rules: StringInterner,
     files: StringInterner,
     hashes: StringInterner,
-    options: ReferenceInterner<any>
-): any[] => {
+    options: ReferenceInterner<CompactOptionValue>
+): CompactUnit => {
     const fileId = files.id(unit.file.path);
     const fileHashId = hashes.idOrMinusOne(unit.file.hash);
 
@@ -114,8 +134,8 @@ const serializeRuleTask = (
     rules: StringInterner,
     files: StringInterner,
     hashes: StringInterner,
-    options: ReferenceInterner<any>
-): any[] => {
+    options: ReferenceInterner<CompactOptionValue>
+): CompactRuleTask => {
     const ruleId = rules.id(task.ruleName);
     const optId = options.id(task.options);
     const cacheKeyId = hashes.idOrMinusOne(task.cacheKey);
@@ -140,7 +160,7 @@ const serializeRuleTask = (
  * @param hashes - Hash interner
  * @returns Compact input tuple [fileId, hashId, needsAstFlag]
  */
-const encodeInput = (input: FileInput, files: StringInterner, hashes: StringInterner): number[] => {
+const encodeInput = (input: FileInput, files: StringInterner, hashes: StringInterner): CompactInput => {
     return [files.id(input.path), hashes.idOrMinusOne(input.hash), input.needsAst ? 1 : 0];
 };
 
@@ -155,18 +175,25 @@ const encodeInput = (input: FileInput, files: StringInterner, hashes: StringInte
  * @returns Reconstructed unit data
  */
 const deserializeUnit = (
-    unitData: any[],
+    unitData: CompactUnit,
     rules: string[],
     files: string[],
     hashes: string[],
-    options: any[]
-): { filePath: string; fileType: any; fileHash: string; ruleTasks: RuleTask[] } => {
+    options: CompactOptionValue[]
+): {
+    filePath: string;
+    fileType: FileAnalysisUnit['file']['type'];
+    fileHash: string;
+    ruleTasks: RuleTask[];
+} => {
     const [fileId, fileType, fileHashId, tasksData] = unitData;
 
     const filePath = files[fileId];
     const fileHash = decodeHash(fileHashId, hashes);
 
-    const ruleTasks: RuleTask[] = (tasksData as any[]).map((t) => deserializeRuleTask(t, rules, files, hashes, options));
+    const ruleTasks: RuleTask[] = tasksData.map((taskData) =>
+        deserializeRuleTask(taskData, rules, files, hashes, options)
+    );
 
     return { filePath, fileType, fileHash, ruleTasks };
 };
@@ -187,16 +214,22 @@ const deserializeUnit = (
  * @param options - Options values
  * @returns RuleTask
  */
-const deserializeRuleTask = (tData: any[], rules: string[], files: string[], hashes: string[], options: any[]): RuleTask => {
+const deserializeRuleTask = (
+    tData: CompactRuleTask,
+    rules: string[],
+    files: string[],
+    hashes: string[],
+    options: CompactOptionValue[]
+): RuleTask => {
     const [ruleId, severity, optId, cacheKeyId, tsCompact, tplCompact, stylesCompact, specCompact, typeCheckerFlag] = tData;
 
     const ruleName = rules[ruleId];
     const ruleOptions = options[optId];
     const cacheKey = decodeHash(cacheKeyId, hashes);
 
-    const inputs: any = { typescript: decodeInput(tsCompact, files, hashes) };
+    const inputs: RuleTask['inputs'] = { typescript: decodeInput(tsCompact, files, hashes) };
     if (tplCompact) inputs.template = decodeInput(tplCompact, files, hashes);
-    if (stylesCompact) inputs.styles = (stylesCompact as any[]).map((d) => decodeInput(d, files, hashes));
+    if (stylesCompact) inputs.styles = stylesCompact.map((styleInput) => decodeInput(styleInput, files, hashes));
     if (specCompact) inputs.spec = decodeInput(specCompact, files, hashes);
 
     // typeCheckerFlag is 1 when present; absent in pre-fix v1 entries (defaults to false).
@@ -213,7 +246,7 @@ const deserializeRuleTask = (tData: any[], rules: string[], files: string[], has
  * @param hashes - Hash strings
  * @returns FileInput
  */
-const decodeInput = (d: number[], files: string[], hashes: string[]): FileInput => {
+const decodeInput = (d: CompactInput, files: string[], hashes: string[]): FileInput => {
     return {
         path: files[d[0]],
         hash: decodeHash(d[1], hashes),

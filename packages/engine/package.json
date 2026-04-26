@@ -23,6 +23,7 @@
         "dev": "tsup --watch",
         "test": "vitest run --passWithNoTests",
         "test:watch": "vitest --passWithNoTests",
+        "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist .turbo"
     },
@@ -48,5 +49,17 @@
         "ngcompass"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/SigoudisEftimis/ngcompass_.git",
+        "directory": "packages/engine"
+    },
+    "homepage": "https://github.com/SigoudisEftimis/ngcompass_#readme",
+    "bugs": {
+        "url": "https://github.com/SigoudisEftimis/ngcompass_/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
 }

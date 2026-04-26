@@ -125,7 +125,10 @@
       "Bash(pnpm --filter @ngcompass/scanner build)",
       "Bash(pnpm --filter @ngcompass/cache build)",
       "Bash(pnpm --filter @ngcompass/scanner test)",
-      "Bash(pnpm --filter @ngcompass/cache --ignore-filter='**/.claude/**' test)"
+      "Bash(pnpm --filter @ngcompass/cache --ignore-filter='**/.claude/**' test)",
+      "Bash(find /c/Users/30694/Desktop/ngcompass_/packages -name \"*.ts\" -type f -exec grep -l \"TODO\\\\|FIXME\\\\|XXX\\\\|HACK\" {} \\\\;)",
+      "Read(//c/Users/30694/.claude/projects/C--Users-30694-Desktop-ngcompass-/memory//**)",
+      "Read(//c/Users/30694/.claude/projects/C--Users-30694-Desktop-ngcompass-/memory/**)"
     ]
   }
 }

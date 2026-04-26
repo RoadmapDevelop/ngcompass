@@ -18,8 +18,6 @@ export type Namespace =
     | 'rules'
     | 'workers'
     | 'reporter'
-    | 'watch'
-    | 'autofix'
     | 'init'
     | 'config'
     | 'planner'
@@ -50,7 +48,7 @@ interface LoggerConfig {
 const KNOWN_NAMESPACES: ReadonlySet<string> = new Set<string>(
     [
         'discovery', 'loader', 'validator', 'cache', 'scanner', 'parser',
-        'rules', 'workers', 'reporter', 'watch', 'autofix', 'init', 'config',
+        'rules', 'workers', 'reporter', 'init', 'config',
         'planner', 'incremental', 'dry-run', 'engine', 'plugin-loader', 'env-fingerprint',
     ] satisfies Namespace[]
 );

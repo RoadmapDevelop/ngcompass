@@ -85,14 +85,6 @@ export interface ParserOptions {
 }
 
 /**
- * File watcher options for watch mode
- */
-export interface WatchOptions {
-    debounce?: number;
-    ignored?: string[];
-}
-
-/**
  * Cache configuration options
  */
 export interface CacheOptions {
@@ -148,26 +140,6 @@ export interface AnalyzerConfig {
     cache?: boolean | CacheOptions;
 
     /**
-     * Enable watch mode
-     */
-    watch?: boolean;
-
-    /**
-     * Watch mode options
-     */
-    watchOptions?: WatchOptions;
-
-    /**
-     * Enable auto-fixing violations
-     */
-    autoFix?: boolean;
-
-    /**
-     * Enable auto-fix on file save
-     */
-    autoFixOnSave?: boolean;
-
-    /**
      * Output format for reports
      */
     outputFormat?: OutputFormat;
@@ -186,11 +158,6 @@ export interface AnalyzerConfig {
      * Maximum number of violations allowed before failing
      */
     maxWarnings?: number;
-
-    /**
-     * Report unused analyzer-disable directives
-     */
-    reportUnusedDisableDirectives?: boolean;
 
     /**
      * Additional patterns to ignore
@@ -223,16 +190,6 @@ export interface AnalyzerConfig {
      * Environment-specific profiles
      */
     profiles?: Record<string, ProfileConfig>;
-
-    /**
-     * When true, any unrecoverable infrastructure error (worker crash,
-     * cache corruption, serialization failure) causes a non-zero exit code
-     * even if partial results were produced.
-     *
-     * Recommended for CI pipelines that require full correctness guarantees.
-     * Default: false (recoverable errors are logged but do not fail the run).
-     */
-    failOnInfrastructureError?: boolean;
 
     /**
      * Structured telemetry collection.
@@ -290,7 +247,7 @@ export interface InitResult {
     alreadyExists?: boolean;
 }
 
-export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' | 'maxWorkers' | 'outputFormat' | 'failOnSeverity' | 'maxWarnings' | 'reportUnusedDisableDirectives' | 'rules' | 'failOnInfrastructureError'> {
+export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' | 'maxWorkers' | 'outputFormat' | 'failOnSeverity' | 'maxWarnings' | 'rules'> {
     /**
      * Cache configuration.
      * Guaranteed to be a full object, never boolean.
@@ -319,19 +276,9 @@ export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' |
     maxWarnings: number;
 
     /**
-     * Report unused directives.
-     */
-    reportUnusedDisableDirectives: boolean;
-
-    /**
      * Resolved rule configuration.
      */
     rules: Record<string, RuleConfig | Severity | 'off'>;
-
-    /**
-     * Guaranteed to be a boolean after normalization. Default: false.
-     */
-    failOnInfrastructureError: boolean;
 }
 
 
