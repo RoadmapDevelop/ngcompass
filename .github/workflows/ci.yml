@@ -54,7 +54,27 @@ jobs:
           # Install all tarballs together — npm resolves workspace deps from this set
           cd "$SMOKE_DIR"
           npm install --no-save "$PACKS_DIR"/*.tgz
-          ./node_modules/.bin/ngcompass --version
+
+          # Persist the bin dir across steps via GITHUB_PATH
+          echo "$SMOKE_DIR/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Verify ngcompass CLI commands
+        shell: bash
+        run: |
+          echo "--- which ngcompass ---"
+          which ngcompass
+
+          echo "--- ngcompass --help ---"
+          ngcompass --help
+
+          echo "--- ngcompass --version ---"
+          ngcompass --version
+
+          echo "--- ngcompass rules ---"
+          ngcompass rules
+
+          echo "--- ngcompass cache info ---"
+          ngcompass cache info
 
       - name: Coverage gate
         if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
