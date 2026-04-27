@@ -7,8 +7,9 @@ import { AstNode, unwrapNode, isMemberExpressionLike, getStaticPropertyName, get
 const seenByTemplateKey = new WeakMap<RuleContext, Map<string, Set<string>>>();
 
 function getTemplateKey(context: RuleContext): string {
-    const offset = (context as any).template?.templateStartOffset;
-    return `${context.filePath}@${Number.isFinite(offset) ? offset : 0}`;
+    const template = (context as RuleContext & { template?: { templateStartOffset?: number } }).template;
+    const offset = template?.templateStartOffset;
+    return `${context.filePath}@${typeof offset === 'number' && Number.isFinite(offset) ? offset : 0}`;
 }
 
 function findAsyncExpression(nodeRaw: AstNode | null | undefined): AstNode | null {
@@ -27,11 +28,16 @@ function stringify(node: AstNode | null | undefined, depth = 0): string | null {
 
     if (node.type === 'Identifier') return node.name as string;
     if (node.type === 'ThisExpression') return 'this';
-    if (node.type === 'Literal') return node.value === null ? 'null' : String(node.value);
+    if (node.type === 'Literal') {
+        const v = node.value;
+        if (v === null) return 'null';
+        if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint') return String(v);
+        return null;
+    }
 
     if (node.type === 'CallExpression') {
         const callee = stringify(node.callee, depth + 1);
-        const args = (Array.isArray(node.arguments) ? node.arguments : []).map(a => stringify(a as AstNode, depth + 1) ?? '?');
+        const args = (Array.isArray(node.arguments) ? node.arguments : []).map(a => stringify(a, depth + 1) ?? '?');
         return `${callee}(${args.join(',')})`;
     }
 
@@ -65,14 +71,14 @@ function stringify(node: AstNode | null | undefined, depth = 0): string | null {
 
     // Array expression: [a, b, c]
     if (node.type === 'ArrayExpression') {
-        const elements = (node.elements ?? []).map((e: any) => stringify(e as AstNode, depth + 1) ?? '?');
+        const elements = (node.elements ?? []).map((e) => stringify(e, depth + 1) ?? '?');
         return `[${elements.join(',')}]`;
     }
 
     // Object expression: {a: b}
     if (node.type === 'ObjectExpression') {
-        const props = (node.properties ?? []).map((p: any) => {
-            const key = p.key ? stringify(p.key as AstNode, depth + 1) : '?';
+        const props = (node.properties ?? []).map((p) => {
+            const key = p.key ? stringify(p.key, depth + 1) : '?';
             const val = p.value ? stringify(p.value as AstNode, depth + 1) : '?';
             return `${key}:${val}`;
         });

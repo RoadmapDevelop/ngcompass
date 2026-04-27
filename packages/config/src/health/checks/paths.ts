@@ -28,6 +28,10 @@ export function validatePaths(
     basePath: (string | number)[] = []
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
+    const resolveFromCwd = (targetPath: string): string =>
+        context.path.isAbsolute(targetPath)
+            ? targetPath
+            : context.path.resolve(context.cwd ?? process.cwd(), targetPath);
 
     /**
      * Integrity: Output Path
@@ -54,7 +58,7 @@ export function validatePaths(
          * Filesystem: Existence and Permissions
          * Verifies that the parent directory exists and the process has write access.
          */
-        const dir = context.path.dirname(outputPath);
+        const dir = context.path.dirname(resolveFromCwd(outputPath));
         if (!context.fs.existsSync(dir)) {
             issues.push({ ...MESSAGES.OUTPUT_PATH_NOT_FOUND(dir), path });
         } else {
@@ -82,7 +86,7 @@ export function validatePaths(
                 issues.push({ ...MESSAGES.CACHE_IN_NODE_MODULES(location), path });
             }
 
-            const cacheDir = context.path.dirname(location);
+            const cacheDir = context.path.dirname(resolveFromCwd(location));
             if (!context.fs.existsSync(cacheDir)) {
                 issues.push({ ...MESSAGES.CACHE_PARENT_NOT_FOUND(cacheDir), path });
             }
@@ -96,16 +100,19 @@ export function validatePaths(
     if (config.parserOptions) {
         const { project, tsconfigRootDir } = config.parserOptions;
 
-        if (project && !context.fs.existsSync(project)) {
+        const resolvedProject = project ? resolveFromCwd(project) : undefined;
+        const resolvedTsconfigRootDir = tsconfigRootDir ? resolveFromCwd(tsconfigRootDir) : undefined;
+
+        if (resolvedProject && !context.fs.existsSync(resolvedProject)) {
             issues.push({
-                ...MESSAGES.TSCONFIG_PROJECT_NOT_FOUND(project),
+                ...MESSAGES.TSCONFIG_PROJECT_NOT_FOUND(project!),
                 path: [...basePath, "parserOptions", "project"]
             });
         }
 
-        if (tsconfigRootDir && !context.fs.existsSync(tsconfigRootDir)) {
+        if (resolvedTsconfigRootDir && !context.fs.existsSync(resolvedTsconfigRootDir)) {
             issues.push({
-                ...MESSAGES.TSCONFIG_ROOT_NOT_FOUND(tsconfigRootDir),
+                ...MESSAGES.TSCONFIG_ROOT_NOT_FOUND(tsconfigRootDir!),
                 path: [...basePath, "parserOptions", "tsconfigRootDir"]
             });
         }

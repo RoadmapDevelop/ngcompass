@@ -27,7 +27,7 @@ export function validateProfiles(
         return { issues };
     }
 
-    const profiles = config.profiles as Record<string, any>;
+    const profiles = config.profiles;
     const profileNames = Object.keys(profiles);
 
     /**
@@ -59,20 +59,6 @@ export function validateProfiles(
         const { issues: blockIssues } = validateConfigBlock(profile, context, ["profiles", profileName]);
         issues.push(...blockIssues);
 
-        /**
-         * Constraint: HTML Format vs AutoFix
-         * Prevents the use of auto-fix features when the output format is set to HTML,
-         * as these are typically mutually exclusive in CI/reporting workflows.
-         */
-        const isHtml = profile.outputFormat === "html";
-        const hasAutoFix = profile.autoFix || profile.autoFixOnSave;
-
-        if (isHtml && hasAutoFix) {
-            issues.push({
-                ...MESSAGES.PROFILE_HTML_OUTPUT_CI(profileName),
-                path: ["profiles", profileName, "outputFormat"]
-            });
-        }
     }
 
     /**
@@ -88,11 +74,11 @@ export function validateProfiles(
         }
 
         const profile = profiles[name];
-        const hasParent = profile && typeof profile === "object" && "extends" in profile;
+        const parent = profile && typeof profile === "object" && "extends" in profile
+            ? (profile as { extends?: unknown }).extends
+            : undefined;
 
-        if (hasParent) {
-            const parent = profile.extends;
-
+        if (typeof parent === "string") {
             if (chain.includes(parent)) {
                 issues.push({
                     ...MESSAGES.PROFILE_CIRCULAR_INHERITANCE([...chain, name, parent]),

@@ -32,13 +32,13 @@ function isEffectCall(node: AstNode): boolean {
 
 function hasExplicitLifecycleOwnership(node: AstNode): boolean {
     const args = Array.isArray(node.arguments) ? node.arguments : [];
-    const options = unwrapNode(args[1] as AstNode);
+    const options = unwrapNode(args[1]);
 
     if (!options || options.type !== 'ObjectExpression') return false;
 
     const properties = Array.isArray(options.properties) ? options.properties : [];
     for (const propNode of properties) {
-        const prop = unwrapNode(propNode as AstNode);
+        const prop = unwrapNode(propNode);
         if (prop?.type === 'Property') {
             const keyNode = unwrapNode(prop.key);
             const key = keyNode?.type === 'Identifier' ? (keyNode.name as string) : (getStaticPropertyName(keyNode) || '');

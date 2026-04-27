@@ -5,7 +5,7 @@
  * Indexes enable efficient incremental execution strategies.
  */
 
-import type { ExecutionPlan, ExecutionIndexes, ExecutionStats, FileType, Task } from "./types.js";
+import type { ExecutionPlan, ExecutionIndexes, ExecutionStats, FileType, Task, RuleTask } from "./types.js";
 import { debug, RuleSeverity } from "@ngcompass/common";
 
 /**
@@ -78,14 +78,14 @@ const buildFilesNeedingAst = (
  * @param astType - AST type
  * @returns true if task requires the AST type
  */
-const needsAst = (task: any, astType: "typescript" | "html" | "css"): boolean => {
+const needsAst = (task: RuleTask, astType: "typescript" | "html" | "css"): boolean => {
     switch (astType) {
         case "typescript":
             return Boolean(task.inputs.typescript.needsAst);
         case "html":
             return Boolean(task.inputs.template?.needsAst ?? false);
         case "css":
-            return Boolean(task.inputs.styles?.some((s: any) => s.needsAst) ?? false);
+            return Boolean(task.inputs.styles?.some((s) => s.needsAst) ?? false);
     }
 };
 

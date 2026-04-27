@@ -29,11 +29,6 @@ const CacheOptionsSchema = z.object({
     ttl: z.number().optional()
 });
 
-const WatchOptionsSchema = z.object({
-    debounce: z.number().optional(),
-    ignored: z.array(z.string()).optional()
-});
-
 const ParserOptionsSchema = z.object({
     project: z.string().optional(),
     tsconfigRootDir: z.string().optional(),
@@ -65,12 +60,6 @@ const BaseAnalyzerConfigSchema = z.object({
     cache: z.union([z.boolean(), CacheOptionsSchema]).optional(),
     cacheLocation: z.string().optional(),
 
-    watch: z.boolean().default(false),
-    watchOptions: WatchOptionsSchema.optional(),
-
-    autoFix: z.boolean().default(false),
-    autoFixOnSave: z.boolean().default(false),
-
     /**
      * Reporting & Failure Thresholds
      */
@@ -78,8 +67,6 @@ const BaseAnalyzerConfigSchema = z.object({
     outputPath: z.string().optional(),
     failOnSeverity: SeveritySchema.default(DEFAULT_CONFIG.failOnSeverity),
     maxWarnings: z.number().default(DEFAULT_CONFIG.maxWarnings),
-    reportUnusedDisableDirectives: z.boolean().default(DEFAULT_CONFIG.reportUnusedDisableDirectives),
-    failOnInfrastructureError: z.boolean().default(DEFAULT_CONFIG.failOnInfrastructureError),
     ignorePatterns: z.array(z.string()).optional(),
 
     /**
@@ -99,7 +86,7 @@ const BaseAnalyzerConfigSchema = z.object({
  * Derived from the Zod schemas to ensure type sync.
  */
 export type AnalyzerConfig = z.infer<typeof BaseAnalyzerConfigSchema> & {
-    profiles?: Record<string, any>;
+    profiles?: Record<string, unknown>;
 };
 
 /**
@@ -148,7 +135,6 @@ export const AnalyzerConfigSchema: z.ZodType<AnalyzerConfig> = BaseAnalyzerConfi
         cache,
         rules: data.rules ?? {},
         overrides: data.overrides ?? [],
-        ignorePatterns: data.ignorePatterns ?? [],
-        watchOptions: data.watchOptions ?? {}
+        ignorePatterns: data.ignorePatterns ?? []
     };
 });

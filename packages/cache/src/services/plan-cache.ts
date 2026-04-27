@@ -1,8 +1,8 @@
 import { AsyncDriver } from '../drivers/types.js';
 
 export interface PlanCache {
-    get: (key: string) => Promise<any>;
-    set: (key: string, plan: any) => Promise<void>;
+    get: (key: string) => Promise<unknown>;
+    set: (key: string, plan: unknown) => Promise<void>;
     delete: (key: string) => Promise<void>;
 }
 
@@ -12,7 +12,7 @@ export interface PlanCache {
  * Strategy: Persistent Disk Storage.
  * Key: Combined hash of files + rules.
  */
-export const createPlanCache = (driver: AsyncDriver<any>): PlanCache => {
+export const createPlanCache = (driver: AsyncDriver<unknown>): PlanCache => {
     return {
         get: (key) => driver.get(key),
         set: (key, plan) => driver.set(key, plan),

@@ -1,0 +1,49 @@
+{
+    "name": "@ngcompass/planner",
+    "version": "0.0.1",
+    "description": "Execution planning and incremental analysis for ngcompass",
+    "sideEffects": false,
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
+        "test": "vitest run --passWithNoTests",
+        "test:watch": "vitest --passWithNoTests",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@ngcompass/common": "workspace:*",
+        "@ngcompass/cache": "workspace:*",
+        "@ngcompass/scanner": "workspace:*",
+        "minimatch": "^10.2.4"
+    },
+    "peerDependencies": {
+        "typescript": "catalog:"
+    },
+    "devDependencies": {
+        "@types/node": "^25.1.0"
+    },
+    "keywords": [
+        "angular",
+        "planner",
+        "incremental",
+        "ngcompass"
+    ],
+    "author": "ngcompass",
+    "license": "MIT"
+}

@@ -118,12 +118,13 @@ export const loadPlugins = async (
  */
 function isValidPlugin(value: unknown): value is RulePlugin {
     if (!value || typeof value !== 'object') return false;
-    const p = value as Record<string, any>;
+    const p = value as Record<string, unknown>;
+    const handler = p.handler as { handle?: unknown } | undefined;
 
     return (
         typeof p.name === 'string' &&
         p.name.length > 0 &&
-        p.handler?.handle instanceof Function
+        handler?.handle instanceof Function
     );
 }
 

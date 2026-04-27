@@ -1,6 +1,7 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [main, develop]
   pull_request:
@@ -12,10 +13,11 @@ env:
 
 jobs:
   ci:
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        node: [18.x, 20.x, 22.x]
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        node: [20.19.x, 22.x]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -30,15 +32,114 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint, Typecheck, Test, Build (via Turbo)
-        run: pnpm exec turbo lint typecheck test build --concurrency=4
+      - name: Typecheck, Test, Build (via Turbo)
+        run: pnpm exec turbo typecheck test build --concurrency=4
+
+      - name: CLI smoke test
+        run: node packages/cli/dist/cli.js --help
+
+      - name: Pack & install smoke test
+        shell: bash
+        run: |
+          PACKS_DIR="$RUNNER_TEMP/packs"
+          SMOKE_DIR="$RUNNER_TEMP/ngcompass-smoke"
+          mkdir -p "$PACKS_DIR" "$SMOKE_DIR"
+
+          # Pack every workspace package so npm can resolve inter-package deps locally
+          for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
+                     packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
+            (cd "$pkg" && pnpm pack --pack-destination "$PACKS_DIR")
+          done
+
+          # Install all tarballs together — npm resolves workspace deps from this set
+          cd "$SMOKE_DIR"
+          npm install --no-save "$PACKS_DIR"/*.tgz
+
+          # Persist the bin dir across steps via GITHUB_PATH
+          echo "$SMOKE_DIR/node_modules/.bin" >> "$GITHUB_PATH"
+
+      - name: Verify ngcompass CLI commands
+        shell: bash
+        run: |
+          echo "--- which ngcompass ---"
+          which ngcompass
+
+          echo "--- ngcompass --help ---"
+          ngcompass --help
+
+          echo "--- ngcompass --version ---"
+          ngcompass --version
+
+          echo "--- ngcompass rules ---"
+          ngcompass rules
+
+          echo "--- ngcompass cache info ---"
+          ngcompass cache info
+
+      - name: Verify shebang preserved in dist
+        shell: bash
+        run: |
+          SHEBANG=$(head -1 packages/cli/dist/cli.js)
+          echo "First line: $SHEBANG"
+          echo "$SHEBANG" | grep -q '^#!' || (echo "ERROR: shebang missing from dist/cli.js" && exit 1)
+
+      - name: Verify NO_COLOR disables ANSI output
+        shell: bash
+        run: |
+          OUTPUT=$(NO_COLOR=1 ngcompass --help)
+          if echo "$OUTPUT" | grep -qP '\x1b\['; then
+            echo "ERROR: ANSI escape codes present despite NO_COLOR=1"
+            exit 1
+          fi
+          echo "OK: no ANSI codes detected"
+
+      - name: Verify ngcompass init in a fresh directory
+        shell: bash
+        run: |
+          INIT_DIR="$RUNNER_TEMP/ngcompass-init-test"
+          mkdir -p "$INIT_DIR"
+          ngcompass init --cwd "$INIT_DIR"
+          # Confirm a config file was created
+          ls "$INIT_DIR"/.ngcompassrc* "$INIT_DIR"/ngcompass.config.* 2>/dev/null \
+            || ls "$INIT_DIR"/*.ngcompass* 2>/dev/null \
+            || (echo "ERROR: no config file created by ngcompass init" && exit 1)
+          echo "OK: config file created"
+
+      - name: Verify exit codes
+        shell: bash
+        run: |
+          # Known-good command must exit 0
+          ngcompass --version
+          [ $? -eq 0 ] || (echo "ERROR: --version exited non-zero" && exit 1)
+
+          # Unknown command must exit non-zero
+          ngcompass __unknown_command__ 2>/dev/null || true
+          CODE=$?
+          [ $CODE -ne 0 ] || (echo "ERROR: unknown command exited 0" && exit 1)
+          echo "OK: exit codes correct"
+
+      - name: Publish dry-run (catch file leakage before release)
+        shell: bash
+        run: |
+          for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
+                     packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
+            echo "=== $pkg ==="
+            (cd "$pkg" && npm publish --dry-run 2>&1)
+          done
+
+      - name: Coverage gate
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
+        run: |
+          pnpm test:coverage
+          node scripts/check-coverage.js
 
       - name: Security audit
         # --prod scopes audit to runtime dependencies only (devDep vulns don't ship to users)
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         run: pnpm audit --audit-level high --prod
 
       - name: Upload coverage
-        if: matrix.node == '20.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         uses: codecov/codecov-action@v4
         with:
           directory: .

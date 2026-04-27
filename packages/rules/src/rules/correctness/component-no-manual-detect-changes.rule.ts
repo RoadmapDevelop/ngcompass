@@ -34,7 +34,7 @@ function isInjectChangeDetectorRefCall(node: AstNode): boolean {
     if (callee?.type !== 'Identifier' || callee.name !== 'inject') return false;
 
     const [firstArg] = node.arguments ?? [];
-    const token = unwrapNode(firstArg as AstNode);
+    const token = unwrapNode(firstArg);
 
     return token?.type === 'Identifier' && token.name === 'ChangeDetectorRef';
 }
@@ -167,7 +167,7 @@ function findManualChangeDetectionFailures(
     const stack: AstNode[] = [...getClassBody(classNode)];
 
     while (stack.length > 0) {
-        const node = unwrapNode(stack.pop()!);
+        const node = unwrapNode(stack.pop());
         if (!node) continue;
 
         const methodName = getDiscouragedMethodName(node);

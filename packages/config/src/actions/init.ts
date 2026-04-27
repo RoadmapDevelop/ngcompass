@@ -18,25 +18,11 @@ export interface InitOptions {
 const TEMPLATE = `import type { AnalyzerConfig } from '@ngcompass/common';
 
 /**
- * @ngcompass Configuration - Production Ready
- *
- * Complete configuration template with all available options.
- * Uncomment and adjust settings as needed for your project.
- *
- * Documentation: https://ngcompass.dev/docs/config
+ * Minimal starter configuration for ngcompass.
+ * Documentation: https://github.com/SigoudisEftimis/ngcompass_#readme
  */
 const config: AnalyzerConfig = {
-    // ==========================================================================
-    // EXTENDS (Presets)
-    // ==========================================================================
-
-    // Extend from shared configurations or presets
     extends: 'ngcompass:recommended',
-    // extends: ['ngcompass:recommended', './custom-rules.config.ts'],
-
-    // ==========================================================================
-    // FILE PATTERNS
-    // ==========================================================================
 
     include: [
         'src/**/*.ts',
@@ -53,135 +39,10 @@ const config: AnalyzerConfig = {
         '**/*.test.ts'
     ],
 
-    // ==========================================================================
-    // ANALYSIS SETTINGS
-    // ==========================================================================
-
-    failOnSeverity: 'error',
-    maxWorkers: 4,
-    maxWarnings: 10,
-
-    // ==========================================================================
-    // WATCH MODE
-    // ==========================================================================
-
-    watch: false,
-    watchOptions: {
-        debounce: 300,
-        ignored: ['node_modules', 'dist', '.git']
-    },
-
-    // ==========================================================================
-    // AUTO-FIX
-    // ==========================================================================
-
-    autoFix: false,
-    autoFixOnSave: false,
-
-    // ==========================================================================
-    // OUTPUT
-    // ==========================================================================
-
-    outputFormat: 'text',
-    // outputPath: './reports/ngcompass-report.json',
-    reportUnusedDisableDirectives: true,
-
-    // ==========================================================================
-    // IGNORE PATTERNS
-    // ==========================================================================
-
-    ignorePatterns: [
-        '**/*.min.js',
-        '**/*.generated.ts'
-    ],
-
-    // ==========================================================================
-    // CACHE
-    // ==========================================================================
-
-    cache: {
-        enabled: true,
-        location: 'node_modules/.cache/ngcompass',
-        strategy: 'local',
-        ttl: 86400000 // 24 hours
-    },
-
-    // ==========================================================================
-    // PARSER OPTIONS
-    // ==========================================================================
-
-    parserOptions: {
-        // project: './tsconfig.json',
-        // tsconfigRootDir: '.',
-        sourceType: 'module',
-        ecmaVersion: 2022
-    },
-
-    // ==========================================================================
-    // RULES
-    // ==========================================================================
-
-    rules: {
-        // Example rules with configurable prefixes:
-        'component-selector': { severity: 'warn', options: { prefix: 'app', type: 'element' } },
-        'directive-selector': { severity: 'error', options: { prefix: 'app', type: 'attribute' } },
-        // 'no-input-rename': 'warn',
-        // 'no-output-rename': 'warn',
-        // 'use-lifecycle-interface': 'warn',
-        // 'prefer-on-push': 'warn',
-    },
-
-    // ==========================================================================
-    // PROFILES
-    // ==========================================================================
-
     profiles: {
-        // Development: fast feedback with watch mode
-        dev: {
-            watch: true,
-            failOnSeverity: 'error',
-            maxWorkers: 2,
-            maxWarnings: 50,
-            watchOptions: {
-                debounce: 200
-            },
-            cache: {
-                enabled: true,
-                strategy: 'memory'
-            }
-        },
-
-        // CI/CD: strict validation for pipelines
         ci: {
-            failOnSeverity: 'error',
-            maxWorkers: 8,
-            maxWarnings: 0,
             outputFormat: 'json',
-            outputPath: './reports/ngcompass-ci.json',
-            reportUnusedDisableDirectives: true,
-            cache: {
-                enabled: true,
-                strategy: 'local'
-            }
-        },
-
-        // Production: comprehensive checks before deployment
-        prod: {
-            failOnSeverity: 'warn',
-            maxWarnings: 0,
-            outputFormat: 'html',
-            outputPath: './reports/ngcompass-prod.html'
-        },
-
-        // Quick: fast checks with minimal rules
-        quick: {
-            failOnSeverity: 'error',
-            maxWorkers: 2,
-            maxWarnings: 100,
-            cache: {
-                enabled: true,
-                strategy: 'memory'
-            }
+            maxWarnings: 0
         }
     }
 };

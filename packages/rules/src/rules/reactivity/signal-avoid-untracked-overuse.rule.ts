@@ -16,14 +16,15 @@ function getNodeEnd(node: AstNode): number {
 
 function collectRanges(program: AstNode): ReadonlyArray<readonly [number, number]> {
     const ranges: [number, number][] = [];
-    const stack: AstNode[] = Array.isArray((program as any).body) ? [...(program as any).body] : [program];
+    const programBody = program.body;
+    const stack: AstNode[] = Array.isArray(programBody) ? [...programBody] : [program];
 
     while (stack.length) {
-        const node = unwrapNode(stack.pop()!);
+        const node = unwrapNode(stack.pop());
         if (!node) continue;
 
         if (node.type === 'CallExpression' && RENDER_HOOKS.has(getCalleeName(node))) {
-            const callback = unwrapNode((node.arguments as any)?.[0]);
+            const callback = unwrapNode(node.arguments?.[0]);
             if (callback) {
                 const start = getNodeStart(callback);
                 const end = getNodeEnd(callback);
@@ -39,7 +40,7 @@ function getRanges(context: RuleContext): ReadonlyArray<readonly [number, number
     let ranges = rangeCache.get(context.filePath);
     if (ranges !== undefined) return ranges;
 
-    const program = (context as any).program;
+    const program = (context as RuleContext & { program?: AstNode }).program;
     ranges = program ? collectRanges(program) : [];
     if (rangeCache.size >= CACHE_LIMIT) rangeCache.clear();
     rangeCache.set(context.filePath, ranges);
@@ -47,7 +48,7 @@ function getRanges(context: RuleContext): ReadonlyArray<readonly [number, number
 }
 
 function isInsideHook(node: AstNode, context: RuleContext): boolean {
-    const text = (context as any).sourceText ?? context.fileContent;
+    const text = (context as RuleContext & { sourceText?: string }).sourceText ?? context.fileContent;
     if (typeof text === 'string' && !RENDER_HOOK_PATTERN.test(text)) return false;
 
     let parent = node.parent;

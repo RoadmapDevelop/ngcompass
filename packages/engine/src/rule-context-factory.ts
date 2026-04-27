@@ -128,6 +128,7 @@ export class RuleContextFactory {
             try {
                 publicMembers = extractPublicMembers(tsSourceFile);
             } catch {
+                // Best-effort: skip when extraction fails (e.g., malformed AST).
             }
         }
 
@@ -143,6 +144,7 @@ export class RuleContextFactory {
             try {
                 effectiveTemplate = await this.context.getTemplate(templatePath);
             } catch {
+                // Best-effort: external template missing or unreadable.
             }
         }
 
@@ -151,6 +153,7 @@ export class RuleContextFactory {
             try {
                 templateReferences = extractTemplateReferences(effectiveTemplate);
             } catch {
+                // Best-effort: skip when reference extraction fails.
             }
         }
 
@@ -288,7 +291,7 @@ function extractTemplateReferences(templateAst: TemplateAst): ReadonlySet<string
         if (typeof n['value'] === 'string' && n['value']) {
             INTERPOLATION_RE.lastIndex = 0;
             let m: RegExpExecArray | null;
-            while ((m = INTERPOLATION_RE.exec(n['value'] as string)) !== null) {
+            while ((m = INTERPOLATION_RE.exec(n['value'])) !== null) {
                 extractIdentifiersFromExprString(m[1], refs);
             }
         }

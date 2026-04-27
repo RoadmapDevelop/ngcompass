@@ -52,7 +52,7 @@ export interface VisitorEntry {
     /** Rule name (for failure collection and timing) */
     readonly ruleName: string;
     /** Converts raw Oxc node → typed stream node (or null if not applicable) */
-    readonly filter: (rawNode: any) => any | null;
+    readonly filter: (rawNode: any) => unknown;
     /** The rule handler's handle function (pre-bound) */
     readonly handle: (streamNode: any, ctx: RuleContext) => RuleFailure | RuleFailure[] | null;
 }
@@ -76,7 +76,7 @@ export type VisitorMap = ReadonlyMap<string, ReadonlyArray<VisitorEntry>>;
  */
 export function buildVisitorMap(
     handlers: ReadonlyArray<RuleHandler<any>>,
-    streamFilters: Partial<Record<StreamType, (rawNode: any) => any | null>>,
+    streamFilters: Partial<Record<StreamType, (rawNode: any) => unknown>>,
 ): VisitorMap {
     const mutable = new Map<string, VisitorEntry[]>();
 

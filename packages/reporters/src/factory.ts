@@ -28,7 +28,8 @@ export function getReporter(
         case 'console':
             return new ConsoleReporter(undefined, options);
         case 'html':
-            return new HtmlReporter(options?.outputPath);
+        case 'ui':
+            return new HtmlReporter(options?.outputPath, undefined, true);
         default: {
             // TypeScript narrows `format` to `never` here if `ReporterFormat` is exhaustive.
             // The cast exists so we can emit a clear runtime message if called from JS or

@@ -9,19 +9,19 @@ const BROWSER_GLOBALS = new Set(['document', 'window', 'localStorage', 'sessionS
 function detectGuardType(node: AstNode, browserGuardVars: Set<string>): 'browser' | 'server' | null {
     const stack = [node];
     while (stack.length) {
-        const n = unwrapNode(stack.pop()!);
+        const n = unwrapNode(stack.pop());
         if (!n) continue;
 
         // Direct isPlatformBrowser() call
-        if (n.type === 'CallExpression' && n.callee && isCalleeNamed(n.callee as AstNode, 'isPlatformBrowser')) return 'browser';
+        if (n.type === 'CallExpression' && n.callee && isCalleeNamed(n.callee, 'isPlatformBrowser')) return 'browser';
 
         // Direct isPlatformServer() call
-        if (n.type === 'CallExpression' && n.callee && isCalleeNamed(n.callee as AstNode, 'isPlatformServer')) return 'server';
+        if (n.type === 'CallExpression' && n.callee && isCalleeNamed(n.callee, 'isPlatformServer')) return 'server';
 
         // Negated !isPlatformServer() === browser guard
         if (n.type === 'UnaryExpression' && n.operator === '!' && n.argument) {
             const arg = unwrapNode(n.argument);
-            if (arg?.type === 'CallExpression' && arg.callee && isCalleeNamed(arg.callee as AstNode, 'isPlatformServer')) return 'browser';
+            if (arg?.type === 'CallExpression' && arg.callee && isCalleeNamed(arg.callee, 'isPlatformServer')) return 'browser';
         }
 
         // Variable-based guard: if (isBrowser) where isBrowser = isPlatformBrowser(...)
@@ -36,23 +36,23 @@ function collectBrowserGuardVars(classBody: AstNode[]): Set<string> {
     const vars = new Set<string>();
     const stack: AstNode[] = [...classBody];
     while (stack.length) {
-        const n = unwrapNode(stack.pop()!);
+        const n = unwrapNode(stack.pop());
         if (!n) continue;
         if (n.type === 'VariableDeclarator' && n.init) {
             const init = unwrapNode(n.init as AstNode);
-            if (init?.type === 'CallExpression' && init.callee && isCalleeNamed(init.callee as AstNode, 'isPlatformBrowser')) {
-                const id = (n as any).id ?? n.key;
-                if (id?.type === 'Identifier' && id.name) vars.add(id.name as string);
+            if (init?.type === 'CallExpression' && init.callee && isCalleeNamed(init.callee, 'isPlatformBrowser')) {
+                const id = (n.id as AstNode | undefined) ?? n.key;
+                if (id?.type === 'Identifier' && id.name) vars.add(id.name);
             }
         }
         // Also detect property assignments: this.isBrowser = isPlatformBrowser(...)
         if (n.type === 'AssignmentExpression' && n.right) {
             const right = unwrapNode(n.right);
-            if (right?.type === 'CallExpression' && right.callee && isCalleeNamed(right.callee as AstNode, 'isPlatformBrowser')) {
+            if (right?.type === 'CallExpression' && right.callee && isCalleeNamed(right.callee, 'isPlatformBrowser')) {
                 const left = unwrapNode(n.left);
                 if (left && isMemberExpressionLike(left) && unwrapNode(left.object)?.type === 'ThisExpression') {
-                    const prop = (left.property as AstNode)?.name;
-                    if (prop) vars.add(prop as string);
+                    const prop = left.property?.name;
+                    if (typeof prop === 'string' && prop) vars.add(prop);
                 }
             }
         }
@@ -62,9 +62,9 @@ function collectBrowserGuardVars(classBody: AstNode[]): Set<string> {
 }
 
 function getRoot(node: AstNode): string | null {
-    let curr: any = node;
+    let curr: AstNode | null = node;
     while (curr && isMemberExpressionLike(curr)) curr = unwrapNode(curr.object);
-    if (curr?.type === 'Identifier') return curr.name || null; // Assuming 'callee' was a typo for 'curr' and 'BYPASS_METHODS' is not intended here.
+    if (curr?.type === 'Identifier') return (curr.name) ?? null;
     return null;
 }
 
@@ -80,21 +80,21 @@ export const noDocumentAccessRule = createAnyAngularClassRule(
         const stack: AstNode[] = [...classBody];
 
         while (stack.length) {
-            const n = unwrapNode(stack.pop()!);
+            const n = unwrapNode(stack.pop());
             if (!n) continue;
 
             if (n.type === 'IfStatement' && n.test) {
-                const test = unwrapNode(n.test as AstNode);
+                const test = unwrapNode(n.test);
                 if (test) {
                     const guardType = detectGuardType(test, browserGuardVars);
                     if (guardType === 'browser') {
                         // Consequent is browser-only — skip it; process alternate (server fallback)
-                        if (n.alternate) stack.push(n.alternate as AstNode);
+                        if (n.alternate) stack.push(n.alternate);
                         continue;
                     }
                     if (guardType === 'server') {
                         // Consequent is server code — check it; alternate is browser-only — skip it
-                        if (n.consequent) stack.push(n.consequent as AstNode);
+                        if (n.consequent) stack.push(n.consequent);
                         continue;
                     }
                 }
@@ -102,10 +102,10 @@ export const noDocumentAccessRule = createAnyAngularClassRule(
 
             // afterNextRender / afterRender callbacks are browser-only — skip the callback body
             if (n.type === 'CallExpression' && n.callee) {
-                const callee = unwrapNode(n.callee as AstNode);
+                const callee = unwrapNode(n.callee);
                 if (callee && (isCalleeNamed(callee, 'afterNextRender') || isCalleeNamed(callee, 'afterRender'))) {
                     // Skip callback (first arg), but process remaining args (options)
-                    const args = (n.arguments ?? []) as AstNode[];
+                    const args = n.arguments ?? [];
                     for (let i = 1; i < args.length; i++) stack.push(args[i]);
                     continue;
                 }
@@ -114,9 +114,9 @@ export const noDocumentAccessRule = createAnyAngularClassRule(
             if (isMemberExpressionLike(n)) {
                 const rootName = getRoot(n);
                 if (rootName && BROWSER_GLOBALS.has(rootName)) {
-                    let root: any = n;
+                    let root: AstNode | null = n;
                     while (root && isMemberExpressionLike(root)) root = unwrapNode(root.object);
-                    const start = getNodeStart(root as AstNode);
+                    const start = getNodeStart(root);
                     if (start !== undefined && !reported.has(start)) {
                         reported.add(start);
                         const { line, column } = context.locator.location(start);

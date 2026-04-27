@@ -8,8 +8,6 @@ import { ConfigBlock, ConfigBlockValidation, ValidationContext } from "../types.
 const LIMITS = {
     WORKERS_MIN: 1,
     WORKERS_CPU_MULTIPLIER: 2,
-    DEBOUNCE_MIN: 0,
-    DEBOUNCE_MAX: 5000,
     CACHE_TTL_MIN: 0
 } as const;
 
@@ -30,17 +28,6 @@ export function validateConfigBlock(
     const issues: ConfigIssue[] = [];
 
     /**
-     * Integrity Check: Mutual Exclusion
-     * Ensures that auto-fix settings do not conflict.
-     */
-    if (block.autoFix && block.autoFixOnSave) {
-        issues.push({
-            ...MESSAGES.MUTUALLY_EXCLUSIVE_AUTOFIX(),
-            path: [...basePath, "autoFix"]
-        });
-    }
-
-    /**
      * Resource Allocation: Worker Threads
      * Validates that the worker count is within reasonable hardware limits.
      */
@@ -58,21 +45,6 @@ export function validateConfigBlock(
                 ...MESSAGES.WORKERS_EXCESSIVE(block.maxWorkers, workerLimit),
                 path: [...basePath, "maxWorkers"]
             });
-        }
-    }
-
-    /**
-     * Performance: Watch Debounce
-     * Validates the debounce interval to prevent UI lag or excessive resource usage.
-     */
-    if (block.watchOptions?.debounce !== undefined) {
-        const { debounce } = block.watchOptions;
-        const path = [...basePath, "watchOptions", "debounce"];
-
-        if (debounce < LIMITS.DEBOUNCE_MIN) {
-            issues.push({ ...MESSAGES.NEGATIVE_DEBOUNCE(debounce), path });
-        } else if (debounce > LIMITS.DEBOUNCE_MAX) {
-            issues.push({ ...MESSAGES.DEBOUNCE_EXCESSIVE(debounce), path });
         }
     }
 

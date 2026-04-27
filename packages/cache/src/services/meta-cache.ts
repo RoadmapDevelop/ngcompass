@@ -25,8 +25,9 @@ export const createMetaCache = (driver: AsyncDriver<FileMeta>): MetaCache => {
         set: (filePath, meta) => driver.set(filePath, meta),
         delete: (filePath) => driver.delete(filePath),
         flush: async () => {
-            if ('flush' in driver && typeof (driver as any).flush === 'function') {
-                await (driver as any).flush();
+            const flushable = driver as { flush?: () => Promise<void> };
+            if (typeof flushable.flush === 'function') {
+                await flushable.flush();
             }
         }
     };

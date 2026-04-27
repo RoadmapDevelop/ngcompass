@@ -1,37 +1,25 @@
-/**
- * HTML Reporter for ngcompass.
- *
- * Generates a self-contained, single-file HTML report with:
- * - Angular-branded design (official red palette + dark theme)
- * - Summary dashboard (files, errors, warnings, duration)
- * - Violations grouped by file, sorted by severity then position
- * - Severity badges with colour coding
- * - Interactive search/filter
- * - Collapsible file sections
- * - Zero external dependencies (all CSS & JS inlined)
- *
- * Usage:
- *   ngcompass analyze --format html
- *   ngcompass analyze --format html --output report.html
- */
-
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { spawn } from 'node:child_process';
 import type { RuleResult, RuleFailure } from '@ngcompass/common';
 import type { Reporter, ResultSummary, ParseError } from '../types.js';
 import { isErrorSeverity, severityRank, compareByPosition } from '../severity-utils.js';
 import { processOutput, type ReporterOutput } from '../output.js';
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';
+const SEVERITY_ORDER = ['critical', 'high', 'error', 'moderate', 'warning', 'low', 'info', 'hint'] as const;
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+type SeverityCount = Partial<Record<string, number>>;
+
+type FileBucket = {
+    filePath: string;
+    relativePath: string;
+    failures: RuleFailure[];
+    errorCount: number;
+    warningCount: number;
+    dominantSeverity: string;
+};
 
 function escapeHtml(text: string): string {
     return text
@@ -42,849 +30,960 @@ function escapeHtml(text: string): string {
         .replace(/'/g, '&#39;');
 }
 
-function formatDuration(ms: number): string {
-    if (ms < 1000) return `${Math.round(ms)}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
+function relativeToRoot(filePath: string): string {
+    return path.relative(process.cwd(), filePath).replace(/\\/g, '/');
+}
+
+function openInBrowser(filePath: string): void {
+    const abs = path.resolve(filePath);
+    const [cmd, args] = process.platform === 'win32'
+        ? (['cmd', ['/c', 'start', '', abs]] as const)
+        : process.platform === 'darwin'
+            ? (['open', [abs]] as const)
+            : (['xdg-open', [abs]] as const);
+    spawn(cmd, args, { detached: true, stdio: 'ignore' }).unref();
+}
+
+function formatTimestamp(date: Date): string {
+    return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
 }
 
 function severityColorClass(severity: string): string {
     switch (severity) {
         case 'critical': return 'sev-critical';
-        case 'high':     return 'sev-high';
-        case 'error':    return 'sev-error';
+        case 'high': return 'sev-high';
+        case 'error': return 'sev-error';
         case 'moderate': return 'sev-moderate';
-        case 'warning':  return 'sev-warning';
-        case 'low':      return 'sev-low';
-        case 'info':     return 'sev-info';
-        case 'hint':     return 'sev-hint';
-        default:         return 'sev-info';
+        case 'warning': return 'sev-warning';
+        case 'low': return 'sev-low';
+        case 'info': return 'sev-info';
+        case 'hint': return 'sev-hint';
+        default: return 'sev-info';
     }
 }
 
-function groupFailuresByFile(
-    results: ReadonlyArray<RuleResult>,
-): Map<string, RuleFailure[]> {
-    const map = new Map<string, RuleFailure[]>();
+function humanSeverity(severity: string): string {
+    return severity.charAt(0).toUpperCase() + severity.slice(1);
+}
+
+function collectFailures(results: ReadonlyArray<RuleResult>): RuleFailure[] {
+    return results.flatMap((result) => result.failures);
+}
+
+function bucketFiles(results: ReadonlyArray<RuleResult>): FileBucket[] {
+    const grouped = new Map<string, RuleFailure[]>();
+
     for (const result of results) {
         for (const failure of result.failures) {
-            const existing = map.get(failure.filePath);
-            if (existing) {
-                existing.push(failure);
+            const list = grouped.get(failure.filePath);
+            if (list) {
+                list.push(failure);
             } else {
-                map.set(failure.filePath, [failure]);
+                grouped.set(failure.filePath, [failure]);
             }
         }
     }
-    return map;
+
+    return [...grouped.entries()]
+        .map(([filePath, failures]) => {
+            const sortedFailures = [...failures].sort((a, b) => {
+                const severityDiff = severityRank(a.severity) - severityRank(b.severity);
+                if (severityDiff !== 0) return severityDiff;
+                const ruleDiff = a.ruleName.localeCompare(b.ruleName);
+                if (ruleDiff !== 0) return ruleDiff;
+                return compareByPosition(a, b);
+            });
+
+            const errorCount = sortedFailures.filter((failure) => isErrorSeverity(failure.severity)).length;
+            const warningCount = sortedFailures.length - errorCount;
+            const dominantSeverity = sortedFailures[0]?.severity ?? 'info';
+
+            return {
+                filePath,
+                relativePath: relativeToRoot(filePath),
+                failures: sortedFailures,
+                errorCount,
+                warningCount,
+                dominantSeverity,
+            } satisfies FileBucket;
+        })
+        .sort((a, b) => {
+            if (b.errorCount !== a.errorCount) return b.errorCount - a.errorCount;
+            if (b.failures.length !== a.failures.length) return b.failures.length - a.failures.length;
+            return a.relativePath.localeCompare(b.relativePath);
+        });
 }
 
-function relativeToRoot(filePath: string): string {
-    return path.relative(process.cwd(), filePath).replace(/\\/g, '/');
+function summarizeSeverities(failures: ReadonlyArray<RuleFailure>): SeverityCount {
+    const counts: SeverityCount = {};
+    for (const failure of failures) {
+        counts[failure.severity] = (counts[failure.severity] ?? 0) + 1;
+    }
+    return counts;
 }
 
-// ---------------------------------------------------------------------------
-// HTML template builders
-// ---------------------------------------------------------------------------
+function summarizeRules(failures: ReadonlyArray<RuleFailure>): Array<[string, number]> {
+    const counts = new Map<string, number>();
+    for (const failure of failures) {
+        counts.set(failure.ruleName, (counts.get(failure.ruleName) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6);
+}
+
+function angularLogo(): string {
+    return `
+<svg viewBox="0 0 256 271" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M128 0L0 45.6l19.5 169.4L128 271l108.5-56L256 45.6 128 0Z" fill="#DD0031"/>
+  <path d="M128 0v30.1-.1V271l108.5-56L256 45.6 128 0Z" fill="#C3002F"/>
+  <path d="M128 31.3 48 210.3h29.8l16.1-40.4h68.1l16.1 40.4H208L128 31.3Zm23.6 113.9h-47.2L128 88.4l23.6 56.8Z" fill="#fff"/>
+</svg>`;
+}
+
+function iconSearch(): string {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 18a7.5 7.5 0 1 1 5.27-12.84A7.5 7.5 0 0 1 10.5 18Zm0-13a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11Zm11 15-4.35-4.35" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function iconChevron(): string {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function iconFile(): string {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H7a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7Zm0 0v5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function iconAlert(): string {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.3 3.86 1.82 18a2 2 0 0 0 1.72 3h16.92a2 2 0 0 0 1.72-3L13.7 3.86a2 2 0 0 0-3.4 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function iconWarning(): string {
+    return '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
 
 function buildStyles(): string {
     return `
 :root {
-  --ng-red:         #DD0031;
-  --ng-red-dark:    #C3002F;
-  --ng-red-deeper:  #9a0020;
-  --bg-page:        #0f1117;
-  --bg-card:        #1a1d27;
-  --bg-card-hover:  #1e2130;
-  --bg-header:      #12151f;
-  --bg-file:        #161924;
-  --bg-badge:       #252836;
-  --border:         #2a2d3e;
-  --border-light:   #353849;
-  --text-primary:   #e8eaf0;
-  --text-secondary: #8b8fa8;
-  --text-muted:     #555870;
-  --text-link:      #7c9fef;
-  --sev-critical-bg:  rgba(229, 57, 53, 0.15);
-  --sev-critical-fg:  #ff6b6b;
-  --sev-critical-bd:  rgba(229, 57, 53, 0.4);
-  --sev-high-bg:      rgba(239, 108, 0, 0.15);
-  --sev-high-fg:      #ffa040;
-  --sev-high-bd:      rgba(239, 108, 0, 0.4);
-  --sev-error-bg:     rgba(198, 40, 40, 0.15);
-  --sev-error-fg:     #ef9a9a;
-  --sev-error-bd:     rgba(198, 40, 40, 0.4);
-  --sev-moderate-bg:  rgba(249, 168, 37, 0.12);
-  --sev-moderate-fg:  #ffd54f;
-  --sev-moderate-bd:  rgba(249, 168, 37, 0.35);
-  --sev-warning-bg:   rgba(251, 192, 45, 0.12);
-  --sev-warning-fg:   #ffe082;
-  --sev-warning-bd:   rgba(251, 192, 45, 0.35);
-  --sev-low-bg:       rgba(85, 139, 47, 0.15);
-  --sev-low-fg:       #a5d6a7;
-  --sev-low-bd:       rgba(85, 139, 47, 0.4);
-  --sev-info-bg:      rgba(2, 119, 189, 0.15);
-  --sev-info-fg:      #90caf9;
-  --sev-info-bd:      rgba(2, 119, 189, 0.4);
-  --sev-hint-bg:      rgba(106, 27, 154, 0.15);
-  --sev-hint-fg:      #ce93d8;
-  --sev-hint-bd:      rgba(106, 27, 154, 0.4);
+  color-scheme: light;
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 3.8% 46.1%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 90%;
+  --ring: 240 5.9% 10%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --primary: 240 5.9% 10%;
+  --primary-foreground: 0 0% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --destructive-soft: 0 86% 97%;
+  --destructive-border: 0 93% 88%;
+  --warning: 38 92% 50%;
+  --warning-soft: 48 96% 96%;
+  --warning-border: 45 93% 85%;
+  --success: 142 71% 45%;
+  --success-soft: 138 76% 96%;
+
+  --radius: 0.5rem;
+  --radius-lg: 0.75rem;
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
 }
 
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 240 10% 5.5%;
+    --card-foreground: 0 0% 98%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
+    --border: 240 3.7% 15.9%;
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
+    --primary: 0 0% 98%;
+    --primary-foreground: 240 5.9% 10%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 0 0% 98%;
+    --destructive-soft: 0 63% 15%;
+    --destructive-border: 0 63% 25%;
+    --warning: 38 92% 55%;
+    --warning-soft: 38 50% 12%;
+    --warning-border: 38 50% 22%;
+    --success: 142 71% 50%;
+    --success-soft: 142 40% 12%;
+  }
+}
 
+* { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
-
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter',
-               'Helvetica Neue', Arial, sans-serif;
-  background: var(--bg-page);
-  color: var(--text-primary);
-  line-height: 1.6;
-  font-size: 14px;
+  margin: 0;
   min-height: 100vh;
+  font: 14px/1.5 var(--font-sans);
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+button, input { font: inherit; color: inherit; }
+a { color: inherit; }
+
+.page {
+  width: min(1120px, calc(100vw - 32px));
+  margin: 0 auto;
+  padding: 24px 0 48px;
 }
 
-/* ── Header ──────────────────────────────────────────────────── */
-.header {
-  background: linear-gradient(135deg, #0d1018 0%, #1a0510 50%, #0d1018 100%);
-  border-bottom: 1px solid var(--ng-red-dark);
-  padding: 0;
-  position: relative;
-  overflow: hidden;
-}
-.header::before {
-  content: '';
-  position: absolute;
-  top: -60px; right: -60px;
-  width: 300px; height: 300px;
-  background: radial-gradient(circle, rgba(221,0,49,0.12) 0%, transparent 70%);
-  pointer-events: none;
-}
-.header::after {
-  content: '';
-  position: absolute;
-  bottom: -80px; left: 10%;
-  width: 400px; height: 200px;
-  background: radial-gradient(ellipse, rgba(221,0,49,0.06) 0%, transparent 70%);
-  pointer-events: none;
-}
-.header-inner {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 28px 32px;
+.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  position: relative;
-  z-index: 1;
+  gap: 16px;
+  padding: 4px 0 24px;
 }
+
 .brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-.ng-logo {
-  width: 48px; height: 48px;
-  flex-shrink: 0;
-  filter: drop-shadow(0 0 12px rgba(221,0,49,0.6));
-}
-.brand-text h1 {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  color: #fff;
-  line-height: 1.2;
-}
-.brand-text h1 span { color: var(--ng-red); }
-.brand-text p {
-  font-size: 12px;
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  margin-top: 2px;
-}
-.header-meta {
-  text-align: right;
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.8;
-}
-.header-meta strong { color: var(--text-secondary); }
-
-/* ── Status banner ────────────────────────────────────────────── */
-.status-banner {
-  padding: 10px 32px;
-  max-width: 1200px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 600;
-}
-.status-banner.pass { color: #69f0ae; }
-.status-banner.fail { color: var(--sev-critical-fg); }
-.status-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-.status-banner.pass .status-dot { background: #69f0ae; box-shadow: 0 0 8px #69f0ae; }
-.status-banner.fail .status-dot { background: var(--ng-red); box-shadow: 0 0 8px var(--ng-red); }
-
-/* ── Main layout ─────────────────────────────────────────────── */
-.main {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 32px 32px 64px;
-}
-
-/* ── Summary cards ────────────────────────────────────────────── */
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px;
-  margin-bottom: 36px;
-}
-.stat-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 22px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color .2s, transform .15s;
-}
-.stat-card:hover {
-  border-color: var(--border-light);
-  transform: translateY(-1px);
-}
-.stat-card::before {
-  content: '';
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 3px;
-  border-radius: 12px 12px 0 0;
-}
-.stat-card.errors::before    { background: var(--ng-red); }
-.stat-card.warnings::before  { background: #ffa040; }
-.stat-card.files::before     { background: #7c9fef; }
-.stat-card.duration::before  { background: #69f0ae; }
-.stat-card.cached::before    { background: #ce93d8; }
-.stat-card.rules::before     { background: #80deea; }
-.stat-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 8px;
-}
-.stat-value {
-  font-size: 32px;
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: -1px;
-}
-.stat-card.errors .stat-value   { color: var(--sev-critical-fg); }
-.stat-card.warnings .stat-value { color: #ffa040; }
-.stat-card.files .stat-value    { color: var(--text-link); }
-.stat-card.duration .stat-value { color: #69f0ae; }
-.stat-card.cached .stat-value   { color: #ce93d8; }
-.stat-card.rules .stat-value    { color: #80deea; }
-.stat-sub {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 6px;
-}
-
-/* ── Section titles ───────────────────────────────────────────── */
-.section-title {
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.6px;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  margin-bottom: 16px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.section-title::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
-}
-
-/* ── Controls bar ─────────────────────────────────────────────── */
-.controls {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-.search-wrap {
-  position: relative;
-  flex: 1;
-  min-width: 200px;
-}
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--text-muted);
-  pointer-events: none;
-  font-size: 14px;
-}
-.search-input {
-  width: 100%;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 9px 12px 9px 36px;
-  color: var(--text-primary);
-  font-size: 13px;
-  outline: none;
-  transition: border-color .2s;
-}
-.search-input::placeholder { color: var(--text-muted); }
-.search-input:focus { border-color: var(--ng-red); }
-.filter-btn {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 14px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all .2s;
-  white-space: nowrap;
-}
-.filter-btn:hover, .filter-btn.active {
-  border-color: var(--ng-red);
-  color: #fff;
-  background: rgba(221,0,49,0.1);
-}
-.filter-btn.active { color: var(--ng-red); }
-.expand-btn {
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 14px;
-  color: var(--text-muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition: all .2s;
-}
-.expand-btn:hover { border-color: var(--border-light); color: var(--text-secondary); }
-
-/* ── File sections ────────────────────────────────────────────── */
-.file-section {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  margin-bottom: 12px;
-  overflow: hidden;
-  transition: border-color .2s;
-}
-.file-section:hover { border-color: var(--border-light); }
-.file-section.hidden { display: none; }
-
-.file-header {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 18px;
-  cursor: pointer;
-  user-select: none;
-  background: var(--bg-file);
-  transition: background .15s;
-}
-.file-header:hover { background: var(--bg-card-hover); }
-.file-chevron {
-  color: var(--text-muted);
-  font-size: 12px;
-  transition: transform .2s;
-  flex-shrink: 0;
-}
-.file-section.open .file-chevron { transform: rotate(90deg); }
-.file-path {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: 12.5px;
-  color: var(--text-link);
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.file-path .path-dir  { color: var(--text-muted); }
-.file-path .path-name { color: var(--text-link); font-weight: 600; }
-.file-counts {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.count-pill {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 20px;
-  line-height: 1.6;
-}
-.count-pill.err {
-  background: rgba(221,0,49,0.15);
-  color: var(--sev-critical-fg);
-  border: 1px solid rgba(221,0,49,0.3);
-}
-.count-pill.warn {
-  background: rgba(239,108,0,0.12);
-  color: #ffa040;
-  border: 1px solid rgba(239,108,0,0.3);
-}
-
-.file-body {
-  display: none;
-  border-top: 1px solid var(--border);
-}
-.file-section.open .file-body { display: block; }
-
-/* ── Violation rows ───────────────────────────────────────────── */
-.violation {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0 14px;
-  align-items: start;
-  padding: 13px 18px;
-  border-bottom: 1px solid var(--border);
-  transition: background .1s;
-}
-.violation:last-child { border-bottom: none; }
-.violation:hover { background: rgba(255,255,255,0.02); }
-
-.sev-badge {
   display: inline-flex;
   align-items: center;
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
-  padding: 3px 8px;
-  border-radius: 5px;
-  white-space: nowrap;
-  margin-top: 1px;
-  border: 1px solid transparent;
+  gap: 10px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  font-size: 14px;
 }
-.sev-critical { background: var(--sev-critical-bg); color: var(--sev-critical-fg); border-color: var(--sev-critical-bd); }
-.sev-high     { background: var(--sev-high-bg);     color: var(--sev-high-fg);     border-color: var(--sev-high-bd); }
-.sev-error    { background: var(--sev-error-bg);    color: var(--sev-error-fg);    border-color: var(--sev-error-bd); }
-.sev-moderate { background: var(--sev-moderate-bg); color: var(--sev-moderate-fg); border-color: var(--sev-moderate-bd); }
-.sev-warning  { background: var(--sev-warning-bg);  color: var(--sev-warning-fg);  border-color: var(--sev-warning-bd); }
-.sev-low      { background: var(--sev-low-bg);      color: var(--sev-low-fg);      border-color: var(--sev-low-bd); }
-.sev-info     { background: var(--sev-info-bg);     color: var(--sev-info-fg);     border-color: var(--sev-info-bd); }
-.sev-hint     { background: var(--sev-hint-bg);     color: var(--sev-hint-fg);     border-color: var(--sev-hint-bd); }
+.brand svg { width: 22px; height: 22px; flex: 0 0 auto; }
 
-.violation-body { min-width: 0; }
-.violation-msg {
-  font-size: 13.5px;
-  color: var(--text-primary);
-  line-height: 1.5;
-  word-break: break-word;
-}
-.violation-rule {
-  font-size: 11.5px;
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  color: var(--text-muted);
-  margin-top: 3px;
-}
-.violation-fix {
-  font-size: 12px;
-  color: #69f0ae;
-  margin-top: 5px;
-  padding: 5px 10px;
-  background: rgba(105, 240, 174, 0.06);
-  border-left: 2px solid rgba(105, 240, 174, 0.4);
-  border-radius: 0 4px 4px 0;
-}
-.violation-fix::before { content: '↳ '; opacity: 0.7; }
-
-.violation-loc {
-  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'Consolas', monospace;
-  font-size: 11px;
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-align: right;
-  margin-top: 2px;
-}
-
-/* ── Parse errors ─────────────────────────────────────────────── */
-.parse-error-item {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-card);
-  border-radius: 8px;
-  margin-bottom: 8px;
-}
-.parse-error-icon { color: var(--sev-critical-fg); font-size: 16px; flex-shrink: 0; margin-top: 1px; }
-.parse-error-path {
-  font-family: monospace;
-  font-size: 12px;
-  color: var(--text-link);
-  margin-bottom: 4px;
-}
-.parse-error-msg { font-size: 12px; color: var(--text-secondary); }
-
-/* ── No issues state ─────────────────────────────────────────── */
-.empty-state {
-  text-align: center;
-  padding: 64px 32px;
-  border: 1px dashed var(--border);
-  border-radius: 12px;
-  background: var(--bg-card);
-}
-.empty-icon { font-size: 48px; margin-bottom: 16px; }
-.empty-title { font-size: 20px; font-weight: 600; color: #69f0ae; margin-bottom: 8px; }
-.empty-sub { font-size: 13px; color: var(--text-muted); }
-
-/* ── No search results ────────────────────────────────────────── */
-.no-results {
-  display: none;
-  text-align: center;
-  padding: 40px;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-.no-results.visible { display: block; }
-
-/* ── Footer ──────────────────────────────────────────────────── */
-.footer {
-  border-top: 1px solid var(--border);
-  padding: 20px 32px;
-  max-width: 1200px;
-  margin: 0 auto;
+.topbar-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-muted);
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
 }
-.footer a { color: var(--ng-red); text-decoration: none; }
-.footer a:hover { text-decoration: underline; }
+.topbar-meta .sep {
+  width: 3px; height: 3px; border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.4);
+}
 
-/* ── Severity summary bar ─────────────────────────────────────── */
-.severity-bar {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+.hero {
+  display: grid;
+  gap: 20px;
   margin-bottom: 24px;
 }
-.sev-chip {
+
+.hero-copy { display: grid; gap: 8px; }
+
+.hero-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.025em;
+  color: hsl(var(--foreground));
+}
+
+.hero-subtitle {
+  color: hsl(var(--muted-foreground));
+  font-size: 15px;
+  max-width: 72ch;
+}
+
+.status-indicator {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 5px 12px;
-  border-radius: 20px;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
+  font-weight: 500;
   border: 1px solid transparent;
-  transition: all .15s;
+  width: fit-content;
 }
-.sev-chip:hover, .sev-chip.active { filter: brightness(1.2); }
-.sev-chip.inactive { opacity: 0.35; }
-.sev-chip .chip-count {
-  background: rgba(0,0,0,0.25);
-  border-radius: 10px;
-  padding: 0 6px;
-  font-size: 10px;
-  min-width: 18px;
-  text-align: center;
+.status-indicator.pass {
+  background: hsl(var(--success-soft));
+  color: hsl(var(--success));
+  border-color: hsl(var(--success) / 0.25);
 }
-.sev-chip.sev-critical { background: var(--sev-critical-bg); color: var(--sev-critical-fg); border-color: var(--sev-critical-bd); }
-.sev-chip.sev-high     { background: var(--sev-high-bg);     color: var(--sev-high-fg);     border-color: var(--sev-high-bd); }
-.sev-chip.sev-error    { background: var(--sev-error-bg);    color: var(--sev-error-fg);    border-color: var(--sev-error-bd); }
-.sev-chip.sev-moderate { background: var(--sev-moderate-bg); color: var(--sev-moderate-fg); border-color: var(--sev-moderate-bd); }
-.sev-chip.sev-warning  { background: var(--sev-warning-bg);  color: var(--sev-warning-fg);  border-color: var(--sev-warning-bd); }
-.sev-chip.sev-low      { background: var(--sev-low-bg);      color: var(--sev-low-fg);      border-color: var(--sev-low-bd); }
-.sev-chip.sev-info     { background: var(--sev-info-bg);     color: var(--sev-info-fg);     border-color: var(--sev-info-bd); }
-.sev-chip.sev-hint     { background: var(--sev-hint-bg);     color: var(--sev-hint-fg);     border-color: var(--sev-hint-bd); }
+.status-indicator.fail {
+  background: hsl(var(--destructive-soft));
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive-border));
+}
+.status-indicator::before {
+  content: '';
+  width: 6px; height: 6px; border-radius: 999px;
+  background: currentColor;
+}
 
-/* ── Progress bar ─────────────────────────────────────────────── */
-.rules-breakdown {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 20px 22px;
-  margin-bottom: 28px;
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
 }
-.rules-breakdown-title {
+
+.card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+}
+
+.stat-card {
+  padding: 16px 18px;
+  display: grid;
+  gap: 4px;
+}
+
+.stat-label {
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 24px;
+  line-height: 1.1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: hsl(var(--foreground));
+}
+.stat-value.destructive { color: hsl(var(--destructive)); }
+.stat-value.warning { color: hsl(var(--warning)); }
+
+.content { display: grid; gap: 20px; }
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 16px;
+}
+
+.card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px 0;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: hsl(var(--foreground));
+  letter-spacing: -0.01em;
+}
+
+.card-sub {
+  color: hsl(var(--muted-foreground));
   font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.6px;
-  color: var(--text-muted);
-  margin-bottom: 14px;
 }
-.rule-row {
+
+.card-body {
+  padding: 12px 18px 18px;
+}
+
+.severity-list { display: grid; gap: 2px; }
+
+.severity-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 8px;
-  font-size: 12px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
 }
-.rule-row:last-child { margin-bottom: 0; }
-.rule-name-col {
-  font-family: monospace;
-  color: var(--text-secondary);
-  width: 280px;
+.severity-row:hover { background: hsl(var(--muted) / 0.6); }
+
+.severity-row .left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  background: currentColor;
+}
+
+.severity-name {
+  font-weight: 500;
+  text-transform: capitalize;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+
+.severity-count {
+  color: hsl(var(--muted-foreground));
+  font-weight: 500;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rule-list { display: grid; gap: 12px; }
+
+.rule-item { display: grid; gap: 6px; }
+.rule-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.rule-name {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  flex-shrink: 0;
+  color: hsl(var(--foreground));
+  font: 12px/1.4 var(--font-mono);
 }
-.rule-bar-wrap {
-  flex: 1;
-  height: 6px;
-  background: var(--border);
-  border-radius: 3px;
+.rule-count {
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rule-bar {
+  height: 4px;
+  border-radius: 999px;
+  background: hsl(var(--muted));
   overflow: hidden;
 }
-.rule-bar-fill {
+.rule-bar > span {
+  display: block;
   height: 100%;
-  border-radius: 3px;
-  background: var(--ng-red);
-  transition: width .3s;
-}
-.rule-count-col {
-  width: 36px;
-  text-align: right;
-  color: var(--text-muted);
-  flex-shrink: 0;
+  border-radius: inherit;
+  background: hsl(var(--foreground) / 0.6);
 }
 
-/* ── Scrollbar ───────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-page); }
-::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+.toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
 
-/* ── Responsive ──────────────────────────────────────────────── */
-@media (max-width: 700px) {
-  .header-inner { flex-direction: column; align-items: flex-start; }
-  .header-meta { text-align: left; }
-  .main { padding: 20px 16px 40px; }
-  .summary-grid { grid-template-columns: repeat(2, 1fr); }
-  .violation { grid-template-columns: auto 1fr; }
-  .violation-loc { grid-column: 2; }
+.searchbox {
+  position: relative;
+  flex: 1 1 320px;
+  min-width: 0;
+}
+.searchbox svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 15px;
+  height: 15px;
+  transform: translateY(-50%);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+.searchbox input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 34px;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--input));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  outline: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.searchbox input::placeholder { color: hsl(var(--muted-foreground)); }
+.searchbox input:focus {
+  border-color: hsl(var(--ring));
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.15);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  height: 36px;
+  border-radius: var(--radius);
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn:hover {
+  background: hsl(var(--accent));
+}
+.btn.is-active {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+}
+.btn.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: hsl(var(--muted-foreground));
+}
+.btn.btn-ghost:hover {
+  background: hsl(var(--accent));
+  color: hsl(var(--foreground));
+}
+
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 0;
+}
+.section-title {
+  color: hsl(var(--foreground));
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.section-sub {
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+}
+
+.file-list { display: grid; gap: 8px; }
+
+.file-card {
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--card));
+  overflow: hidden;
+  transition: border-color 0.15s ease;
+}
+.file-card:hover { border-color: hsl(var(--border) / 1.4); }
+
+.file-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.file-header:hover { background: hsl(var(--muted) / 0.4); }
+
+.file-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.file-icon {
+  width: 16px;
+  height: 16px;
+  color: hsl(var(--muted-foreground));
+  flex: 0 0 auto;
+}
+.chevron {
+  width: 14px;
+  height: 14px;
+  color: hsl(var(--muted-foreground));
+  transition: transform 0.18s ease;
+  flex: 0 0 auto;
+}
+.file-card.is-open .chevron { transform: rotate(90deg); }
+
+.file-path {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: hsl(var(--foreground));
+}
+.file-sub {
+  color: hsl(var(--muted-foreground));
+  font: 12px/1.4 var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.badge svg { width: 12px; height: 12px; }
+.badge-secondary {
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+}
+.badge-destructive {
+  background: hsl(var(--destructive-soft));
+  color: hsl(var(--destructive));
+  border-color: hsl(var(--destructive-border));
+}
+.badge-warning {
+  background: hsl(var(--warning-soft));
+  color: hsl(var(--warning));
+  border-color: hsl(var(--warning-border));
+}
+
+.file-issues {
+  display: none;
+  border-top: 1px solid hsl(var(--border));
+}
+.file-card.is-open .file-issues { display: block; }
+
+.issue {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 16px;
+  border-top: 1px solid hsl(var(--border));
+}
+.issue:first-child { border-top: 0; }
+
+.issue-left {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+.issue-left svg { width: 12px; height: 12px; }
+.issue.is-error .issue-left {
+  background: hsl(var(--destructive-soft));
+  color: hsl(var(--destructive));
+}
+.issue.is-warning .issue-left {
+  background: hsl(var(--warning-soft));
+  color: hsl(var(--warning));
+}
+
+.issue-body {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.issue-message {
+  font-size: 13.5px;
+  color: hsl(var(--foreground));
+  line-height: 1.45;
+}
+.issue-meta {
+  color: hsl(var(--muted-foreground));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  font-size: 12px;
+  align-items: center;
+}
+.issue-rule {
+  font: 12px/1.4 var(--font-mono);
+  color: hsl(var(--muted-foreground));
+}
+.issue-meta .sep {
+  width: 3px; height: 3px; border-radius: 999px;
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+.issue-loc {
+  color: hsl(var(--muted-foreground));
+  font: 12px/1.4 var(--font-mono);
+  align-self: start;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.parse-list { display: grid; gap: 8px; }
+.parse-item {
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid hsl(var(--destructive-border));
+  background: hsl(var(--destructive-soft));
+}
+.parse-path {
+  font: 12px/1.4 var(--font-mono);
+  color: hsl(var(--destructive));
+  font-weight: 500;
+}
+.parse-message {
+  margin-top: 4px;
+  color: hsl(var(--foreground));
+  font-size: 13px;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  border: 1px dashed hsl(var(--border));
+  border-radius: var(--radius-lg);
+  color: hsl(var(--muted-foreground));
+  background: hsl(var(--card));
+}
+.empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  margin-bottom: 12px;
+}
+.empty-icon svg { width: 18px; height: 18px; }
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: hsl(var(--foreground));
+}
+.empty-sub {
+  margin-top: 4px;
+  color: hsl(var(--muted-foreground));
+  font-size: 13px;
+}
+
+.footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  color: hsl(var(--muted-foreground));
+  font-size: 12px;
+  padding: 24px 2px 0;
+  border-top: 1px solid hsl(var(--border));
+  margin-top: 32px;
+}
+
+.hidden { display: none !important; }
+
+.sev-critical { color: hsl(0 72% 51%); }
+.sev-high { color: hsl(20 90% 48%); }
+.sev-error { color: hsl(0 72% 51%); }
+.sev-moderate { color: hsl(38 92% 50%); }
+.sev-warning { color: hsl(45 93% 47%); }
+.sev-low { color: hsl(142 71% 45%); }
+.sev-info { color: hsl(217 91% 60%); }
+.sev-hint { color: hsl(262 83% 58%); }
+
+@media (prefers-color-scheme: dark) {
+  .sev-critical { color: hsl(0 84% 65%); }
+  .sev-high { color: hsl(24 94% 60%); }
+  .sev-error { color: hsl(0 84% 65%); }
+  .sev-moderate { color: hsl(38 92% 60%); }
+  .sev-warning { color: hsl(48 96% 65%); }
+  .sev-low { color: hsl(142 71% 55%); }
+  .sev-info { color: hsl(213 94% 68%); }
+  .sev-hint { color: hsl(262 83% 70%); }
+}
+
+@media (max-width: 1024px) {
+  .summary-strip { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .hero-title { font-size: 24px; }
+  .issue { grid-template-columns: auto minmax(0, 1fr); }
+  .issue-loc { grid-column: 2; margin-top: 0; }
+  .topbar { flex-direction: column; align-items: flex-start; }
+  .topbar-meta { justify-content: flex-start; }
 }
 `;
+}
+
+function buildIssueRow(failure: RuleFailure): string {
+    const severityClass = isErrorSeverity(failure.severity) ? 'is-error' : 'is-warning';
+    const icon = isErrorSeverity(failure.severity) ? iconAlert() : iconWarning();
+    const location = typeof failure.line === 'number'
+        ? `L${failure.line}${typeof failure.column === 'number' ? `:${failure.column}` : ''}`
+        : '—';
+
+    return `
+<div class="issue ${severityClass}" data-severity="${escapeHtml(failure.severity)}" data-search="${escapeHtml([
+            failure.ruleName,
+            failure.message,
+            failure.filePath,
+            failure.severity,
+        ].join(' ').toLowerCase())}">
+  <div class="issue-left">${icon}</div>
+  <div class="issue-body">
+    <div class="issue-message">${escapeHtml(failure.message)}</div>
+    <div class="issue-meta">
+      <span class="issue-rule">${escapeHtml(failure.ruleName)}</span>
+      <span class="sep"></span>
+      <span>${escapeHtml(humanSeverity(failure.severity))}</span>
+    </div>
+  </div>
+  <div class="issue-loc">${escapeHtml(location)}</div>
+</div>`;
+}
+
+function buildFileCard(bucket: FileBucket, index: number): string {
+    const fileName = bucket.relativePath.split('/').pop() ?? bucket.relativePath;
+    const issues = bucket.failures.map((failure) => buildIssueRow(failure)).join('\n');
+    const openClass = index < 3 ? ' is-open' : '';
+
+    return `
+<section class="file-card${openClass}" data-file-card data-search="${escapeHtml(bucket.relativePath.toLowerCase())}">
+  <button type="button" class="file-header" data-toggle>
+    <div class="file-main">
+      <span class="chevron">${iconChevron()}</span>
+      <span class="file-icon">${iconFile()}</span>
+      <span class="file-path">
+        <span class="file-name">${escapeHtml(fileName)}</span>
+        <span class="file-sub">${escapeHtml(bucket.relativePath)}</span>
+      </span>
+    </div>
+    <span class="file-meta">
+      ${bucket.errorCount > 0 ? `<span class="badge badge-error">${iconAlert()} ${bucket.errorCount} error${bucket.errorCount === 1 ? '' : 's'}</span>` : ''}
+      ${bucket.warningCount > 0 ? `<span class="badge badge-warning">${iconWarning()} ${bucket.warningCount} warning${bucket.warningCount === 1 ? '' : 's'}</span>` : ''}
+      <span class="badge badge-neutral">${bucket.failures.length} issue${bucket.failures.length === 1 ? '' : 's'}</span>
+    </span>
+  </button>
+  <div class="file-issues">
+    ${issues}
+  </div>
+</section>`;
 }
 
 function buildScript(): string {
     return `
-(function() {
-  // ── Expand / collapse file sections ─────────────────────────
-  document.querySelectorAll('.file-header').forEach(function(header) {
-    header.addEventListener('click', function() {
-      var section = header.closest('.file-section');
-      section.classList.toggle('open');
-    });
-  });
+(() => {
+  const root = document.documentElement;
+  const searchInput = document.getElementById('searchInput');
+  const expandAll = document.getElementById('expandAll');
+  const collapseAll = document.getElementById('collapseAll');
+  const filterButtons = Array.from(document.querySelectorAll('[data-filter]'));
+  const fileCards = Array.from(document.querySelectorAll('[data-file-card]'));
+  const noResults = document.getElementById('noResults');
 
-  // ── Expand all / Collapse all ───────────────────────────────
-  var expandAll = document.getElementById('expandAll');
-  var collapseAll = document.getElementById('collapseAll');
+  let severityFilter = 'all';
+
+  function setOpen(card, open) {
+    card.classList.toggle('is-open', open);
+  }
+
+  for (const card of fileCards) {
+    const toggle = card.querySelector('[data-toggle]');
+    if (!toggle) continue;
+    toggle.addEventListener('click', () => {
+      setOpen(card, !card.classList.contains('is-open'));
+    });
+  }
+
   if (expandAll) {
-    expandAll.addEventListener('click', function() {
-      document.querySelectorAll('.file-section').forEach(function(s) { s.classList.add('open'); });
+    expandAll.addEventListener('click', () => {
+      for (const card of fileCards) setOpen(card, true);
     });
   }
+
   if (collapseAll) {
-    collapseAll.addEventListener('click', function() {
-      document.querySelectorAll('.file-section').forEach(function(s) { s.classList.remove('open'); });
+    collapseAll.addEventListener('click', () => {
+      for (const card of fileCards) setOpen(card, false);
     });
   }
-
-  // ── Search filter ────────────────────────────────────────────
-  var searchInput = document.getElementById('searchInput');
-  var noResults   = document.getElementById('noResults');
-  if (searchInput) {
-    searchInput.addEventListener('input', function() {
-      applyFilters();
-    });
-  }
-
-  // ── Severity chip filter ─────────────────────────────────────
-  var activeFilters = new Set();
-  document.querySelectorAll('.sev-chip[data-sev]').forEach(function(chip) {
-    chip.addEventListener('click', function() {
-      var sev = chip.dataset.sev;
-      if (activeFilters.has(sev)) {
-        activeFilters.delete(sev);
-        chip.classList.remove('active');
-        chip.classList.add('inactive');
-      } else {
-        activeFilters.add(sev);
-        chip.classList.add('active');
-        chip.classList.remove('inactive');
-      }
-      if (activeFilters.size === 0) {
-        document.querySelectorAll('.sev-chip').forEach(function(c) { c.classList.remove('inactive'); });
-      }
-      applyFilters();
-    });
-  });
-
-  // ── Errors-only / Warnings-only quick filter ─────────────────
-  document.querySelectorAll('.filter-btn[data-filter]').forEach(function(btn) {
-    btn.addEventListener('click', function() {
-      var wasActive = btn.classList.contains('active');
-      document.querySelectorAll('.filter-btn[data-filter]').forEach(function(b) {
-        b.classList.remove('active');
-      });
-      activeFilters.clear();
-      document.querySelectorAll('.sev-chip').forEach(function(c) {
-        c.classList.remove('active', 'inactive');
-      });
-      if (!wasActive) {
-        btn.classList.add('active');
-        var filter = btn.dataset.filter;
-        if (filter === 'errors') {
-          ['critical','high','error'].forEach(function(s) { activeFilters.add(s); });
-        } else if (filter === 'warnings') {
-          ['moderate','warning','low','info','hint'].forEach(function(s) { activeFilters.add(s); });
-        }
-      }
-      applyFilters();
-    });
-  });
 
   function applyFilters() {
-    var query = searchInput ? searchInput.value.toLowerCase() : '';
-    var sections = document.querySelectorAll('.file-section[data-file]');
-    var visibleCount = 0;
+    const query = (searchInput && 'value' in searchInput ? searchInput.value : '').trim().toLowerCase();
+    let visibleCount = 0;
 
-    sections.forEach(function(section) {
-      var filePath  = (section.dataset.file || '').toLowerCase();
-      var matchSearch = !query || filePath.includes(query);
+    for (const card of fileCards) {
+      const issues = Array.from(card.querySelectorAll('.issue'));
+      let issueVisibleCount = 0;
 
-      var violations = section.querySelectorAll('.violation[data-sev]');
-      var anyVisible = false;
+      for (const issue of issues) {
+        const matchesQuery = !query || (issue.dataset.search || '').includes(query) || (card.dataset.search || '').includes(query);
+        const matchesSeverity = severityFilter === 'all'
+          || (severityFilter === 'errors' && issue.classList.contains('is-error'))
+          || (severityFilter === 'warnings' && issue.classList.contains('is-warning'));
 
-      violations.forEach(function(v) {
-        var sev = v.dataset.sev || '';
-        var msg = (v.dataset.msg || '').toLowerCase();
-        var rule = (v.dataset.rule || '').toLowerCase();
-        var matchSev    = activeFilters.size === 0 || activeFilters.has(sev);
-        var matchText   = !query || msg.includes(query) || rule.includes(query) || filePath.includes(query);
-        var show = matchSev && matchText;
-        v.style.display = show ? '' : 'none';
-        if (show) anyVisible = true;
-      });
+        const visible = matchesQuery && matchesSeverity;
+        issue.classList.toggle('hidden', !visible);
+        if (visible) issueVisibleCount += 1;
+      }
 
-      var show = matchSearch && anyVisible;
-      section.classList.toggle('hidden', !show);
-      if (show) visibleCount++;
-    });
+      card.classList.toggle('hidden', issueVisibleCount === 0);
+      if (issueVisibleCount > 0) visibleCount += 1;
+    }
 
     if (noResults) {
-      noResults.classList.toggle('visible', visibleCount === 0 && sections.length > 0);
+      noResults.classList.toggle('hidden', visibleCount !== 0);
     }
   }
 
-  // ── Open first N files by default ────────────────────────────
-  var firstFiles = document.querySelectorAll('.file-section');
-  var limit = Math.min(3, firstFiles.length);
-  for (var i = 0; i < limit; i++) { firstFiles[i].classList.add('open'); }
-})();
-`;
-}
-
-// ---------------------------------------------------------------------------
-// Angular SVG logo
-// ---------------------------------------------------------------------------
-
-function angularLogo(): string {
-    return `<svg class="ng-logo" viewBox="0 0 250 250" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-  <polygon fill="#DD0031" points="125,30 125,30 125,30 31.9,63.2 46.1,186.3 125,230 125,230 125,230 203.9,186.3 218.1,63.2"/>
-  <polygon fill="#C3002F" points="125,30 125,52.2 125,52.1 125,153.4 125,153.4 125,230 125,230 203.9,186.3 218.1,63.2"/>
-  <path fill="#FFFFFF" d="M125,52.1L66.8,182.6h0h21.7h0l11.7-29.2h49.4l11.7,29.2h0h21.7h0L125,52.1L125,52.1z M142,135.4H108l17-40.9L142,135.4z"/>
-</svg>`;
-}
-
-// ---------------------------------------------------------------------------
-// Per-file violation HTML builder
-// ---------------------------------------------------------------------------
-
-interface SeverityCount { [sev: string]: number }
-
-function buildFileSection(
-    filePath: string,
-    failures: RuleFailure[],
-    index: number,
-): string {
-    const rel = relativeToRoot(filePath);
-    const dirPart = rel.includes('/') ? rel.substring(0, rel.lastIndexOf('/') + 1) : '';
-    const namePart = rel.includes('/') ? rel.substring(rel.lastIndexOf('/') + 1) : rel;
-
-    // Sort by severity rank then position
-    const sorted = [...failures].sort((a, b) => {
-        const sr = severityRank(a.severity) - severityRank(b.severity);
-        if (sr !== 0) return sr;
-        return compareByPosition(a, b);
+  for (const button of filterButtons) {
+    button.addEventListener('click', () => {
+      const next = button.getAttribute('data-filter') || 'all';
+      severityFilter = severityFilter === next ? 'all' : next;
+      for (const candidate of filterButtons) {
+        candidate.classList.toggle('is-active', candidate.getAttribute('data-filter') === severityFilter);
+      }
+      applyFilters();
     });
+  }
 
-    const errCount  = sorted.filter(f => isErrorSeverity(f.severity)).length;
-    const warnCount = sorted.length - errCount;
+  if (searchInput) {
+    searchInput.addEventListener('input', applyFilters);
+  }
 
-    const countPills = [
-        errCount  > 0 ? `<span class="count-pill err">${errCount} error${errCount !== 1 ? 's' : ''}</span>` : '',
-        warnCount > 0 ? `<span class="count-pill warn">${warnCount} warning${warnCount !== 1 ? 's' : ''}</span>` : '',
-    ].filter(Boolean).join('');
-
-    const rows = sorted.map(f => {
-        const cls   = severityColorClass(f.severity);
-        const fix   = f.fix ? `<div class="violation-fix">${escapeHtml(f.fix)}</div>` : '';
-        const loc   = `${f.line}:${f.column}`;
-        const msg   = escapeHtml(f.message.replace(/\.$/, ''));
-        const rule  = escapeHtml(f.ruleName);
-        return `<div class="violation" data-sev="${escapeHtml(f.severity)}" data-msg="${msg.toLowerCase()}" data-rule="${rule.toLowerCase()}">
-  <span class="sev-badge ${cls}">${escapeHtml(f.severity)}</span>
-  <div class="violation-body">
-    <div class="violation-msg">${msg}</div>
-    <div class="violation-rule">${rule}</div>
-    ${fix}
-  </div>
-  <div class="violation-loc">${escapeHtml(loc)}</div>
-</div>`;
-    }).join('\n');
-
-    return `<div class="file-section" data-file="${escapeHtml(rel.toLowerCase())}" id="file-${index}">
-  <div class="file-header">
-    <span class="file-chevron">▶</span>
-    <span class="file-path">
-      <span class="path-dir">${escapeHtml(dirPart)}</span><span class="path-name">${escapeHtml(namePart)}</span>
-    </span>
-    <span class="file-counts">${countPills}</span>
-  </div>
-  <div class="file-body">
-    ${rows}
-  </div>
-</div>`;
+  applyFilters();
+})();`;
 }
-
-// ---------------------------------------------------------------------------
-// Full HTML document builder
-// ---------------------------------------------------------------------------
 
 function buildHtml(
     results: ReadonlyArray<RuleResult>,
@@ -892,246 +991,205 @@ function buildHtml(
     summary: ResultSummary,
     generatedAt: Date,
 ): string {
-    const allFailures  = results.flatMap(r => r.failures);
+    const allFailures = collectFailures(results);
+    const fileBuckets = bucketFiles(results);
+    const severityCounts = summarizeSeverities(allFailures);
+    const topRules = summarizeRules(allFailures);
+    const topRuleMax = topRules[0]?.[1] ?? 1;
+    const projectName = path.basename(process.cwd());
+    const timestamp = formatTimestamp(generatedAt);
+
     const totalViolations = allFailures.length;
-    const hasViolations   = totalViolations > 0 || parseErrors.length > 0;
+    const totalFiles = summary.totalFiles;
+    const affectedFiles = fileBuckets.length;
+    const hasIssues = totalViolations > 0 || parseErrors.length > 0;
+    const passed = totalViolations === 0 && parseErrors.length === 0;
+    const cachedCopy = typeof summary.cachedTasks === 'number' && summary.cachedTasks > 0
+        ? `${summary.cachedTasks.toLocaleString()} cached`
+        : 'No cache';
 
-    // Group by file and sort files by error count desc, then path
-    const byFile = groupFailuresByFile(results);
-    const sortedFiles = [...byFile.entries()].sort((a, b) => {
-        const ae = a[1].filter(f => isErrorSeverity(f.severity)).length;
-        const be = b[1].filter(f => isErrorSeverity(f.severity)).length;
-        if (be !== ae) return be - ae;
-        return relativeToRoot(a[0]).localeCompare(relativeToRoot(b[0]));
-    });
+    const subtitle = passed
+        ? `No violations found across ${totalFiles.toLocaleString()} scanned file${totalFiles === 1 ? '' : 's'}.`
+        : `${totalViolations.toLocaleString()} violation${totalViolations === 1 ? '' : 's'} across ${affectedFiles.toLocaleString()} affected file${affectedFiles === 1 ? '' : 's'}. ${parseErrors.length > 0 ? `${parseErrors.length.toLocaleString()} parse error${parseErrors.length === 1 ? '' : 's'}. ` : ''}${cachedCopy}.`;
 
-    // Per-severity counts
-    const sevCounts: SeverityCount = {};
-    for (const f of allFailures) {
-        sevCounts[f.severity] = (sevCounts[f.severity] ?? 0) + 1;
-    }
+    const severityRows = SEVERITY_ORDER
+        .filter((severity) => (severityCounts[severity] ?? 0) > 0)
+        .map((severity) => `
+<div class="severity-row ${severityColorClass(severity)}">
+  <span class="left"><span class="dot" style="background:currentColor"></span><span class="severity-name">${escapeHtml(humanSeverity(severity))}</span></span>
+  <span class="severity-count">${(severityCounts[severity] ?? 0).toLocaleString()}</span>
+</div>`)
+        .join('\n') || '<div class="severity-row sev-low"><span class="left"><span class="dot" style="background:currentColor"></span><span class="severity-name">No issues</span></span><span class="severity-count">0</span></div>';
 
-    // Per-rule counts (top 10)
-    const ruleCounts = new Map<string, number>();
-    for (const f of allFailures) {
-        ruleCounts.set(f.ruleName, (ruleCounts.get(f.ruleName) ?? 0) + 1);
-    }
-    const topRules = [...ruleCounts.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 10);
-    const maxRuleCount = topRules.length > 0 ? topRules[0][1] : 1;
+    const rulesHtml = topRules.length > 0
+        ? topRules.map(([ruleName, count]) => `
+<div class="rule-item">
+  <div class="rule-top">
+    <span class="rule-name">${escapeHtml(ruleName)}</span>
+    <span class="rule-count">${count.toLocaleString()}</span>
+  </div>
+  <div class="rule-bar"><span style="width:${Math.max(8, Math.round((count / topRuleMax) * 100))}%"></span></div>
+</div>`).join('\n')
+        : '<div class="rule-item"><div class="rule-top"><span class="rule-name">No rule violations</span><span class="rule-count">0</span></div><div class="rule-bar"><span style="width:0%"></span></div></div>';
 
-    // Status
-    const passed = summary.totalErrors === 0 && parseErrors.length === 0;
-
-    // Severity chips (only visible severities)
-    const SEV_ORDER = ['critical','high','error','moderate','warning','low','info','hint'];
-    const sevChips = SEV_ORDER
-        .filter(s => sevCounts[s] > 0)
-        .map(s => `<span class="sev-chip ${severityColorClass(s)}" data-sev="${s}">
-  ${s} <span class="chip-count">${sevCounts[s]}</span>
-</span>`).join('\n');
-
-    // Rules breakdown section
-    const rulesBreakdownHtml = topRules.length > 1 ? `
-<div class="rules-breakdown">
-  <div class="rules-breakdown-title">Top Rules by Violations</div>
-  ${topRules.map(([name, count]) => {
-      const pct = Math.round((count / maxRuleCount) * 100);
-      return `<div class="rule-row">
-    <span class="rule-name-col">${escapeHtml(name)}</span>
-    <div class="rule-bar-wrap"><div class="rule-bar-fill" style="width:${pct}%"></div></div>
-    <span class="rule-count-col">${count}</span>
-  </div>`;
-  }).join('\n')}
-</div>` : '';
-
-    // File sections
-    const fileSectionsHtml = sortedFiles.length === 0
-        ? `<div class="empty-state">
-  <div class="empty-icon">✅</div>
-  <div class="empty-title">No violations found</div>
-  <div class="empty-sub">Your Angular project looks clean!</div>
-</div>`
-        : sortedFiles.map(([fp, failures], i) => buildFileSection(fp, failures, i)).join('\n');
-
-    // Parse errors section
-    const parseErrorsHtml = parseErrors.length > 0 ? `
-<section style="margin-bottom:36px">
-  <div class="section-title">Parse Errors (${parseErrors.length})</div>
-  ${parseErrors.map(e => `<div class="parse-error-item">
-    <span class="parse-error-icon">⚠</span>
-    <div>
-      <div class="parse-error-path">${escapeHtml(relativeToRoot(e.filePath))}</div>
-      <div class="parse-error-msg">${escapeHtml(e.message)}</div>
-    </div>
-  </div>`).join('\n')}
+    const parseErrorsBlock = parseErrors.length > 0 ? `
+<section class="card parse-errors">
+  <div class="card-head">
+    <div class="card-title">Parse errors</div>
+    <div class="files-count">${parseErrors.length.toLocaleString()}</div>
+  </div>
+  <div class="parse-list">
+    ${parseErrors.map((error) => `
+      <div class="parse-item">
+        <div class="parse-path">${escapeHtml(relativeToRoot(error.filePath))}</div>
+        <div class="parse-message">${escapeHtml(error.message)}</div>
+      </div>`).join('\n')}
+  </div>
 </section>` : '';
 
-    // Cached info
-    const cachedInfo = summary.cachedTasks !== undefined
-        ? `<span>${summary.cachedTasks.toLocaleString()} task${summary.cachedTasks !== 1 ? 's' : ''} from cache</span>`
-        : '';
-
-    const ts = generatedAt.toLocaleString('en-US', {
-        year: 'numeric', month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit', second: '2-digit',
-    });
+    const filesHtml = fileBuckets.length > 0
+        ? fileBuckets.map((bucket, index) => buildFileCard(bucket, index)).join('\n')
+        : `
+<div class="empty">
+  <div>
+    <div>${iconFile()}</div>
+    <div class="empty-title">No violations found</div>
+    <div class="empty-sub">This scan completed cleanly.</div>
+  </div>
+</div>`;
 
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ngcompass — Analysis Report</title>
+  <title>ngcompass — ${escapeHtml(projectName)}</title>
   <style>${buildStyles()}</style>
 </head>
 <body>
-
-<!-- ══ HEADER ══════════════════════════════════════════════════════ -->
-<header class="header">
-  <div class="header-inner">
-    <div class="brand">
-      ${angularLogo()}
-      <div class="brand-text">
-        <h1>ng<span>compass</span></h1>
-        <p>Angular Static Analysis Report</p>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        ${angularLogo()}
+        <span class="brand-name">ngcompass</span>
       </div>
-    </div>
-    <div class="header-meta">
-      <div><strong>Generated:</strong> ${escapeHtml(ts)}</div>
-      <div><strong>Project:</strong> ${escapeHtml(relativeToRoot(process.cwd()) || path.basename(process.cwd()))}</div>
-      <div><strong>Duration:</strong> ${escapeHtml(formatDuration(summary.duration))}</div>
-    </div>
-  </div>
-</header>
-
-<!-- ══ STATUS BANNER ════════════════════════════════════════════════ -->
-<div class="status-banner ${passed ? 'pass' : 'fail'}">
-  <span class="status-dot"></span>
-  ${passed
-    ? 'Analysis passed — no violations found'
-    : `Analysis completed with ${summary.totalErrors.toLocaleString()} error${summary.totalErrors !== 1 ? 's' : ''} and ${summary.totalWarnings.toLocaleString()} warning${summary.totalWarnings !== 1 ? 's' : ''}`}
-</div>
-
-<!-- ══ MAIN ═════════════════════════════════════════════════════════ -->
-<main class="main">
-
-  <!-- Summary cards -->
-  <div class="summary-grid">
-    <div class="stat-card errors">
-      <div class="stat-label">Errors</div>
-      <div class="stat-value">${summary.totalErrors.toLocaleString()}</div>
-      <div class="stat-sub">Critical / High / Error</div>
-    </div>
-    <div class="stat-card warnings">
-      <div class="stat-label">Warnings</div>
-      <div class="stat-value">${summary.totalWarnings.toLocaleString()}</div>
-      <div class="stat-sub">Moderate / Low / Info</div>
-    </div>
-    <div class="stat-card files">
-      <div class="stat-label">Files Scanned</div>
-      <div class="stat-value">${summary.totalFiles.toLocaleString()}</div>
-      <div class="stat-sub">${sortedFiles.length} file${sortedFiles.length !== 1 ? 's' : ''} with issues</div>
-    </div>
-    <div class="stat-card duration">
-      <div class="stat-label">Duration</div>
-      <div class="stat-value">${escapeHtml(formatDuration(summary.duration))}</div>
-      <div class="stat-sub">${escapeHtml(cachedInfo || `${summary.totalTasks.toLocaleString()} tasks`)}</div>
-    </div>
-    ${topRules.length > 0 ? `<div class="stat-card rules">
-      <div class="stat-label">Rules Triggered</div>
-      <div class="stat-value">${ruleCounts.size}</div>
-      <div class="stat-sub">${totalViolations.toLocaleString()} total violation${totalViolations !== 1 ? 's' : ''}</div>
-    </div>` : ''}
-  </div>
-
-  ${parseErrorsHtml}
-
-  ${hasViolations ? `
-  <!-- Severity breakdown chips -->
-  ${sevChips.length > 0 ? `<div class="severity-bar">${sevChips}</div>` : ''}
-
-  <!-- Top rules chart -->
-  ${rulesBreakdownHtml}
-
-  <!-- Violations section -->
-  <section>
-    <div class="section-title">Violations by File (${sortedFiles.length})</div>
-
-    <!-- Controls -->
-    <div class="controls">
-      <div class="search-wrap">
-        <span class="search-icon">🔍</span>
-        <input
-          id="searchInput"
-          class="search-input"
-          type="search"
-          placeholder="Search files, rules, messages…"
-          autocomplete="off"
-          spellcheck="false"
-        >
+      <div class="topbar-meta">
+        <span class="pill">${escapeHtml(timestamp)}</span>
+        <span class="pill">${escapeHtml(projectName)}</span>
       </div>
-      <button class="filter-btn" data-filter="errors">Errors only</button>
-      <button class="filter-btn" data-filter="warnings">Warnings only</button>
-      <button class="expand-btn" id="expandAll">Expand all</button>
-      <button class="expand-btn" id="collapseAll">Collapse all</button>
-    </div>
+    </header>
 
-    <!-- File sections -->
-    ${fileSectionsHtml}
-    <div class="no-results" id="noResults">No violations match your current filters.</div>
-  </section>
-  ` : fileSectionsHtml}
+    <section class="shell">
+      <div class="hero">
+        <div class="hero-copy">
+          <div class="eyebrow">Angular static analysis · ${totalFiles.toLocaleString()} files scanned</div>
+          <h1 class="hero-title ${passed ? 'pass' : 'fail'}">${passed ? 'Analysis Passed' : 'Issues Found'}</h1>
+          <div class="hero-subtitle">${escapeHtml(subtitle)}</div>
+        </div>
+        <div class="stats-row">
+          <div class="stat-card">
+            <div class="stat-label">Errors</div>
+            <div class="stat-value">${summary.totalErrors.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Warnings</div>
+            <div class="stat-value">${summary.totalWarnings.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Affected files</div>
+            <div class="stat-value">${affectedFiles.toLocaleString()}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">Violations</div>
+            <div class="stat-value">${totalViolations.toLocaleString()}</div>
+          </div>
+        </div>
+      </div>
 
-</main>
+      <main class="content">
+        ${hasIssues ? `
+        <section class="summary-strip">
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Severity breakdown</div>
+              <div class="files-count">${totalViolations.toLocaleString()} total</div>
+            </div>
+            <div class="severity-list">${severityRows}</div>
+          </div>
+          <div class="card">
+            <div class="card-head">
+              <div class="card-title">Top rules</div>
+              <div class="files-count">${topRules.length.toLocaleString()}</div>
+            </div>
+            <div class="rule-list">${rulesHtml}</div>
+          </div>
+        </section>
+        ` : ''}
 
-<!-- ══ FOOTER ═══════════════════════════════════════════════════════ -->
-<footer class="footer">
-  <span>Generated by <a href="https://github.com/ngcompass/ngcompass" target="_blank" rel="noopener">ngcompass</a> — Angular Static Analysis</span>
-  <span>${escapeHtml(ts)}</span>
-</footer>
+        ${parseErrorsBlock}
 
-<script>${buildScript()}</script>
+        <section class="card controls">
+          <div class="controls-row">
+            <label class="searchbox" aria-label="Search issues">
+              ${iconSearch()}
+              <input id="searchInput" type="search" placeholder="Search files, rules, messages..." autocomplete="off" spellcheck="false">
+            </label>
+            <div class="actions">
+              <button type="button" class="btn" data-filter="errors">Errors</button>
+              <button type="button" class="btn" data-filter="warnings">Warnings</button>
+              <button type="button" class="btn" id="expandAll">Expand all</button>
+              <button type="button" class="btn" id="collapseAll">Collapse all</button>
+            </div>
+          </div>
+        </section>
+
+        <div class="files-head">
+          <div class="files-title">Violations by file</div>
+          <div class="files-count">${affectedFiles.toLocaleString()} file${affectedFiles === 1 ? '' : 's'}</div>
+        </div>
+
+        <section class="file-list">
+          ${filesHtml}
+          <div id="noResults" class="empty hidden">
+            <div>
+              <div class="empty-title">No matching results</div>
+              <div class="empty-sub">Try clearing search or changing the severity filter.</div>
+            </div>
+          </div>
+        </section>
+      </main>
+    </section>
+
+    <footer class="footer">
+      <span>Generated by ngcompass</span>
+      <span>Compact report UI inspired by shadcn-style primitives</span>
+    </footer>
+  </div>
+
+  <script>${buildScript()}</script>
 </body>
 </html>`;
 }
 
-// ---------------------------------------------------------------------------
-// HtmlReporter class
-// ---------------------------------------------------------------------------
-
-/**
- * HTML reporter — accumulates results in memory and writes a self-contained
- * HTML file on `summary()`.
- *
- * All progress methods (step / info / debug) are no-ops so that stdout
- * remains clean when the user redirects output.
- */
 export class HtmlReporter implements Reporter {
     private readonly accumulatedResults: RuleResult[] = [];
     private readonly accumulatedParseErrors: ParseError[] = [];
 
     constructor(
-        /** Absolute or relative path for the HTML output file. */
         private readonly outputPath: string = DEFAULT_OUTPUT_PATH,
         private readonly out: ReporterOutput = processOutput,
+        private readonly autoOpen: boolean = false,
     ) {}
 
     report(results: ReadonlyArray<RuleResult>): void {
-        for (const r of results) {
-            this.accumulatedResults.push(r);
-        }
+        for (const result of results) this.accumulatedResults.push(result);
     }
 
     parseErrors(errors: ReadonlyArray<ParseError>): void {
-        for (const e of errors) {
-            this.accumulatedParseErrors.push(e);
-        }
+        for (const error of errors) this.accumulatedParseErrors.push(error);
     }
 
     error(error: Error): void {
-        // Write error to stderr so it's visible even when stdout is piped
         this.out.error(`[ngcompass] Error: ${error.message}`);
     }
 
@@ -1147,20 +1205,16 @@ export class HtmlReporter implements Reporter {
 
         try {
             fs.writeFileSync(absPath, html, 'utf8');
-            // Confirmation goes to stderr so it doesn't pollute any pipes on stdout
+            this.out.error(`\n\u2713 Report saved: ${path.relative(process.cwd(), absPath) || absPath}\n`);
+            if (this.autoOpen) openInBrowser(absPath);
+        } catch (writeErr: unknown) {
             this.out.error(
-                `\n✓ HTML report saved to: ${path.relative(process.cwd(), absPath) || absPath}\n`,
-            );
-        } catch (writeErr) {
-            this.out.error(
-                `[ngcompass] Failed to write HTML report to ${absPath}: ${(writeErr as Error).message}`,
+                `[ngcompass] Failed to write report to ${absPath}: ${writeErr instanceof Error ? writeErr.message : String(writeErr)}`,
             );
         }
     }
 
-    // ── ProgressReporter no-ops (keep stdout clean) ──────────────────────
-
-    step(_message: string): void { /* no-op */ }
-    info(_message: string): void { /* no-op */ }
-    debug(_message: string): void { /* no-op */ }
+    step(_message: string): void {}
+    info(_message: string): void {}
+    debug(_message: string): void {}
 }

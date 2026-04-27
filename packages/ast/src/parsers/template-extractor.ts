@@ -16,6 +16,11 @@
 import { walkProgram } from '../visitor.js';
 import type { Program } from 'oxc-parser';
 
+type AstNode = {
+    type?: string;
+    [key: string]: unknown;
+};
+
 // ============================================
 // PUBLIC API
 // ============================================
@@ -50,7 +55,8 @@ export interface ExtractedTemplate {
 export function extractTemplateFromProgram(program: Program): ExtractedTemplate {
     let result: ExtractedTemplate = { content: '', startOffset: 0 };
 
-    walkProgram(program, (node: any) => {
+    walkProgram(program, (rawNode) => {
+        const node = rawNode as AstNode;
         // Once we have the template, stop walking (false = skip children)
         if (result.content) return false;
 
@@ -74,18 +80,21 @@ export function extractTemplateFromProgram(program: Program): ExtractedTemplate 
  * Attempts to extract the `template` property value from a class decorated
  * with @Component.
  */
-function tryExtractFromClass(classNode: any): ExtractedTemplate | null {
-    for (const decorator of classNode.decorators) {
-        const call = decorator?.expression;
+function tryExtractFromClass(classNode: AstNode): ExtractedTemplate | null {
+    const decorators = classNode.decorators as ReadonlyArray<AstNode> | undefined;
+    if (!decorators) return null;
+    for (const decorator of decorators) {
+        const call = decorator?.expression as AstNode | undefined;
         if (!call || call.type !== 'CallExpression') continue;
 
-        const callee = call.callee;
+        const callee = call.callee as AstNode | undefined;
         if (!callee || callee.type !== 'Identifier' || callee.name !== 'Component') continue;
 
-        const objectArg = call.arguments?.[0];
+        const args = call.arguments as ReadonlyArray<AstNode> | undefined;
+        const objectArg = args?.[0];
         if (!objectArg || objectArg.type !== 'ObjectExpression') continue;
 
-        const templateValue = findPropertyValue(objectArg.properties, 'template');
+        const templateValue = findPropertyValue(objectArg.properties as ReadonlyArray<AstNode>, 'template');
         if (templateValue) {
             return extractStringValueWithOffset(templateValue);
         }
@@ -96,13 +105,13 @@ function tryExtractFromClass(classNode: any): ExtractedTemplate | null {
 /**
  * Finds the value expression of a named property in an ObjectExpression.
  */
-function findPropertyValue(properties: any[], keyName: string): any {
+function findPropertyValue(properties: ReadonlyArray<AstNode>, keyName: string): AstNode | null {
     if (!Array.isArray(properties)) return null;
     for (const prop of properties) {
-        const key = prop?.key;
-        const value = prop?.value;
+        const key = prop?.key as AstNode | undefined;
+        const value = prop?.value as AstNode | undefined;
         if (!key || !value) continue;
-        const name = key?.name ?? key?.value;
+        const name = key.name ?? key.value;
         if (name === keyName) return value;
     }
     return null;
@@ -116,23 +125,28 @@ function findPropertyValue(properties: any[], keyName: string): any {
  * original TypeScript source file — i.e. the position right after the
  * opening quote or backtick.
  */
-function extractStringValueWithOffset(node: any): ExtractedTemplate {
+function extractStringValueWithOffset(node: AstNode): ExtractedTemplate {
     if (!node) return { content: '', startOffset: 0 };
 
     if (node.type === 'StringLiteral' || node.type === 'Literal') {
         // node.start / node.span.start → position of the opening quote in the file
-        const nodeStart: number = node.start ?? node.span?.start ?? 0;
+        const span = node.span as { start?: number } | undefined;
+        const nodeStart: number = (node.start as number | undefined) ?? span?.start ?? 0;
         return {
-            content: node.value ?? '',
+            content: (node.value as string | undefined) ?? '',
             startOffset: nodeStart + 1, // +1 to skip the opening ' or "
         };
     }
 
     if (node.type === 'TemplateLiteral') {
-        const quasis: any[] = node.quasis ?? [];
-        const content = quasis.map((q: any) => q.value?.raw ?? '').join('');
+        const quasis = (node.quasis as ReadonlyArray<AstNode> | undefined) ?? [];
+        const content = quasis.map((q) => {
+            const quasiValue = q.value as { raw?: string } | undefined;
+            return quasiValue?.raw ?? '';
+        }).join('');
         // The first quasi's start position points to the opening backtick
-        const firstStart: number = quasis[0]?.start ?? quasis[0]?.span?.start ?? 0;
+        const firstSpan = quasis[0]?.span as { start?: number } | undefined;
+        const firstStart: number = (quasis[0]?.start as number | undefined) ?? firstSpan?.start ?? 0;
         return {
             content,
             startOffset: firstStart + 1, // +1 to skip the opening `
