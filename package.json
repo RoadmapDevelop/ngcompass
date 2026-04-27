@@ -56,6 +56,9 @@
     "supportedArchitectures": {
       "os": ["linux", "darwin", "win32", "current"],
       "cpu": ["x64", "arm64", "current"]
+    },
+    "overrides": {
+      "picomatch": ">=4.0.4"
     }
   },
   "devDependencies": {
