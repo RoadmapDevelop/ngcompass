@@ -76,6 +76,57 @@ jobs:
           echo "--- ngcompass cache info ---"
           ngcompass cache info
 
+      - name: Verify shebang preserved in dist
+        shell: bash
+        run: |
+          SHEBANG=$(head -1 packages/cli/dist/cli.js)
+          echo "First line: $SHEBANG"
+          echo "$SHEBANG" | grep -q '^#!' || (echo "ERROR: shebang missing from dist/cli.js" && exit 1)
+
+      - name: Verify NO_COLOR disables ANSI output
+        shell: bash
+        run: |
+          OUTPUT=$(NO_COLOR=1 ngcompass --help)
+          if echo "$OUTPUT" | grep -qP '\x1b\['; then
+            echo "ERROR: ANSI escape codes present despite NO_COLOR=1"
+            exit 1
+          fi
+          echo "OK: no ANSI codes detected"
+
+      - name: Verify ngcompass init in a fresh directory
+        shell: bash
+        run: |
+          INIT_DIR="$RUNNER_TEMP/ngcompass-init-test"
+          mkdir -p "$INIT_DIR"
+          ngcompass init --cwd "$INIT_DIR"
+          # Confirm a config file was created
+          ls "$INIT_DIR"/.ngcompassrc* "$INIT_DIR"/ngcompass.config.* 2>/dev/null \
+            || ls "$INIT_DIR"/*.ngcompass* 2>/dev/null \
+            || (echo "ERROR: no config file created by ngcompass init" && exit 1)
+          echo "OK: config file created"
+
+      - name: Verify exit codes
+        shell: bash
+        run: |
+          # Known-good command must exit 0
+          ngcompass --version
+          [ $? -eq 0 ] || (echo "ERROR: --version exited non-zero" && exit 1)
+
+          # Unknown command must exit non-zero
+          ngcompass __unknown_command__ 2>/dev/null || true
+          CODE=$?
+          [ $CODE -ne 0 ] || (echo "ERROR: unknown command exited 0" && exit 1)
+          echo "OK: exit codes correct"
+
+      - name: Publish dry-run (catch file leakage before release)
+        shell: bash
+        run: |
+          for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
+                     packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
+            echo "=== $pkg ==="
+            (cd "$pkg" && npm publish --dry-run 2>&1)
+          done
+
       - name: Coverage gate
         if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         run: |
