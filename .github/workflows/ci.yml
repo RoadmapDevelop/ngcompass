@@ -38,19 +38,30 @@ jobs:
       - name: CLI smoke test
         run: node packages/cli/dist/cli.js --help
 
+      - name: Pack & install smoke test
+        shell: bash
+        run: |
+          cd packages/cli
+          pnpm pack --pack-destination "$RUNNER_TEMP"
+          TARBALL=$(ls "$RUNNER_TEMP"/ngcompass-cli-*.tgz | head -1)
+          mkdir -p "$RUNNER_TEMP/ngcompass-smoke"
+          cd "$RUNNER_TEMP/ngcompass-smoke"
+          npm install --no-save "$TARBALL"
+          ./node_modules/.bin/ngcompass --version
+
       - name: Coverage gate
-        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         run: |
           pnpm test:coverage
           node scripts/check-coverage.js
 
       - name: Security audit
         # --prod scopes audit to runtime dependencies only (devDep vulns don't ship to users)
-        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         run: pnpm audit --audit-level high --prod
 
       - name: Upload coverage
-        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         uses: codecov/codecov-action@v4
         with:
           directory: .
