@@ -7,12 +7,12 @@
  * access. These operations are resource-intensive and are performed once
  * per analysis run on the primary execution thread.
  */
-
+import path from "node:path";
 import ts from "typescript";
 import { createAnalysisContext, type AnalysisContext } from "./analysis-context.js";
 import { buildProjectContext } from "./project-context-builder.js";
 import { debug } from "@ngcompass/common";
-import type { ProjectContext } from "@ngcompass/common";
+import type { ParserOptions, ProjectContext } from "@ngcompass/common";
 
 /**
  * Enhances the baseline AnalysisContext with semantic and project-wide data.
@@ -46,13 +46,19 @@ export interface TypeAwareAnalysisContext extends AnalysisContext {
 export const createTypeAwareAnalysisContext = (
     rootDir: string,
     files: ReadonlyArray<string> = [],
+    parserOptions?: ParserOptions,
 ): TypeAwareAnalysisContext => {
     const baseContext = createAnalysisContext(rootDir);
 
     debug('engine', 'Initializing Type-Aware Context (ts.createProgram)...');
     const tsStart = performance.now();
 
-    const configPath = ts.findConfigFile(rootDir, ts.sys.fileExists, "tsconfig.json");
+    const tsconfigRootDir = parserOptions?.tsconfigRootDir
+        ? path.resolve(rootDir, parserOptions.tsconfigRootDir)
+        : rootDir;
+    const configPath = parserOptions?.project
+        ? path.resolve(tsconfigRootDir, parserOptions.project)
+        : ts.findConfigFile(tsconfigRootDir, ts.sys.fileExists, "tsconfig.json");
 
     let program: ts.Program | undefined;
 
@@ -61,7 +67,7 @@ export const createTypeAwareAnalysisContext = (
         const parsedCommandLine = ts.parseJsonConfigFileContent(
             configFile.config,
             ts.sys,
-            rootDir
+            tsconfigRootDir
         );
 
         program = ts.createProgram({

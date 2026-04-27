@@ -1,9 +1,9 @@
 import { Command } from 'commander';
-
-import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult, type ParseError } from '@ngcompass/common';
+import path from 'node:path';
+import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult, type ParseError, type ParserOptions } from '@ngcompass/common';
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
-import { CacheContext } from '@ngcompass/cache';
+import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { exitWithError } from './exit.js';
 import { getGlobalRegistry, executeBatchedNewEngineRules, isNewEngineRule } from '@ngcompass/rules';
 import { loadPlugins } from '@ngcompass/config';
@@ -12,40 +12,97 @@ import { ExecutionPlanOutput, buildExecutionPlan } from '@ngcompass/planner';
 import { scan } from '@ngcompass/scanner';
 import { resolveRules, getEnabledRules } from '@ngcompass/rules';
 import { resolveConfig } from '@ngcompass/config';
-
 interface AnalyzeOptions {
     profile?: string;
     force?: boolean;
     debug?: boolean;
-    format?: string;
+    format?: ReporterFormat;
     compact?: boolean;
     rule?: string;
     output?: string;
 }
 
+function normalizeReporterFormat(format: ReporterFormat | undefined): ReporterFormat {
+    if (format === 'ui') return 'html';
+    return format ?? 'console';
+}
+
+function resolveReporterFormat(
+    cliFormat: ReporterFormat | undefined,
+    configFormat: NormalizedAnalyzerConfig['outputFormat'] | undefined,
+): ReporterFormat {
+    if (cliFormat) {
+        return normalizeReporterFormat(cliFormat);
+    }
+
+    switch (configFormat) {
+        case 'json':
+            return 'json';
+        case 'html':
+            return 'html';
+        case 'text':
+        case undefined:
+            return 'console';
+        default:
+            return 'console';
+    }
+}
+
+function shouldFailAnalysis(
+    config: Pick<NormalizedAnalyzerConfig, 'failOnSeverity' | 'maxWarnings'>,
+    stats: Pick<AnalysisResult['stats'], 'totalErrors' | 'totalWarnings'>,
+): boolean {
+    const failOnSeverity = config.failOnSeverity ?? 'error';
+    const maxWarnings = config.maxWarnings ?? 10;
+
+    if (stats.totalErrors > 0) {
+        return true;
+    }
+
+    if (failOnSeverity === 'warn' && stats.totalWarnings > 0) {
+        return true;
+    }
+
+    return stats.totalWarnings > maxWarnings;
+}
+
+function resolveParserProjectPath(
+    parserOptions: ParserOptions | undefined,
+    cwd: string,
+): string | undefined {
+    if (!parserOptions?.project) {
+        return undefined;
+    }
+
+    const rootDir = parserOptions.tsconfigRootDir
+        ? path.resolve(cwd, parserOptions.tsconfigRootDir)
+        : cwd;
+
+    return path.resolve(rootDir, parserOptions.project);
+}
 
 export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
     program
         .command('analyze')
-        .description('Run analysis on the project')
-        .option('-p, --profile <name>', 'Configuration profile to use')
-        .option('--force', 'Force re-execution of all tasks')
-        .option('--format <fmt>', 'Output format: console|json|html', 'console')
-        .option('--compact', 'Use compact ESLint-style output instead of the rich default')
-        .option('--output <path>', 'Output file path for --format html (default: ngcompass-report.html)')
-        .option('--rule <id>', 'Run only a single rule in isolation')
+        .description('Analyze your project and report rule violations and architecture risks')
+        .option('-p, --profile <name>', 'Configuration profile to run')
+        .option('--force', 'Ignore cached results and re-run all analysis tasks')
+        .option('--format <fmt>', 'Reporter format: console | json | ui')
+        .option('--compact', 'Use compact, ESLint-style output')
+        .option('--output <path>', 'Output path for UI reports (default: ngcompass-report.html)')
+        .option('--rule <id>', 'Run only one rule (useful for debugging or focused checks)')
         .action(async (options: AnalyzeOptions) => {
             const globalOptions = program.opts();
             const isDebug = !!globalOptions.debug;
             const isVerbose = !!globalOptions.verbose || isDebug;
 
             const startTime = performance.now();
-            const format = (options.format ?? 'console') as ReporterFormat;
-            const reporter = getReporter(format, {
+            let reporter = getReporter(normalizeReporterFormat(options.format), {
                 compact: !!options.compact,
                 verbose: isVerbose,
                 outputPath: options.output,
             });
+            let activeCache: CacheContext | undefined = cache;
 
             let exitCode = 0;
 
@@ -55,9 +112,15 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!configResult) { exitCode = 1; return; }
 
                 const { config } = configResult;
+                activeCache = createRuntimeCache(config, process.cwd());
+                reporter = getReporter(resolveReporterFormat(options.format, config.outputFormat), {
+                    compact: !!options.compact,
+                    verbose: isVerbose,
+                    outputPath: options.output ?? config.outputPath,
+                });
 
                 // 2. Discover Files
-                const files = await discoverFilesStep(config, options, cache, reporter);
+                const files = await discoverFilesStep(config, options, activeCache, reporter);
                 if (!files) { exitCode = 1; return; }
 
                 // 3. Resolve Rules
@@ -65,12 +128,11 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!enabledRules) { exitCode = 1; return; }
 
                 // 4. Build Execution Plan
-                const plan = await buildPlanStep(files, enabledRules, cache, options, reporter, config);
+                const plan = await buildPlanStep(files, enabledRules, activeCache, options, reporter, config);
                 if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
-                // CTX-001: pass `files` so ProjectContext knows the full set of project files
-                const analysis = await runAnalysisStep(plan, cache, options, reporter, files);
+                const analysis = await runAnalysisStep(plan, activeCache, options, reporter, files, config);
                 if (!analysis) { exitCode = 1; return; }
 
                 const duration = performance.now() - startTime;
@@ -91,16 +153,19 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
 
                 // 7. Save Results to Cache
                 if (!plan.precomputedAnalysis) {
-                    await saveToCacheStep(analysis.results, cache, options, reporter);
+                    await saveToCacheStep(analysis.results, activeCache, options, reporter);
                 }
 
-                if (analysis.stats.totalErrors > 0) {
+                if (shouldFailAnalysis(config, analysis.stats)) {
                     exitCode = 1;
                 }
             } catch (error) {
                 reporter.error(error as Error);
                 exitCode = 1;
             } finally {
+                if (activeCache && activeCache !== cache) {
+                    await activeCache.flush();
+                }
                 if (exitCode !== 0) {
                     exitWithError(exitCode);
                 }
@@ -151,7 +216,7 @@ async function loadConfigurationStep(
 async function discoverFilesStep(
     config: NormalizedAnalyzerConfig,
     options: AnalyzeOptions,
-    cache: CacheContext,
+    cache: CacheContext | undefined,
     reporter: Reporter
 ): Promise<string[] | null> {
     const tStart = performance.now();
@@ -161,6 +226,8 @@ async function discoverFilesStep(
         rootDir: process.cwd(),
         include: config.include ?? [...DEFAULT_INCLUDE_PATTERNS],
         exclude: config.exclude ?? [],
+        ignorePatterns: config.ignorePatterns,
+        tsConfigPath: resolveParserProjectPath(config.parserOptions, process.cwd()),
         respectGitignore: true,
         debug: options.debug,
         cache
@@ -212,7 +279,7 @@ async function resolveRulesStep(
 async function buildPlanStep(
     files: string[],
     rules: ResolvedRulesMap,
-    cache: CacheContext,
+    cache: CacheContext | undefined,
     options: AnalyzeOptions,
     reporter: Reporter,
     config: NormalizedAnalyzerConfig
@@ -227,6 +294,7 @@ async function buildPlanStep(
         cache,
         debug: options.debug,
         incremental: options.force ? { forceRerun: true } : undefined,
+        workerCount: config.maxWorkers,
         overrides: config.overrides,
     });
 
@@ -247,11 +315,11 @@ async function buildPlanStep(
 
 async function runAnalysisStep(
     plan: ExecutionPlanOutput,
-    cache: CacheContext,
+    cache: CacheContext | undefined,
     options: AnalyzeOptions,
     reporter: Reporter,
-    /** CTX-001: scanner-discovered files — forwarded to ProjectContext builder. */
     files?: ReadonlyArray<string>,
+    config?: NormalizedAnalyzerConfig,
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
     reporter.step('Running analysis...');
@@ -263,6 +331,8 @@ async function runAnalysisStep(
         cache,
         debug: options.debug,
         files,
+        maxWorkers: config?.maxWorkers,
+        parserOptions: config?.parserOptions,
     });
 
     if (!result.ok) {
@@ -276,10 +346,13 @@ async function runAnalysisStep(
 
 async function saveToCacheStep(
     results: readonly RuleResult[],
-    cache: CacheContext,
+    cache: CacheContext | undefined,
     options: AnalyzeOptions,
     reporter: Reporter
 ): Promise<void> {
+    if (!cache) {
+        return;
+    }
     const tStart = performance.now();
     const cacheEntries: [string, RuleResult][] = [];
 

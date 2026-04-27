@@ -168,7 +168,7 @@ const extractChangeDetection = (obj: ObjectExpression): MetadataValue<ChangeDete
     if (!node) return MISSING;
 
     if (node.type === 'Identifier') {
-        const name = (node as any).name;
+        const name = (node as Identifier).name;
         if (name === 'OnPush') return literal(ChangeDetectionStrategy.OnPush);
         if (name === 'Default') return literal(ChangeDetectionStrategy.Default);
         return NON_LITERAL;

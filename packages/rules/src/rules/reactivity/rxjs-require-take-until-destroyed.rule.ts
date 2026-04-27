@@ -33,7 +33,7 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
         const astNode = node as unknown as AstNode;
         if (!isSubscribeCall(astNode)) return null;
 
-        const callee = unwrapNode((astNode as any).callee);
+        const callee = unwrapNode(astNode.callee);
         const receiver = isMemberExpressionLike(callee) ? callee?.object : null;
 
         if (receiver && hasTeardownInReceiverChain(receiver)) return null;

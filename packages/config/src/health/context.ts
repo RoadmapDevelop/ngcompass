@@ -12,7 +12,11 @@ export function createDefaultContext(overrides?: Partial<ValidationContext>): Va
             accessSync: (p: string, mode: number) => fs.accessSync(p, mode),
         },
         os: { cpus },
-        path: { dirname: path.dirname },
+        path: {
+            dirname: path.dirname,
+            resolve: path.resolve,
+            isAbsolute: path.isAbsolute,
+        },
         ...overrides,
     };
 }

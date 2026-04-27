@@ -107,8 +107,6 @@ describe('Logger Module', () => {
                 'rules',
                 'workers',
                 'reporter',
-                'watch',
-                'autofix',
                 'init',
                 'config',
                 'env-fingerprint'

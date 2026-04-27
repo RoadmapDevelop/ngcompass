@@ -4,7 +4,7 @@
     "description": "Command line interface for ngcompass",
     "sideEffects": false,
     "bin": {
-        "compass": "./dist/index.js"
+        "ngcompass": "./dist/cli.js"
     },
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
@@ -28,7 +28,6 @@
         "test:watch": "vitest --passWithNoTests",
         "test:ui": "vitest --ui --passWithNoTests",
         "test:coverage": "vitest run --coverage --passWithNoTests",
-        "lint": "eslint src --ext .ts",
         "typecheck": "tsc --noEmit",
         "clean": "rimraf dist .turbo"
     },
@@ -52,6 +51,18 @@
     ],
     "author": "ngcompass",
     "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/SigoudisEftimis/ngcompass_.git",
+        "directory": "packages/cli"
+    },
+    "homepage": "https://github.com/SigoudisEftimis/ngcompass_#readme",
+    "bugs": {
+        "url": "https://github.com/SigoudisEftimis/ngcompass_/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    },
     "devDependencies": {
         "@types/node": "^25.1.0",
         "typescript": "catalog:"

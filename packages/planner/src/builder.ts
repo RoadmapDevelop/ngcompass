@@ -14,7 +14,7 @@ import type {
     Result,
     FileType,
 } from "./types.js";
-import type { ConfigOverride } from "@ngcompass/common";
+import type { ConfigOverride, ResolvedRule } from "@ngcompass/common";
 import { resolveOverridesForFile } from "./overrides.js";
 import { Ok, Err } from "./types.js";
 import { AnalysisResult, debug, time, timeLog } from "@ngcompass/common";
@@ -211,7 +211,7 @@ export const getExecutionPlanSummary = (output: ExecutionPlanOutput): string => 
  */
 const validateBuildInputs = (
     files: ReadonlyArray<string>,
-    rules: ReadonlyMap<string, any>
+    rules: ReadonlyMap<string, ResolvedRule>
 ): Error | null => {
     if (files.length === 0) return new Error("No files to analyze");
     if (rules.size === 0) return new Error("No rules configured");
@@ -305,7 +305,10 @@ const tryLoadPlanFromCache = async (
     const tDeserStart = performance.now();
     let output: ExecutionPlanOutput;
     try {
-        output = cachedData.v === 1 ? deserializePlan(cachedData) : (cachedData as ExecutionPlanOutput);
+        const versioned = cachedData as { v?: number };
+        output = versioned.v === 1
+            ? deserializePlan(cachedData as Parameters<typeof deserializePlan>[0])
+            : (cachedData as ExecutionPlanOutput);
     } catch (deserErr) {
         // Cache corruption: delete the bad entry and trigger a cold rebuild.
         // This self-heals without user intervention (same pattern as the AST cache).
@@ -373,10 +376,10 @@ const savePlanToCacheIfEnabled = async (
  */
 const collectApplicableRulesFromTasks = (
     tasks: ReadonlyArray<Task>,
-    rules: ReadonlyMap<string, any>
-): any[] => {
+    rules: ReadonlyMap<string, ResolvedRule>
+): ResolvedRule[] => {
     const ruleNamesInFile = new Set(tasks.map((t) => t.ruleName));
-    const applicable: any[] = [];
+    const applicable: ResolvedRule[] = [];
 
     for (const ruleName of ruleNamesInFile) {
         const rule = rules.get(ruleName);
@@ -393,9 +396,9 @@ const collectApplicableRulesFromTasks = (
  * @param applicableRules - Rules applicable to the file
  * @returns File-level content hash
  */
-const calculateHashFromTasks = (tasks: ReadonlyArray<Task>, applicableRules: any[]): string => {
+const calculateHashFromTasks = (tasks: ReadonlyArray<Task>, applicableRules: ResolvedRule[]): string => {
     if (tasks.length === 0) return "";
-    return calculateFileHash((tasks[0] as any).inputs, applicableRules);
+    return calculateFileHash(tasks[0].inputs, applicableRules);
 };
 
 /**
@@ -409,7 +412,7 @@ const calculateHashFromTasks = (tasks: ReadonlyArray<Task>, applicableRules: any
  */
 const buildAllTasks = async (
     files: ReadonlyArray<string>,
-    rules: ReadonlyMap<string, any>,
+    rules: ReadonlyMap<string, ResolvedRule>,
     context?: TaskBuilderContext,
     fileTypeCache?: Map<string, FileType>,
     parallelThreshold = 10000,
@@ -435,7 +438,7 @@ const buildAllTasks = async (
  */
 const buildAllTasksSequential = async (
     files: ReadonlyArray<string>,
-    rules: ReadonlyMap<string, any>,
+    rules: ReadonlyMap<string, ResolvedRule>,
     context?: TaskBuilderContext,
     fileTypeCache?: Map<string, FileType>,
     overrides?: ReadonlyArray<ConfigOverride>
@@ -466,7 +469,7 @@ const buildAllTasksSequential = async (
  */
 const tryBuildAllTasksParallel = async (
     files: ReadonlyArray<string>,
-    rules: ReadonlyMap<string, any>,
+    rules: ReadonlyMap<string, ResolvedRule>,
     fileTypeCache: Map<string, FileType> | undefined,
     workerCount: number,
     overrides?: ReadonlyArray<ConfigOverride>
@@ -560,7 +563,7 @@ const splitIntoChunks = (items: ReadonlyArray<string>, chunkCount: number): stri
 const runWorkerChunks = async (
     chunks: ReadonlyArray<string[]>,
     workerPath: string,
-    rules: ReadonlyMap<string, any>,
+    rules: ReadonlyMap<string, ResolvedRule>,
     fileTypeCache?: Map<string, FileType>,
     overrides?: ReadonlyArray<ConfigOverride>
 ): Promise<Task[]> => {
@@ -586,7 +589,7 @@ const runWorkerChunks = async (
             worker.on("message", (message: { tasks: Task[] }) => resolve(message.tasks));
             worker.on("error", (err) => {
                 debug("planner", `Worker ${index} error: ${String(err)}`);
-                reject(err);
+                reject(err instanceof Error ? err : new Error(String(err)));
             });
             worker.on("exit", (code) => {
                 if (code !== 0) reject(new Error(`Worker ${index} stopped with exit code ${code}`));
@@ -626,7 +629,7 @@ const getOrDetectFileType = (filePath: string, cache?: Map<string, FileType>): F
  */
 const convertTasksToPlan = (
     tasks: ReadonlyArray<Task>,
-    rules: ReadonlyMap<string, any>,
+    rules: ReadonlyMap<string, ResolvedRule>,
     fileTypeCache?: Map<string, FileType>
 ): Record<string, FileAnalysisUnit> => {
     const tasksByFile = groupTasksByFile(tasks);

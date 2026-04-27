@@ -23,7 +23,8 @@ const TEARDOWN_NAMES = new Set(['destroy$', 'destroyed$', 'ondestroy$', 'ngondes
 const UI_STATE_PATTERN = /state|loading|error|active|selected|open|visible|disabled|count|value|data|hidden|expanded|pending|success|failed/i;
 
 function getAliasMap(context: RuleContext): Map<string, string> {
-    const aliases = collectAllRxjsAliases((context as any).sourceText, SUBJECT_TYPES);
+    const sourceText = (context as RuleContext & { sourceText?: string }).sourceText;
+    const aliases = collectAllRxjsAliases(sourceText, SUBJECT_TYPES);
     const map = new Map<string, string>();
     for (const [type, names] of aliases) {
         for (const name of names) map.set(name, type);
@@ -45,11 +46,11 @@ function getSubjectType(callee: MaybeAstNode, aliases: Map<string, string>): str
 function extractCalls(root: AstNode, methodName: string, found: Set<string>): void {
     const stack = [root];
     while (stack.length) {
-        const n = unwrapNode(stack.pop()!);
+        const n = unwrapNode(stack.pop());
         if (!n) continue;
         const callee = unwrapNode(n.callee);
         if (n.type === 'CallExpression' && getStaticPropertyName(callee) === methodName) {
-            const obj = unwrapNode((callee as any)?.object);
+            const obj = unwrapNode(callee?.object);
             if (obj && isMemberExpressionLike(obj) && unwrapNode(obj.object)?.type === 'ThisExpression') {
                 const prop = getStaticPropertyName(obj);
                 if (prop) found.add(prop);
@@ -69,15 +70,16 @@ function getBridgeNames(classBody: AstNode[]): Set<string> {
 
     for (const m of classBody) {
         if (isMethodDefinition(m)) {
-            if (m.kind === 'set' && (m as any).decorators?.some((d: any) => (unwrapNode(d.expression) as any)?.name === 'Input' || (unwrapNode((unwrapNode(d.expression) as any)?.callee) as any)?.name === 'Input')) {
+            if (m.kind === 'set' && hasInputDecorator(m)) {
                 extractCalls(m, 'next', names);
             }
             // ngOnChanges is a lifecycle bridge — .next() here is a legitimate pattern
-            if ((m as any).key?.name === 'ngOnChanges') {
+            const keyName = m.key?.name;
+            if (keyName === 'ngOnChanges') {
                 const body = getMethodBody(m);
                 if (body) extractCalls(body, 'next', names);
             }
-            if ((m as any).key?.name === 'ngOnDestroy') {
+            if (keyName === 'ngOnDestroy') {
                 const body = getMethodBody(m);
                 if (body) extractCalls(body, 'complete', names);
             }
@@ -86,6 +88,18 @@ function getBridgeNames(classBody: AstNode[]): Set<string> {
         }
     }
     return names;
+}
+
+function hasInputDecorator(member: AstNode): boolean {
+    const decorators = member.decorators;
+    if (!Array.isArray(decorators)) return false;
+    for (const d of decorators) {
+        const expr = unwrapNode(d.expression);
+        if (expr?.name === 'Input') return true;
+        const callee = unwrapNode(expr?.callee);
+        if (callee?.name === 'Input') return true;
+    }
+    return false;
 }
 
 function getSubjectsWithPipe(classBody: AstNode[]): Set<string> {
@@ -113,11 +127,11 @@ export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
         for (const m of classBody) {
             if (m.type !== 'PropertyDefinition' || m.accessibility === 'public') continue;
 
-            const init = unwrapNode((m as any).value ?? (m as any).initializer);
+            const init = unwrapNode((m.value as AstNode | undefined) ?? m.initializer);
             if (!init || init.type !== 'NewExpression') continue;
 
             const type = getSubjectType(init.callee, aliases);
-            const name = (m.key as any)?.name ?? '';
+            const name = (m.key?.name) ?? '';
             if (!type || !name || TEARDOWN_NAMES.has(name.toLowerCase()) || bridgeNames.has(name) || pipeNames.has(name)) continue;
 
             const { line, column } = context.locator.location(getNodeStart(m));

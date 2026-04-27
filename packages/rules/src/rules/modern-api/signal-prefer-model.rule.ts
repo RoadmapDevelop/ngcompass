@@ -33,7 +33,7 @@ function hasSignal(member: AstNode, name: string): boolean {
 }
 
 function getMemberName(member: AstNode): string | null {
-    const key = unwrapNode(member.key as AstNode | undefined);
+    const key = unwrapNode(member.key);
     if (!key) return null;
     return key.type === 'Identifier' ? (key.name ?? null) : (key.type === 'Literal' ? String(key.value) : null);
 }

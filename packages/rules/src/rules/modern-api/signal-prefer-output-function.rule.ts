@@ -21,7 +21,10 @@ function isOutputDecorator(member: AstNode): boolean {
 
 function isEventEmitter(member: AstNode, context: RuleContext): boolean {
     const val = unwrapNode(member.value as AstNode);
-    if (val?.type === 'NewExpression' && unwrapNode(val.callee)?.type === 'Identifier' && (unwrapNode(val.callee) as any).name === 'EventEmitter') return true;
+    if (val?.type === 'NewExpression') {
+        const callee = unwrapNode(val.callee);
+        if (callee?.type === 'Identifier' && callee.name === 'EventEmitter') return true;
+    }
 
     const typeAnn = unwrapNode(member.typeAnnotation as AstNode);
     if (typeAnn && getParamTypeName(typeAnn).includes('EventEmitter')) return true;
@@ -48,7 +51,7 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
             if (isOutputDecorator(m) && isEventEmitter(m, context)) {
                 const start = getNodeStart(m);
                 const { line, column } = context.locator.location(start);
-                const key = unwrapNode(m.key as AstNode | undefined);
+                const key = unwrapNode(m.key);
                 const name = (key?.type === 'Identifier' ? key.name : (key?.type === 'Literal' ? String(key.value) : '')) || '(unknown)';
 
                 failures.push({

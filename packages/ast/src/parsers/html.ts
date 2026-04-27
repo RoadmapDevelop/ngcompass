@@ -40,6 +40,6 @@ export const parseHtml = (content: string, templateStartOffset = 0): HtmlParserR
  * @param content - Template source text
  * @returns Parser output
  */
-const runAngularHtmlParse = (content: string): { rootNodes: any[]; errors: any[] } => {
-    return parse(content, { tokenizeAngularBlocks: true }) as any;
+const runAngularHtmlParse = (content: string): { rootNodes: unknown[]; errors: unknown[] } => {
+    return parse(content, { tokenizeAngularBlocks: true }) as { rootNodes: unknown[]; errors: unknown[] };
 };

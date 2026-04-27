@@ -17,29 +17,35 @@ const OBSERVABLE_TYPES = new Set(['Observable', 'Subject', 'BehaviorSubject', 'R
 const TEARDOWN_NAMES = new Set(['destroy$', 'destroyed$', 'unsub$', 'teardown$', 'dispose$']);
 
 function isOutputMember(member: AstNode): boolean {
-    const decorators = (member as any).decorators || (member as any).modifiers?.filter((m: any) => m.type === 'Decorator');
+    const modifiers = member.modifiers as ReadonlyArray<AstNode> | undefined;
+    const decorators = (member.decorators as ReadonlyArray<AstNode> | undefined) ??
+        (Array.isArray(modifiers) ? modifiers.filter((m) => m.type === 'Decorator') : undefined);
     return Array.isArray(decorators) && decorators.some(d => {
-        const expr = unwrapNode(d?.expression);
+        const expr = unwrapNode(d.expression);
         const name = expr?.type === 'CallExpression' ? getCalleeName(expr) : (expr?.type === 'Identifier' ? expr.name : null);
         return name === 'Output';
     });
 }
 
 function getTypeName(member: AstNode): string {
-    const typeNode = unwrapNode((member as any).typeAnnotation?.typeAnnotation);
+    const typeAnn = member.typeAnnotation;
+    const typeNode = unwrapNode(typeAnn?.typeAnnotation);
     if (!typeNode || (typeNode.type !== 'TSTypeReference' && typeNode.type !== 'TypeReference')) return '';
 
-    const tn = typeNode.typeName ?? typeNode.name;
+    const tn = typeNode.typeName ?? (typeNode.name as AstNode | string | undefined);
     if (typeof tn === 'string') return tn;
-    if (tn?.type === 'Identifier') return tn.name ?? '';
-    if (tn?.type === 'TSQualifiedName') return unwrapNode(tn.right)?.name ?? '';
+    if (tn && typeof tn === 'object') {
+        const tnNode = tn;
+        if (tnNode.type === 'Identifier') return (tnNode.name) ?? '';
+        if (tnNode.type === 'TSQualifiedName') return unwrapNode(tnNode.right)?.name as string ?? '';
+    }
     return '';
 }
 
 function isObservableSource(member: AstNode): boolean {
     if (OBSERVABLE_TYPES.has(getTypeName(member))) return true;
 
-    const init = unwrapNode((member as any).value ?? (member as any).initializer);
+    const init = unwrapNode((member.value as AstNode | undefined) ?? member.initializer);
     if (!init) return false;
 
     const callee = getCalleeName(init);
@@ -53,7 +59,7 @@ function isObservableSource(member: AstNode): boolean {
 
     const stack = [init];
     while (stack.length > 0) {
-        const curr = unwrapNode(stack.pop()!);
+        const curr = unwrapNode(stack.pop());
         if (!curr) continue;
         if (curr.type === 'CallExpression' && getCalleeName(curr) === 'pipe') return true;
         for (const child of childNodes(curr)) stack.push(child);
@@ -64,7 +70,8 @@ function isObservableSource(member: AstNode): boolean {
 export const rxjsPreferToSignalRule = createAnyAngularClassRule(
     RULE_NAME,
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if ((streamNode as any).metadata?.type !== 'Component') return null;
+        const meta = (streamNode as unknown as { metadata?: { type?: string } }).metadata;
+        if (meta?.type !== 'Component') return null;
 
         const templateRefs = context.crossRef?.templateReferences;
         if (templateRefs === undefined) return null;
@@ -75,7 +82,7 @@ export const rxjsPreferToSignalRule = createAnyAngularClassRule(
         for (const member of classBody) {
             if (member.type !== 'PropertyDefinition') continue;
 
-            const name = (member.key as any)?.name ?? '';
+            const name = (member.key?.name) ?? '';
             if (!name || !name.endsWith('$') || TEARDOWN_NAMES.has(name.toLowerCase())) continue;
             if (isOutputMember(member)) continue;
 

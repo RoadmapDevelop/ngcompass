@@ -14,6 +14,26 @@ import { CacheConfig } from './drivers/types.js';
 import { computeCompositeHash } from './services/hashing.js';
 import { CACHE_VERSION } from './constants.js';
 import { CacheContext } from './types.js';
+import { AsyncDriver, DriverStats } from './drivers/types.js';
+
+const createAsyncMemoryDriver = <T>(maxItems?: number, ttl?: number): AsyncDriver<T> => {
+    const driver = createMemoryDriver<T>({ maxItems, ttl });
+
+    return {
+        get: async (key: string): Promise<T | undefined> => driver.get(key),
+        set: async (key: string, value: T): Promise<void> => {
+            driver.set(key, value);
+        },
+        has: async (key: string): Promise<boolean> => driver.has(key),
+        delete: async (key: string): Promise<void> => {
+            driver.delete(key);
+        },
+        clear: async (): Promise<void> => {
+            driver.clear();
+        },
+        getStats: async (): Promise<DriverStats> => driver.getStats(),
+    };
+};
 
 /**
  * Initializes the caching system.
@@ -21,6 +41,8 @@ import { CacheContext } from './types.js';
 export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
     const cwd = process.cwd();
     const defaultBaseDir = path.resolve(cwd, 'node_modules', '.cache', 'ngcompass');
+    const useMemoryOnly = !config.disk?.path;
+    const cacheLocation = config.disk?.path ?? '[memory]';
 
     // 1. Drivers
     // Sources: Memory Only
@@ -33,31 +55,45 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         maxItems: 200 // Keep top 200 ASTs in memory
     });
 
-    const astL2 = createDiskDriver<AstEntry>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'ast'),
-        ttl: config.disk?.ttl
-    });
+    const astL2 = useMemoryOnly
+        ? createAsyncMemoryDriver<AstEntry>(config.memory?.maxItems, config.memory?.ttl)
+        : createDiskDriver<AstEntry>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'ast'),
+            ttl: config.disk?.ttl
+        });
 
-    const resultDriver = createDiskDriver<unknown>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'results')
-    });
+    const resultDriver = useMemoryOnly
+        ? createAsyncMemoryDriver<unknown>(config.memory?.maxItems, config.memory?.ttl)
+        : createDiskDriver<unknown>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'results'),
+            ttl: config.disk?.ttl,
+        });
 
-    const configDriver = createAtomicDriver<unknown>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'config')
-    });
+    const configDriver = useMemoryOnly
+        ? createAsyncMemoryDriver<unknown>(config.memory?.maxItems, config.memory?.ttl)
+        : createAtomicDriver<unknown>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'config')
+        });
 
-    const metaDriver = createJsonFileDriver<FileMeta>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'meta')
-    });
+    const metaDriver = useMemoryOnly
+        ? createAsyncMemoryDriver<FileMeta>(config.memory?.maxItems, config.memory?.ttl)
+        : createJsonFileDriver<FileMeta>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'meta')
+        });
 
-    // Use regular disk driver for plan cache
-    const planDriver = createDiskDriver<unknown>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'plans'),
-    });
+    const planDriver = useMemoryOnly
+        ? createAsyncMemoryDriver<unknown>(config.memory?.maxItems, config.memory?.ttl)
+        : createDiskDriver<unknown>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'plans'),
+            ttl: config.disk?.ttl,
+        });
 
-    const fileDriver = createDiskDriver<FileCacheEntry>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'files'),
-    });
+    const fileDriver = useMemoryOnly
+        ? createAsyncMemoryDriver<FileCacheEntry>(config.memory?.maxItems, config.memory?.ttl)
+        : createDiskDriver<FileCacheEntry>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'files'),
+            ttl: config.disk?.ttl,
+        });
 
     // 2. Services
     const sources = createSourceCache(sourceDriver);
@@ -69,9 +105,12 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
     const files = createFileCache(fileDriver);
 
     // Analysis results cache (disk driver, keyed by global hash)
-    const analysisDriver = createDiskDriver<unknown>({
-        path: path.join(config.disk?.path ?? defaultBaseDir, 'analysis')
-    });
+    const analysisDriver = useMemoryOnly
+        ? createAsyncMemoryDriver<unknown>(config.memory?.maxItems, config.memory?.ttl)
+        : createDiskDriver<unknown>({
+            path: path.join(config.disk?.path ?? defaultBaseDir, 'analysis'),
+            ttl: config.disk?.ttl,
+        });
     const analysis = createResultCache(analysisDriver);
 
     // Shared helper: clear every driver — single source of truth for "clear all".
@@ -98,7 +137,9 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
         analysis,
         computeHash: computeCompositeHash,
         prune: async () => {
-            await astL2.prune();
+            if ('prune' in astL2 && typeof astL2.prune === 'function') {
+                await astL2.prune();
+            }
         },
         clear: clearAllDrivers,
         clearType: async (type) => {
@@ -123,10 +164,10 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
             await Promise.all([
                 results.flush(),
                 analysis.flush(),
-                metaDriver.flush(),
+                metas.flush(),
             ]);
         },
-        getCachePath: () => config.disk?.path ?? defaultBaseDir,
+        getCachePath: () => cacheLocation,
         getInfo: async () => {
             const astL1Stats = astL1.getStats();
             const [
@@ -165,7 +206,7 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
                 config: { entries: configStats.entries, size: configStats.size },
                 results: { entries: resultStats.entries, size: resultStats.size },
                 totalSize,
-                location: config.disk?.path ?? defaultBaseDir,
+                location: cacheLocation,
                 version: CACHE_VERSION
             };
         }

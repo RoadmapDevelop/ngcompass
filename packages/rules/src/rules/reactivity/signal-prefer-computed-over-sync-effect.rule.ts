@@ -42,7 +42,9 @@ function isSignalRead(node: MaybeAstNode, context: RuleContext, inEffect: boolea
                 const type = context.typeChecker.getTypeOfSymbolAtLocation(sym, sym.valueDeclaration!);
                 if (type && context.typeChecker.typeToString(type).includes('Signal')) return true;
             }
-        } catch {}
+        } catch {
+            // Fall back to heuristic detection when type-checker lookup fails.
+        }
     }
 
     if (isMemberExpressionLike(callee)) return unwrapNode(callee.object)?.type === 'ThisExpression';
@@ -54,7 +56,7 @@ function analyzeEffect(root: AstNode, context: RuleContext): { hasRead: boolean;
     const stack: AstNode[] = [root];
 
     while (stack.length) {
-        const node = unwrapNode(stack.pop()!);
+        const node = unwrapNode(stack.pop());
         if (!node) continue;
 
         if (node.type === 'AwaitExpression' || node.type === 'YieldExpression') res.hasAsync = true;
