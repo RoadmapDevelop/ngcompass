@@ -72,7 +72,7 @@ export function buildProjectContext(
         ngModuleMap:          ngModuleMap          as ReadonlyMap<string, NgModuleInfo>,
         standaloneComponents: standaloneComponents as ReadonlySet<string>,
         classToFile:          classToFile          as ReadonlyMap<string, string>,
-        componentGraph: componentGraph as ReadonlyMap<string, ComponentFiles>,
+        componentGraph,
         projectFiles:   projectFileSet,
         rootDir,
         // CTX-002
@@ -285,7 +285,7 @@ function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
             node.arguments.length > 0 &&
             ts.isStringLiteralLike(node.arguments[0])
         ) {
-            specifiers.push((node.arguments[0] as ts.StringLiteralLike).text);
+            specifiers.push(node.arguments[0].text);
         }
 
         ts.forEachChild(node, visit);

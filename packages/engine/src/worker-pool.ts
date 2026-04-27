@@ -185,7 +185,6 @@ const resolveWorkerPath = async (): Promise<string | null> => {
     const candidates = [
         join(__dirname, "..", "..", "rules", "dist", "execution-worker.js"),
         join(__dirname, "..", "..", "rules", "dist", "execution-worker.cjs"),
-        join(__dirname, "..", "..", "rules", "src", "execution-worker.ts"),
     ];
 
     for (const candidate of candidates) {

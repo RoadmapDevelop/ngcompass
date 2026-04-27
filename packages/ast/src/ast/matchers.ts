@@ -288,7 +288,7 @@ export const getInputSignalAliasUnsafe = (callExpr: CallExpression): string | un
 };
 
 /** Extracts alias from input.required({ alias: 'alias' }). */
-const getRequiredInputAlias = (args: readonly any[]): string | undefined => {
+const getRequiredInputAlias = (args: ReadonlyArray<Expression>): string | undefined => {
     const first = args[0];
     if (!first || first.type !== 'ObjectExpression') return undefined;
     return getLiteralStringValueUnsafe(
@@ -297,7 +297,7 @@ const getRequiredInputAlias = (args: readonly any[]): string | undefined => {
 };
 
 /** Extracts alias from input('alias') or input(defaultVal, { alias: 'alias' }). */
-const getOptionalInputAlias = (args: readonly any[]): string | undefined => {
+const getOptionalInputAlias = (args: ReadonlyArray<Expression>): string | undefined => {
     if (args.length === 1) {
         const first = args[0];
         if (first.type === 'StringLiteral' || first.type === 'Literal') {

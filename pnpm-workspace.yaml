@@ -3,7 +3,6 @@ packages:
 
 catalog:
   '@types/node': ^25.1.0
-  eslint: ^8.57.1
   rimraf: ^6.1.2
   tsup: ^8.5.1
   typescript: 5.9.3

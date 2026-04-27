@@ -1,0 +1,60 @@
+{
+    "name": "@ngcompass/cli",
+    "version": "0.0.1",
+    "description": "Command line interface for ngcompass",
+    "sideEffects": false,
+    "bin": {
+        "compass": "./dist/index.js"
+    },
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
+        "test": "vitest run --passWithNoTests",
+        "test:watch": "vitest --passWithNoTests",
+        "test:ui": "vitest --ui --passWithNoTests",
+        "test:coverage": "vitest run --coverage --passWithNoTests",
+        "lint": "eslint src --ext .ts",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@ngcompass/common": "workspace:*",
+        "@ngcompass/reporters": "workspace:*",
+        "@ngcompass/rules": "workspace:*",
+        "@ngcompass/cache": "workspace:*",
+        "@ngcompass/config": "workspace:*",
+        "@ngcompass/engine": "workspace:*",
+        "@ngcompass/scanner": "workspace:*",
+        "@ngcompass/planner": "workspace:*",
+        "@ngcompass/ast": "workspace:*",
+        "@ngcompass/testing": "workspace:*",
+        "commander": "^11.0.0",
+        "picocolors": "^1.1.1"
+    },
+    "keywords": [
+        "angular",
+        "analysis",
+        "cli"
+    ],
+    "author": "ngcompass",
+    "license": "MIT",
+    "devDependencies": {
+        "@types/node": "^25.1.0",
+        "typescript": "catalog:"
+    }
+}

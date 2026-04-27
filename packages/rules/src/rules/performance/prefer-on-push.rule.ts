@@ -3,7 +3,7 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createComponentRule } from '@ngcompass/engine';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 
-type AnyNode = any;
+type LoosePropertyBag = Record<string, unknown>;
 
 const RULE_NAME = 'prefer-on-push-component-change-detection';
 
@@ -12,20 +12,33 @@ type DeclaringModuleContext = {
     siblingComponentCount: number;
 };
 
+function getNumberProp(obj: LoosePropertyBag | undefined, key: string): number | undefined {
+    const value = obj?.[key];
+    return typeof value === 'number' ? value : undefined;
+}
+
 function getSafeReportOffset(classNode: AngularClassNode): number {
-    const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
-    return metadata?.decoratorStart ?? metadata?.start ?? (classNode as AnyNode)?.node?.start ?? (classNode as AnyNode)?.start ?? 0;
+    const wrapper = classNode as unknown as LoosePropertyBag;
+    const metadata = (wrapper.metadata as LoosePropertyBag | undefined) ?? {};
+    const node = wrapper.node as LoosePropertyBag | undefined;
+
+    return getNumberProp(metadata, 'decoratorStart')
+        ?? getNumberProp(metadata, 'start')
+        ?? getNumberProp(node, 'start')
+        ?? getNumberProp(wrapper, 'start')
+        ?? 0;
 }
 
 function getComponentName(classNode: AngularClassNode): string {
-    const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
-    return metadata?.className ?? 'AnonymousComponent';
+    const metadata = (classNode as unknown as LoosePropertyBag).metadata as LoosePropertyBag | undefined;
+    const className = metadata?.className;
+    return typeof className === 'string' ? className : 'AnonymousComponent';
 }
 
-function isReportableChangeDetection(changeDetection: AnyNode): boolean {
+function isReportableChangeDetection(changeDetection: unknown): boolean {
     if (!changeDetection || typeof changeDetection !== 'object') return false;
 
-    const { kind, value } = changeDetection;
+    const { kind, value } = changeDetection as { kind?: unknown; value?: unknown };
 
     if (kind === 'non-literal') return false;
     if (kind === 'literal') return value !== ChangeDetectionStrategy.OnPush;
@@ -51,8 +64,9 @@ function getModuleNameFromFilePath(moduleFilePath: string): string {
 function getDeclaringModuleContext(classNode: AngularClassNode, context: RuleContext): DeclaringModuleContext | null {
     if (!context.project) return null;
 
-    const componentName = (classNode as AnyNode)?.metadata?.className;
-    if (!componentName) return null;
+    const metadata = (classNode as unknown as LoosePropertyBag).metadata as LoosePropertyBag | undefined;
+    const componentName = metadata?.className;
+    if (typeof componentName !== 'string' || !componentName) return null;
 
     const currentFilePath = normalizeFilePath(context.filePath);
     const { ngModuleMap, classToFile } = context.project;
@@ -114,7 +128,7 @@ function createFailure(classNode: AngularClassNode, context: RuleContext): RuleF
 export const preferOnPushRule = createComponentRule(
     RULE_NAME,
     (classNode: AngularClassNode, context: RuleContext): RuleFailure | null => {
-        const metadata: AnyNode = (classNode as AnyNode)?.metadata ?? {};
+        const metadata = ((classNode as unknown as LoosePropertyBag).metadata as LoosePropertyBag | undefined) ?? {};
 
         if (metadata.type !== 'Component' || !isReportableChangeDetection(metadata.changeDetection)) {
             return null;

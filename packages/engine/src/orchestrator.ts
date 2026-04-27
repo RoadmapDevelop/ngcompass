@@ -12,7 +12,7 @@ import pLimit from "p-limit";
 
 import { Task, ExecutionPlanOutput, groupTasksByFile } from "@ngcompass/planner";
 import { CacheContext } from "@ngcompass/cache";
-import { RuleResult, Result, Ok, Err, AnalysisResult } from "@ngcompass/common";
+import { RuleResult, Result, Ok, Err, AnalysisResult, ParserOptions } from "@ngcompass/common";
 import { debug, createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
 
 import { createAnalysisContext } from "./analysis-context.js";
@@ -111,6 +111,9 @@ export interface AnalysisOptions {
      * solely from the TypeScript Program's source-file list).
      */
     readonly files?: ReadonlyArray<string>;
+
+    /** Optional TypeScript parser settings from config. */
+    readonly parserOptions?: ParserOptions;
 }
 
 /**
@@ -173,6 +176,7 @@ export const runAnalysis = async (
                 true,
                 options.errorCollector,
                 options.files,
+                options.parserOptions,
             );
             executedResults = [...executedResults, ...typeAwareResults];
         }
@@ -239,9 +243,10 @@ const executeTasksLocally = async (
     errorCollector?: InfrastructureErrorCollector,
     /** CTX-001: scanner-discovered files forwarded to ProjectContext builder. */
     files?: ReadonlyArray<string>,
+    parserOptions?: ParserOptions,
 ): Promise<RuleResult[]> => {
     const context = useTypeAwareContext
-        ? createTypeAwareAnalysisContext(rootDir, files ?? [])
+        ? createTypeAwareAnalysisContext(rootDir, files ?? [], parserOptions)
         : createAnalysisContext(rootDir);
 
     if (useTypeAwareContext) {

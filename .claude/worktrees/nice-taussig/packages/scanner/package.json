@@ -1,0 +1,50 @@
+{
+    "name": "@ngcompass/scanner",
+    "version": "0.0.1",
+    "description": "File system scanning (glob, git, gitignore) for ngcompass",
+    "sideEffects": false,
+    "main": "./dist/index.cjs",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js",
+            "require": "./dist/index.cjs"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "build:prod": "NODE_ENV=production tsup --minify",
+        "dev": "tsup --watch",
+        "test": "vitest run --passWithNoTests",
+        "test:watch": "vitest --passWithNoTests",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@ngcompass/cache": "workspace:*",
+        "@ngcompass/common": "workspace:*",
+        "ignore": "^7.0.3",
+        "minimatch": "^10.2.4",
+        "tinyglobby": "^0.2.15"
+    },
+    "peerDependencies": {
+        "typescript": "catalog:"
+    },
+    "devDependencies": {
+        "@types/node": "^25.1.0"
+    },
+    "keywords": [
+        "angular",
+        "scanner",
+        "glob",
+        "ngcompass"
+    ],
+    "author": "ngcompass",
+    "license": "MIT"
+}

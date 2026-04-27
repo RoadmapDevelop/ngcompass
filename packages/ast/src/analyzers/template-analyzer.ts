@@ -6,6 +6,31 @@ export interface HtmlParserResult {
 import type { TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode } from '../node-streams.js';
 import { parseSync } from 'oxc-parser';
 
+/**
+ * Loose shape used for traversing angular-html-parser AST nodes.
+ * The library does not export types, so we model only the fields we touch.
+ */
+type HtmlAstNode = {
+    children?: readonly HtmlAstNode[];
+    attrs?: ReadonlyArray<{
+        name: string;
+        value: string;
+        valueSpan?: { start?: { offset?: number } };
+        sourceSpan?: { start?: { offset?: number }; end?: { offset?: number } };
+    }>;
+    kind?: string;
+    type?: string;
+    constructor?: { name?: string };
+    value?: string;
+    tokens?: ReadonlyArray<{ type: number; parts?: string[]; sourceSpan: { start: { offset: number } } }>;
+    name?: string;
+    parameters?: ReadonlyArray<{
+        expression?: string;
+        sourceSpan?: { start?: { offset?: number }; end?: { offset?: number } };
+    }>;
+    sourceSpan?: { start?: { offset?: number }; end?: { offset?: number } };
+};
+
 // ============================================
 // PUBLIC API
 // ============================================
@@ -19,7 +44,7 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
     const attributes: TemplateAttributeNode[] = [];
     const blocks: TemplateBlockNode[] = [];
 
-    const visit = (node: any) => {
+    const visit = (node: HtmlAstNode | undefined | null) => {
         if (!node) return;
 
         if (node.children) {
@@ -31,7 +56,7 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
         visitBlock(node, blocks, expressions);
     };
 
-    for (const rootNode of htmlResult.rootNodes) visit(rootNode);
+    for (const rootNode of htmlResult.rootNodes) visit(rootNode as HtmlAstNode);
 
     return { expressions, attributes, blocks };
 };
@@ -41,7 +66,7 @@ export const analyzeTemplate = (htmlResult: HtmlParserResult): {
 // ============================================
 
 const visitAttributes = (
-    node: any,
+    node: HtmlAstNode,
     attributes: TemplateAttributeNode[],
     expressions: TemplateExpressionNode[],
 ): void => {
@@ -69,7 +94,7 @@ const visitAttributes = (
     }
 };
 
-const visitTextNode = (node: any, expressions: TemplateExpressionNode[]): void => {
+const visitTextNode = (node: HtmlAstNode, expressions: TemplateExpressionNode[]): void => {
     const isText = node.kind === 'text' || node.type === 'text' || node.constructor?.name === 'Text';
     if (!isText || !node.value) return;
 
@@ -81,19 +106,19 @@ const visitTextNode = (node: any, expressions: TemplateExpressionNode[]): void =
 };
 
 const visitBlock = (
-    node: any,
+    node: HtmlAstNode,
     blocks: TemplateBlockNode[],
     expressions: TemplateExpressionNode[],
 ): void => {
     if (node.kind !== 'block' && node.constructor?.name !== 'Block') return;
 
-    const blockName: string = node.name;
-    const parameters: any[] = node.parameters ?? [];
+    const blockName = node.name ?? '';
+    const parameters = node.parameters ?? [];
 
     blocks.push({
         name: blockName,
-        parameters: parameters.map((p: any) => ({
-            expression: p.expression,
+        parameters: parameters.map((p) => ({
+            expression: p.expression ?? '',
             sourceSpan: {
                 start: p.sourceSpan?.start?.offset ?? 0,
                 end: p.sourceSpan?.end?.offset ?? 0,
@@ -122,7 +147,8 @@ const visitBlock = (
 // ============================================
 
 /** Extracts {{ expr }} from angular-html-parser token list when available. */
-const extractInterpolationsFromTokens = (node: any, expressions: TemplateExpressionNode[]): void => {
+const extractInterpolationsFromTokens = (node: HtmlAstNode, expressions: TemplateExpressionNode[]): void => {
+    if (!node.tokens) return;
     for (const token of node.tokens) {
         if (token.type === 8 && token.parts?.length === 3) {
             const expr = token.parts[1];
@@ -133,8 +159,8 @@ const extractInterpolationsFromTokens = (node: any, expressions: TemplateExpress
 };
 
 /** Extracts {{ expr }} via manual scan when token list is not available. */
-const extractInterpolationsManually = (node: any, expressions: TemplateExpressionNode[]): void => {
-    const textValue = node.value as string;
+const extractInterpolationsManually = (node: HtmlAstNode, expressions: TemplateExpressionNode[]): void => {
+    const textValue = node.value ?? '';
     const nodeStart = node.sourceSpan?.start?.offset ?? 0;
     let lastIndex = 0;
 
@@ -207,9 +233,9 @@ const parseAndAdd = (code: string, offset: number, outcomes: TemplateExpressionN
         const stmt = ret.program.body[0];
         if (stmt.type !== 'ExpressionStatement' || !stmt.expression) return;
 
-        let expr: any = stmt.expression;
+        let expr = stmt.expression as { type: string; expression?: unknown };
         if (expr.type === 'ParenthesizedExpression' && expr.expression) {
-            expr = expr.expression;
+            expr = expr.expression as typeof expr;
         }
 
         outcomes.push({

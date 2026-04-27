@@ -33,7 +33,7 @@ export const signalPreferInputSignalRule = createAnyAngularClassRule(
             if (m.decorators.some(isInputDecorator)) {
                 const start = getNodeStart(m);
                 const { line, column } = context.locator.location(start);
-                const key = unwrapNode(m.key as AstNode | undefined);
+                const key = unwrapNode(m.key);
                 const name = (key?.type === 'Identifier' ? key.name : (key?.type === 'Literal' ? String(key.value) : '')) || '(unknown)';
 
                 let msg = `'${name}' uses the legacy @Input() decorator. Prefer the signal-based \`input()\` / \`input.required()\` API (Angular 17.1+).`;

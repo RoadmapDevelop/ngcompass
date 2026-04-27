@@ -7,9 +7,9 @@ import { exitWithError } from './exit.js';
 export function registerInitCommand(program: Command, _cache: CacheContext) {
     program
         .command('init')
-        .description('Initialize a new ngcompass configuration file')
-        .option('-f, --force', 'Overwrite existing configuration')
-        .option('--cwd <path>', 'Working directory', process.cwd())
+        .description('Create a starter ngcompass configuration in the current project')
+        .option('-f, --force', 'Overwrite an existing configuration file')
+        .option('--cwd <path>', 'Project directory where the configuration will be created', process.cwd())
         .action(async (options) => {
             try {
                 const result = await initConfig({
@@ -23,8 +23,8 @@ export function registerInitCommand(program: Command, _cache: CacheContext) {
                 if (!result.success && !result.alreadyExists) {
                     exitWithError();
                 }
-            } catch (error: any) {
-                console.error(error.message);
+            } catch (error: unknown) {
+                console.error(error instanceof Error ? error.message : String(error));
                 exitWithError();
             }
         });

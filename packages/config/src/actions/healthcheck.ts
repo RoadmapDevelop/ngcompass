@@ -11,14 +11,14 @@ export interface ValidateConfigOptions {
 export async function validateConfig(options: ValidateConfigOptions = {}): Promise<ConfigValidationResult> {
     try {
         return await resolveConfig(options);
-    } catch (error: any) {
+    } catch (error: unknown) {
         return {
             config: undefined,
             report: {
                 valid: false,
                 issues: [{
                     code: "error-conf-semantic",
-                    message: error.message,
+                    message: error instanceof Error ? error.message : String(error),
                     path: [],
                     severity: "error"
                 }]

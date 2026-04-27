@@ -25,6 +25,14 @@ const ERROR_CODES = {
     PROFILE_NOT_FOUND: "error-profile-not-found",
 } as const;
 
+const BUILTIN_PRESETS = new Set([
+    "recommended",
+    "strict",
+    "performance",
+    "reactivity",
+    "all",
+]);
+
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
@@ -228,13 +236,17 @@ function buildProfileNotFoundResult(
     filePath: string | undefined,
 ): ConfigValidationResult {
     const available = Object.keys(availableProfiles).join(", ");
+    const profileLooksLikePreset = BUILTIN_PRESETS.has(profile.replace(/^ngcompass:/, ""));
+    const presetHint = profileLooksLikePreset
+        ? ` "${profile}" is a built-in preset, not a config profile. Use 'extends: "ngcompass:${profile.replace(/^ngcompass:/, "")}"' in your config instead.`
+        : "";
     return {
         config: undefined,
         report: {
             valid: false,
             issues: [{
                 code: ERROR_CODES.PROFILE_NOT_FOUND,
-                message: `Profile "${profile}" not found. Available: [${available}]`,
+                message: `Profile "${profile}" not found. Available: [${available}]${presetHint}`,
                 path: ["profiles", profile],
                 severity: "error" as const,
                 file: filePath,

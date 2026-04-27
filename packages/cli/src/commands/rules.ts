@@ -7,8 +7,8 @@ import { exitWithError } from './exit.js';
 export function registerRulesCommand(program: Command) {
     program
         .command('rules [ruleName]')
-        .description('List all available rules or show details of a specific rule')
-        .option('--preset <name>', 'Filter rules by preset (recommended, strict, performance, reactivity, all)')
+        .description('Browse available rules or inspect details for a specific rule')
+        .option('--preset <name>', 'Filter by preset: recommended, strict, performance, reactivity, or all')
         .action((ruleName: string | undefined, opts: { preset?: string }) => {
             if (opts.preset && !isBuiltinPreset(opts.preset)) {
                 console.error(pc.red(`Unknown preset: "${opts.preset}". Available: recommended, strict, all, performance, reactivity`));

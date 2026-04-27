@@ -37,6 +37,8 @@ function createMockContext(overrides?: Partial<ValidationContext>): ValidationCo
                 const lastSlash = normalized.lastIndexOf('/');
                 return lastSlash <= 0 ? '/' : normalized.slice(0, lastSlash);
             },
+            resolve: (...parts: string[]) => parts.join('/').replace(/\\/g, '/').replace(/\/+/g, '/'),
+            isAbsolute: (p: string) => p.startsWith('/') || /^[A-Za-z]:[\\/]/.test(p),
         },
         ...overrides,
     };
@@ -73,13 +75,12 @@ describe('Resilience: Pipeline Fault Tolerance', () => {
         /**
          * Test scenario: 
          * 1. 'maxWorkers' is the wrong type (Schema Error)
-         * 2. 'autoFix' conflicts with 'autoFixOnSave' (Semantic Error)
+         * 2. 'maxWarnings' is negative (Semantic Error)
          */
         const result = await validateConfiguration(
             {
                 maxWorkers: 'high',
-                autoFix: true,
-                autoFixOnSave: true,
+                maxWarnings: -1,
             },
             createMockContext()
         );
@@ -87,7 +88,7 @@ describe('Resilience: Pipeline Fault Tolerance', () => {
         const codes = result.report.issues.map(i => i.code);
 
         // Ensure the semantic check was reached despite the schema failure
-        expect(codes).toContain('mutually-exclusive-autofix');
+        expect(codes).toContain('negative-max-warnings');
 
         // Ensure the schema error was also captured
         const hasSchemaError = result.report.issues.some(i => i.severity === 'error');
@@ -98,15 +99,14 @@ describe('Resilience: Pipeline Fault Tolerance', () => {
         const result = await validateConfiguration(
             {
                 include: ['src/**/*.ts'],
-                autoFix: true,
-                autoFixOnSave: true, // cross-fields check
+                maxWarnings: -1, // cross-fields check
                 rules: { '': 'error' }, // rules check
             },
             createMockContext()
         );
 
         const codes = result.report.issues.map(i => i.code);
-        expect(codes).toContain('mutually-exclusive-autofix');
+        expect(codes).toContain('negative-max-warnings');
         expect(codes).toContain('empty-rule-name');
     });
 
@@ -114,26 +114,24 @@ describe('Resilience: Pipeline Fault Tolerance', () => {
         const result = await validateConfiguration(
             {
                 include: ['src/**/*.ts'],
-                autoFix: true,
-                autoFixOnSave: true,
+                maxWarnings: -1,
             },
             createMockContext()
         );
 
-        const mutexIssues = result.report.issues.filter(
-            i => i.code === 'mutually-exclusive-autofix'
+        const matchingIssues = result.report.issues.filter(
+            i => i.code === 'negative-max-warnings'
         );
 
         // Even if multiple logic paths detect the same issue, only one should be reported
-        expect(mutexIssues).toHaveLength(1);
+        expect(matchingIssues).toHaveLength(1);
     });
 
     it('should prioritize errors over warnings in the final report output', async () => {
         const result = await validateConfiguration(
             {
                 include: ['src/**/*.ts'],
-                autoFix: true,
-                autoFixOnSave: true, // error
+                maxWarnings: -1, // error
                 rules: {},           // warning (no-rules configured)
             },
             createMockContext()
@@ -153,7 +151,7 @@ describe('Resilience: Pipeline Fault Tolerance', () => {
      */
     it('should block config exposure if any error-level issues exist', async () => {
         const result = await validateConfiguration(
-            { autoFix: true, autoFixOnSave: true },
+            { maxWarnings: -1 },
             createMockContext()
         );
 

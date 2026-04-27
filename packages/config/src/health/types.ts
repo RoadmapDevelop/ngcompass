@@ -17,14 +17,13 @@ export interface ValidationContext {
     };
     path: {
         dirname: (p: string) => string;
+        resolve: (...paths: string[]) => string;
+        isAbsolute: (p: string) => boolean;
     };
 }
 
 export interface ConfigBlock {
-    autoFix?: boolean;
-    autoFixOnSave?: boolean;
     maxWorkers?: number;
-    watchOptions?: { debounce?: number };
     cache?: CacheConfig;
 }
 

@@ -42,8 +42,6 @@ export const DEFAULT_CONFIG = {
     outputFormat: 'text' as OutputFormat,
     failOnSeverity: 'error' as FailSeverity,
     maxWarnings: 10,
-    reportUnusedDisableDirectives: true,
-    failOnInfrastructureError: false,
     include: ['src/**/*.ts'],
     exclude: [
         'node_modules/**',

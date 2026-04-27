@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 import { Command } from 'commander';
 import { registerCommands } from '../commands/index.js';
 import fs from 'node:fs';
@@ -62,9 +61,15 @@ export async function run() {
 
   program
     .name('ngcompass')
-    .description(packageJson.description || 'Angular Analysis Toolkit')
-    .version(packageJson.version)
-    .option('--debug', 'Enable debug output (all namespaces)')
+    .description(
+      'Static analysis and architecture insights for Angular codebases.'
+    )
+    .version(`v${packageJson.version}`, '-V, --version', 'Display ngcompass version')
+    .option('--debug', 'Enable detailed debug logs across all modules')
+    .addHelpText(
+      'after',
+      '\nExamples:\n  $ ngcompass init\n  $ ngcompass analyze --profile strict\n  $ ngcompass cache info\n'
+    )
     .hook('preAction', async (thisCommand, actionCommand) => {
       const opts = thisCommand.opts();
       if (opts.debug) {
@@ -72,7 +77,11 @@ export async function run() {
       }
 
       const actionOpts = actionCommand.opts();
-      if (actionOpts.format !== 'json' && actionOpts.format !== 'html') {
+      if (
+        actionOpts.format !== 'json' &&
+        actionOpts.format !== 'html' &&
+        actionOpts.format !== 'ui'
+      ) {
         const { default: pc } = await import('picocolors');
         process.stdout.write(
           `${pc.bold('ngcompass')} ${pc.cyan(packageJson.version)}\n`

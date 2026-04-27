@@ -29,7 +29,7 @@
     "dependencies": {
         "@ngcompass/cache": "workspace:*",
         "@ngcompass/common": "workspace:*",
-        "defu": "^6.1.4",
+        "defu": "^6.1.5",
         "jiti": "^2.6.1",
         "lilconfig": "^3.1.3",
         "minimatch": "^10.2.4",
@@ -48,5 +48,17 @@
         "ngcompass"
     ],
     "author": "ngcompass",
-    "license": "MIT"
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/SigoudisEftimis/ngcompass_.git",
+        "directory": "packages/config"
+    },
+    "homepage": "https://github.com/SigoudisEftimis/ngcompass_#readme",
+    "bugs": {
+        "url": "https://github.com/SigoudisEftimis/ngcompass_/issues"
+    },
+    "publishConfig": {
+        "access": "public"
+    }
 }

@@ -30,7 +30,7 @@ files.forEach(file => {
     // Also we might have `import { RuleFailure } from "../types.js"`
     if (newContent !== content) {
         fs.writeFileSync(file, newContent, 'utf-8');
-        console.log('Updated:', file);
+        process.stdout.write(`Updated: ${file}\n`);
     }
 });
-console.log('Done.');
+process.stdout.write('Done.\n');

@@ -4,12 +4,6 @@ type IssueTemplate = Omit<ConfigIssue, 'path'>;
 
 export const MESSAGES = {
     // Cross-field
-    MUTUALLY_EXCLUSIVE_AUTOFIX: (): IssueTemplate => ({
-        code: "mutually-exclusive-autofix",
-        message: "Options 'autoFix' and 'autoFixOnSave' cannot be enabled simultaneously.",
-        suggestion: "Choose one: 'autoFix' applies fixes immediately, 'autoFixOnSave' applies on file save.",
-        severity: "error"
-    }),
     NEGATIVE_MAX_WARNINGS: (val: number): IssueTemplate => ({
         code: "negative-max-warnings",
         message: `Value for 'maxWarnings' must be non-negative. Received: ${val}.`,
@@ -24,12 +18,6 @@ export const MESSAGES = {
         suggestion: "Set to 1 or higher, or remove to use default (CPU count - 1).",
         severity: "error"
     }),
-    NEGATIVE_DEBOUNCE: (val: number): IssueTemplate => ({
-        code: "negative-debounce",
-        message: `Debounce duration must be non-negative. Received: ${val}ms.`,
-        suggestion: "Set to 0 or higher. Typical values: 100-500ms for watch mode.",
-        severity: "error"
-    }),
     NEGATIVE_CACHE_TTL: (val: number): IssueTemplate => ({
         code: "negative-cache-ttl",
         message: `Cache TTL must be non-negative. Received: ${val}ms.`,
@@ -40,12 +28,6 @@ export const MESSAGES = {
         code: "warn-workers-excessive",
         message: `Worker count (${workers}) exceeds CPU count (${limit}). May cause context switching overhead.`,
         suggestion: `Reduce to ${limit} or lower for optimal performance.`,
-        severity: "warning"
-    }),
-    DEBOUNCE_EXCESSIVE: (val: number): IssueTemplate => ({
-        code: "warn-debounce-excessive",
-        message: `Debounce duration (${val}ms) is high. File changes won't be processed for ${(val / 1000).toFixed(1)}s.`,
-        suggestion: "Consider reducing to 100-500ms for better responsiveness.",
         severity: "warning"
     }),
     CACHE_TTL_ZERO: (): IssueTemplate => ({
@@ -158,18 +140,6 @@ export const MESSAGES = {
     }),
 
     // Profiles
-    PROFILE_MUTUALLY_EXCLUSIVE_AUTOFIX: (profile: string): IssueTemplate => ({
-        code: "profile-mutually-exclusive-autofix",
-        message: `Profile "${profile}" enables both 'autoFix' and 'autoFixOnSave'.`,
-        suggestion: "Choose one auto-fix strategy per profile.",
-        severity: "error"
-    }),
-    PROFILE_NEGATIVE_DEBOUNCE: (profile: string, val: number): IssueTemplate => ({
-        code: "profile-negative-debounce",
-        message: `Profile "${profile}" has invalid debounce: ${val}ms.`,
-        suggestion: "Set to 0 or higher. Typical values: 100-500ms.",
-        severity: "error"
-    }),
     PROFILE_CIRCULAR_INHERITANCE: (chain: string[]): IssueTemplate => ({
         code: "profile-circular-inheritance",
         message: `Circular profile inheritance detected: ${chain.join(" → ")}.`,
@@ -182,13 +152,6 @@ export const MESSAGES = {
         suggestion: "Remove 'profiles: {}' or add at least one profile like 'dev' or 'ci'.",
         severity: "warning"
     }),
-    PROFILE_HTML_OUTPUT_CI: (profile: string): IssueTemplate => ({
-        code: "warn-profile-html-output-ci",
-        message: `Profile "${profile}" combines HTML output with auto-fix.`,
-        suggestion: "Use JSON format for CI/CD, reserve HTML for local development review.",
-        severity: "warning"
-    }),
-
     // Extends chain
     EXTENDS_NOT_FOUND: (preset: string): IssueTemplate => ({
         code: "extends-not-found",

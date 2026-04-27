@@ -20,6 +20,7 @@ export {
     TelemetryConfig,
     TelemetryEventBase,
     ConfigOverride,
+    ParserOptions,
 } from './interfaces.js';
 export * from './errors';
 export * from './types';

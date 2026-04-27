@@ -35,15 +35,15 @@ function isSubscribeHandler(node: AstNode | null | undefined): node is AstNode {
 }
 
 function getObjectPropertyName(node: AstNode): string {
-    const key = unwrapNode((node as any).key);
+    const key = unwrapNode(node.key);
     if (!key) return '';
     return key.type === 'Identifier' ? (key.name as string) : (getStaticPropertyName(key) || '');
 }
 
-function getHandlersFromArgs(args: any[]): AstNode[] {
+function getHandlersFromArgs(args: ReadonlyArray<AstNode>): AstNode[] {
     const handlers: AstNode[] = [];
     for (let i = 0; i < Math.min(args.length, 3); i++) {
-        const arg = unwrapNode(args[i] as AstNode);
+        const arg = unwrapNode(args[i]);
         if (isSubscribeHandler(arg)) handlers.push(arg);
     }
     return handlers;
@@ -53,12 +53,12 @@ function getHandlersFromObserver(observer: AstNode): AstNode[] {
     if (observer.type !== 'ObjectExpression') return [];
 
     const handlers: AstNode[] = [];
-    const properties = Array.isArray((observer as any).properties) ? (observer as any).properties : [];
+    const properties = Array.isArray(observer.properties) ? observer.properties : [];
 
     for (const propertyNode of properties) {
-        const property = unwrapNode(propertyNode as AstNode);
+        const property = unwrapNode(propertyNode);
         if (property?.type === 'Property' && OBSERVER_HANDLER_NAMES.has(getObjectPropertyName(property))) {
-            const value = unwrapNode((property as any).value);
+            const value = unwrapNode(property.value as AstNode);
             if (isSubscribeHandler(value)) handlers.push(value);
         }
     }
@@ -68,10 +68,10 @@ function getHandlersFromObserver(observer: AstNode): AstNode[] {
 function getSubscribeHandlers(node: AstNode): AstNode[] {
     if (!isSubscribeCall(node)) return [];
 
-    const args = Array.isArray((node as any).arguments) ? (node as any).arguments : [];
+    const args = Array.isArray(node.arguments) ? node.arguments : [];
     if (args.length === 0) return [];
 
-    const firstArg = unwrapNode(args[0] as AstNode);
+    const firstArg = unwrapNode(args[0]);
     if (firstArg?.type === 'ObjectExpression') {
         return getHandlersFromObserver(firstArg);
     }
@@ -83,7 +83,7 @@ function containsNestedSubscribe(root: AstNode): boolean {
     const stack: AstNode[] = [root];
 
     while (stack.length > 0) {
-        const node = unwrapNode(stack.pop()!);
+        const node = unwrapNode(stack.pop());
         if (!node) continue;
 
         if (node !== root && isSubscribeCall(node)) return true;
@@ -122,7 +122,7 @@ export const rxjsNoNestedSubscribeRule = createCallExpressionRule(
 
         const handlers = getSubscribeHandlers(astNode);
         for (const handler of handlers) {
-            const body = unwrapNode((handler as any).body);
+            const body = unwrapNode(handler.body as AstNode);
             if (body && containsNestedSubscribe(body)) {
                 return createFailure(astNode, context);
             }

@@ -8,7 +8,6 @@ export class AnalyzerError extends Error {
     this.name = 'AnalyzerError';
     // Capture stack trace if available (V8/Node.js specific)
     if ('captureStackTrace' in Error) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call
       (Error as any).captureStackTrace(this, this.constructor);
     }
   }
@@ -93,7 +92,7 @@ export type InfrastructureErrorType =
  *
  * recoverable: true  → the pipeline can continue (file is skipped / cold rebuild)
  * recoverable: false → the pipeline cannot produce correct results and should abort
- *                      when failOnInfrastructureError is enabled.
+ *                      and should abort the current run.
  */
 export interface InfrastructureError {
   readonly type: InfrastructureErrorType;
@@ -119,7 +118,7 @@ export function createInfrastructureError(
  * Per-run accumulator of infrastructure errors.
  *
  * Passed through the pipeline so callers can inspect failures at the end
- * and honour the failOnInfrastructureError config flag.
+ * after execution completes.
  */
 export class InfrastructureErrorCollector {
   private readonly _errors: InfrastructureError[] = [];
