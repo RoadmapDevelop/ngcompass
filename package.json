@@ -52,6 +52,12 @@
     "node": ">=18.0.0",
     "pnpm": ">=8.0.0"
   },
+  "pnpm": {
+    "supportedArchitectures": {
+      "os": ["linux", "darwin", "win32", "current"],
+      "cpu": ["x64", "arm64", "current"]
+    }
+  },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "@swc-node/register": "^1.11.1",
