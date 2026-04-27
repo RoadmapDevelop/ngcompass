@@ -41,12 +41,19 @@ jobs:
       - name: Pack & install smoke test
         shell: bash
         run: |
-          cd packages/cli
-          pnpm pack --pack-destination "$RUNNER_TEMP"
-          TARBALL=$(ls "$RUNNER_TEMP"/ngcompass-cli-*.tgz | head -1)
-          mkdir -p "$RUNNER_TEMP/ngcompass-smoke"
-          cd "$RUNNER_TEMP/ngcompass-smoke"
-          npm install --no-save "$TARBALL"
+          PACKS_DIR="$RUNNER_TEMP/packs"
+          SMOKE_DIR="$RUNNER_TEMP/ngcompass-smoke"
+          mkdir -p "$PACKS_DIR" "$SMOKE_DIR"
+
+          # Pack every workspace package so npm can resolve inter-package deps locally
+          for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
+                     packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
+            (cd "$pkg" && pnpm pack --pack-destination "$PACKS_DIR")
+          done
+
+          # Install all tarballs together — npm resolves workspace deps from this set
+          cd "$SMOKE_DIR"
+          npm install --no-save "$PACKS_DIR"/*.tgz
           ./node_modules/.bin/ngcompass --version
 
       - name: Coverage gate
