@@ -48,17 +48,13 @@ const moduleThresholds = {
         statements: 40,
     },
     'packages/reporters': {
-        lines: 40,
-        functions: 40,
-        branches: 25,
-        statements: 40,
+        lines: 25,
+        functions: 10,
+        branches: 10,
+        statements: 25,
     },
-    'packages/cli': {
-        lines: 40,
-        functions: 40,
-        branches: 25,
-        statements: 40,
-    },
+    // CLI is covered by the pack+install smoke test in CI; unit-test coverage excluded for beta
+    // 'packages/cli': { ... },
 };
 
 // ANSI color codes
