@@ -1,139 +1,213 @@
-# ngcompass
+<div align="center">
+  <img src="./assets/logo.png" alt="ngcompass logo" width="120" />
+  <h1>ngcompass</h1>
+  <p><strong>Static analysis for Angular — catch architecture problems, performance issues, and code quality violations before they reach production.</strong></p>
 
-Angular static analysis tool for architecture, performance, SSR, and code quality.
+  <p>
+    <a href="https://www.npmjs.com/package/@ngcompass/cli"><img src="https://img.shields.io/npm/v/@ngcompass/cli/beta?label=beta&color=ec4899" alt="npm beta"></a>
+    <img src="https://img.shields.io/badge/Angular-v15%2B-dd0031" alt="Angular v15+">
+    <img src="https://img.shields.io/badge/Node.js-20%2B-339933" alt="Node.js 20+">
+    <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
+  </p>
+</div>
 
-## Features
+---
 
-- Deep AST analysis of Angular components, templates, and services
-- Pluggable rule system with built-in presets (recommended, strict, performance, reactivity)
-- Incremental analysis with smart caching
-- Multiple output formats: console, JSON, SARIF, HTML
-- Fast execution powered by SWC and OXC parsers
+## What is ngcompass?
+
+ngcompass is a **command-line static analysis tool** built specifically for Angular projects. It scans your codebase without running it — reading your TypeScript, templates, and configuration files — and reports issues across four key areas:
+
+| Category | What it checks |
+|---|---|
+| **Architecture** | Module boundaries, circular dependencies, improper component relationships |
+| **Performance** | Missing `OnPush`, untracked subscriptions, heavy template expressions |
+| **SSR Compatibility** | Browser-only APIs used in universal code, hydration pitfalls |
+| **Code Quality** | Deprecated APIs, naming conventions, dead code, missing best practices |
+
+Think of it as **ESLint — but Angular-aware**. It understands the relationship between components, services, templates, and modules at a deeper level than generic TypeScript linters.
+
+---
 
 ## Installation
 
 ```bash
-npm install -g @ngcompass/cli
-# or
-pnpm add -g @ngcompass/cli
+# npm
+npm install -g @ngcompass/cli@beta
+
+# pnpm
+pnpm add -g @ngcompass/cli@beta
 ```
+
+> This is a **beta release**. Install with `@beta` to opt in.
+
+---
 
 ## Quick Start
 
 ```bash
-# Initialize configuration
+# 1. Go to your Angular project
+cd my-angular-app
+
+# 2. Initialize configuration
 ngcompass init
 
-# Run analysis
+# 3. Run analysis
 ngcompass analyze
-
-# Check configuration health
-ngcompass config health
 ```
 
-## Commands
+That's it. ngcompass will scan your project and print a report to the terminal.
 
-| Command | Description |
-|---|---|
-| `ngcompass init` | Initialize a new `ngcompass.config.ts` in the current directory |
-| `ngcompass analyze` | Run analysis on the project |
-| `ngcompass config health` | Validate the current configuration |
-| `ngcompass cache info` | Show cache status and statistics |
-| `ngcompass cache clear` | Clear cached results |
-| `ngcompass cache path` | Show the cache directory location |
-| `ngcompass rules [name]` | List all rules or inspect a specific rule |
+---
 
-## Global Options
+## Output Formats
 
-| Option | Description |
-|---|---|
-| `--debug` | Enable verbose debug output |
-| `--version` | Show version number |
-| `--help` | Show help |
+ngcompass can output results in multiple formats depending on your workflow:
 
-## Analyze Options
+```bash
+# Terminal output (default)
+ngcompass analyze
 
-| Option | Description |
-|---|---|
-| `-p, --profile <name>` | Select a configuration profile from `profiles` in `ngcompass.config.*` |
-| `--force` | Force re-execution, ignoring cache |
-| `--format <fmt>` | Output format: `console` (default), `json`, `sarif`, `html`, `ui` |
-| `--compact` | ESLint-style compact output |
-| `--output <path>` | Write the `html` / `ui` report to a file |
-| `--rule <id>` | Run a single rule in isolation |
+# Compact ESLint-style output (great for CI logs)
+ngcompass analyze --format console --compact
+
+# Interactive HTML report (opens in browser)
+ngcompass analyze --format html
+
+# Machine-readable JSON
+ngcompass analyze --format json > results.json
+
+# SARIF for GitHub Code Scanning
+ngcompass analyze --format sarif > results.sarif
+```
+
+The HTML report gives you a full visual breakdown — severity charts, per-file drill-down, search and filter — all in a single self-contained file.
+
+---
 
 ## Configuration
 
-Run `ngcompass init` to generate a `ngcompass.config.ts` file. Example:
+Run `ngcompass init` to generate `ngcompass.config.ts` in your project root:
 
 ```ts
 import { defineConfig } from '@ngcompass/config';
 
 export default defineConfig({
+  // Start from a preset: 'ngcompass:recommended' | 'ngcompass:strict' | 'ngcompass:performance'
   extends: 'ngcompass:recommended',
+
+  // Files to scan
   include: ['src/**/*.ts'],
-  exclude: ['**/*.spec.ts'],
+  exclude: ['**/*.spec.ts', '**/*.stories.ts'],
+
+  // Override individual rules
+  rules: {
+    'no-missing-on-push': 'error',
+    'no-ssr-unsafe-globals': 'warn',
+  },
 });
 ```
 
-## Output Examples
+### Presets
 
-Write machine-readable JSON for automation:
+| Preset | Description |
+|---|---|
+| `ngcompass:recommended` | Balanced set of rules for most Angular projects |
+| `ngcompass:strict` | Stricter checks including all recommended rules |
+| `ngcompass:performance` | Focus on rendering performance and change detection |
 
-```bash
-ngcompass analyze --format json > ngcompass-results.json
+---
+
+## Commands
+
+| Command | Description |
+|---|---|
+| `ngcompass init` | Generate a `ngcompass.config.ts` in the current directory |
+| `ngcompass analyze` | Run analysis on the project |
+| `ngcompass config health` | Validate the current configuration |
+| `ngcompass rules` | List all available rules |
+| `ngcompass rules <name>` | Inspect a specific rule |
+| `ngcompass cache info` | Show cache status and statistics |
+| `ngcompass cache clear` | Clear the analysis cache |
+| `ngcompass cache path` | Show the cache directory location |
+
+### Analyze Options
+
+| Option | Description |
+|---|---|
+| `--format <fmt>` | Output format: `console`, `json`, `sarif`, `html` |
+| `--output <path>` | Write HTML report to a specific file path |
+| `--compact` | ESLint-style compact one-line-per-issue output |
+| `--rule <id>` | Run a single rule in isolation |
+| `--force` | Skip cache and re-run full analysis |
+| `--profile <name>` | Use a named profile from your config |
+| `--debug` | Enable verbose debug output |
+
+---
+
+## CI Integration
+
+ngcompass exits with code `0` on success and non-zero when violations are found. Drop it into any CI pipeline:
+
+```yaml
+# GitHub Actions example
+- name: Run ngcompass
+  run: ngcompass analyze --format sarif > results.sarif
+
+- name: Upload to Code Scanning
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: results.sarif
 ```
 
-Write SARIF for GitHub Code Scanning or other SARIF consumers:
+---
+
+## Caching
+
+ngcompass caches analysis results between runs. Only changed files are re-analyzed, making subsequent runs significantly faster on large codebases.
 
 ```bash
-ngcompass analyze --format sarif > ngcompass.sarif
+ngcompass cache info    # see what's cached
+ngcompass cache clear   # reset the cache
+ngcompass analyze --force  # skip cache for this run
 ```
 
-Write a branded HTML report:
-
-```bash
-ngcompass analyze --format html --output ngcompass-report.html
-```
-
-Use ngcompass in CI and fail on violations:
-
-```bash
-ngcompass analyze --format console --compact
-```
-
-The CLI exits with `0` when analysis completes without errors and exits non-zero when errors are found or the command cannot run successfully.
-
-## Known Limitations
-
-- Beta releases may change rule names, rule messages, and report layout before `1.0`.
-- Angular support should be validated against your project before enforcing ngcompass as a required CI gate.
-- Template parsing and static analysis are best-effort; dynamic template construction and highly indirect patterns may not be fully understood.
-- SARIF output is intended for code scanning ingestion and may not include every visual detail from the HTML report.
-- HTML reports are static files and do not currently include live filtering backed by a server.
+---
 
 ## Packages
 
-This is a monorepo. Published packages:
+ngcompass is a monorepo. All packages are published under the `@ngcompass` scope:
 
 | Package | Description |
 |---|---|
-| [`@ngcompass/cli`](packages/cli) | CLI tool |
-| [`@ngcompass/rules`](packages/rules) | Built-in rule collection |
+| [`@ngcompass/cli`](packages/cli) | The CLI tool — this is what you install |
 | [`@ngcompass/engine`](packages/engine) | Rule execution engine |
+| [`@ngcompass/rules`](packages/rules) | Built-in rule collection |
 | [`@ngcompass/ast`](packages/ast) | AST parsers and visitors |
-| [`@ngcompass/config`](packages/config) | Config loading and validation |
 | [`@ngcompass/scanner`](packages/scanner) | File system scanning |
 | [`@ngcompass/planner`](packages/planner) | Incremental execution planner |
 | [`@ngcompass/cache`](packages/cache) | Caching layer |
-| [`@ngcompass/reporters`](packages/reporters) | Output formatters |
+| [`@ngcompass/reporters`](packages/reporters) | Output formatters (console, JSON, SARIF, HTML) |
+| [`@ngcompass/config`](packages/config) | Config loading and validation |
 | [`@ngcompass/common`](packages/common) | Shared types and utilities |
+
+---
 
 ## Requirements
 
-- Node.js ^20.19.0 or >=22.12.0
-- pnpm >= 8
+- **Node.js** `^20.19.0` or `>=22.12.0`
+- **Angular** v15 or later
+
+---
+
+## Known Limitations (Beta)
+
+- Rule names, messages, and report layout may change before `1.0`
+- Template parsing is best-effort — highly dynamic templates may not be fully understood
+- SARIF output targets code scanning ingestion and may omit some visual details
+- Validate against your project before enforcing ngcompass as a required CI gate
+
+---
 
 ## License
 
-MIT
+MIT — see [LICENSE](./LICENSE)
