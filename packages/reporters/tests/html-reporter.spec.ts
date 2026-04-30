@@ -67,7 +67,7 @@ describe('HtmlReporter', () => {
         const { html, out } = await renderHtml([makeResult()]);
 
         expect(html).toContain('class="brand-logo"');
-        expect(html).toContain('data:image/png;base64,');
+        expect(html).toContain('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACACAYAAADD');
         expect(html).toContain('Errors');
         expect(html).toContain('Warnings');
         expect(html).toContain('Violations');

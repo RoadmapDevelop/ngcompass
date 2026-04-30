@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./assets/logo.png" alt="ngcompass logo" width="120" />
+  <img src="./assets/logo-small.png" alt="ngcompass logo" width="120" />
   <h1>ngcompass</h1>
   <p><strong>Static analysis for Angular — catch architecture problems, performance issues, and code quality violations before they reach production.</strong></p>
 
