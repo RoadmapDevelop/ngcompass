@@ -38,6 +38,8 @@ function resolveReporterFormat(
     switch (configFormat) {
         case 'json':
             return 'json';
+        case 'sarif':
+            return 'sarif';
         case 'html':
             return 'html';
         case 'text':
@@ -87,7 +89,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .description('Analyze your project and report rule violations and architecture risks')
         .option('-p, --profile <name>', 'Configuration profile to run')
         .option('--force', 'Ignore cached results and re-run all analysis tasks')
-        .option('--format <fmt>', 'Reporter format: console | json | ui')
+        .option('--format <fmt>', 'Reporter format: console | json | sarif | html | ui')
         .option('--compact', 'Use compact, ESLint-style output')
         .option('--output <path>', 'Output path for UI reports (default: ngcompass-report.html)')
         .option('--rule <id>', 'Run only one rule (useful for debugging or focused checks)')

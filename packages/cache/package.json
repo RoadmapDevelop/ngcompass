@@ -1,12 +1,15 @@
 {
     "name": "@ngcompass/cache",
-    "version": "0.0.1",
+    "version": "0.1.0-beta",
     "description": "Caching layer for ngcompass",
     "sideEffects": false,
     "main": "./dist/index.cjs",
     "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "type": "module",
+    "engines": {
+        "node": "^20.19.0 || >=22.12.0"
+    },
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
@@ -19,7 +22,7 @@
     ],
     "scripts": {
         "build": "tsup",
-        "build:prod": "NODE_ENV=production tsup --minify",
+        "build:prod": "tsup --minify",
         "dev": "tsup --watch",
         "test": "vitest run ",
         "test:watch": "vitest",

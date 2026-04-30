@@ -29,7 +29,6 @@ export const allPreset: PresetConfig = {
         'signal-no-side-effects-in-computed': 'error',
         'signal-prefer-computed-over-sync-effect': 'warn',
         'signal-effect-must-be-destroy-scoped': 'error',
-        'signal-no-effect-in-constructor': 'warn',
         'signal-avoid-untracked-overuse': 'warn',
         'signal-prefer-input-signal': 'warn',
         'signal-prefer-output-function': 'warn',
@@ -37,7 +36,7 @@ export const allPreset: PresetConfig = {
 
         // Template performance & features
         'template-no-call-expression': 'error',
-        'template-trackby-required-for-ngfor': 'error',
+        'template-trackby-required': 'error',
         'template-no-object-literal-binding': 'warn',
         'template-no-array-literal-binding': 'warn',
         'template-no-async-pipe-duplication': 'warn',

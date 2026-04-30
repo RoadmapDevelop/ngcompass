@@ -293,11 +293,13 @@ describe('Analyze Command', () => {
 
     it('exits with code 1 if analysis yields errors', async () => {
         setupSuccessfulPipeline({}, { totalErrors: 1 });
+        const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
         registerAnalyzeCommand(program, { flush: vi.fn().mockResolvedValue(undefined) } as any);
         await program.parseAsync(['node', 'test', 'analyze']);
 
         expect(mockExit).toHaveBeenCalledWith(1);
+        expect(stdoutWrite).not.toHaveBeenCalledWith('\x1B[?25h');
     });
 
     it('exits with code 1 when warnings exceed maxWarnings', async () => {
