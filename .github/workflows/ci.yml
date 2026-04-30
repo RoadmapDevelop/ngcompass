@@ -53,6 +53,7 @@ jobs:
 
           # Install all tarballs together — npm resolves workspace deps from this set
           cd "$SMOKE_DIR"
+          npm init -y
           npm install --no-save "$PACKS_DIR"/*.tgz
 
           # Persist the bin dir across steps via GITHUB_PATH
@@ -105,6 +106,35 @@ jobs:
             || (echo "ERROR: no config file created by ngcompass init" && exit 1)
           echo "OK: config file created"
 
+      - name: Verify analyze output formats
+        shell: bash
+        run: |
+          ANALYZE_DIR="$RUNNER_TEMP/ngcompass-analyze-test"
+          mkdir -p "$ANALYZE_DIR/src"
+          ngcompass init --cwd "$ANALYZE_DIR"
+
+          cat > "$ANALYZE_DIR/src/app.component.ts" <<'TS'
+          import { ChangeDetectionStrategy, Component } from '@angular/core';
+
+          @Component({
+            selector: 'app-root',
+            template: '<h1>Hello</h1>',
+            changeDetection: ChangeDetectionStrategy.OnPush,
+          })
+          export class AppComponent {}
+          TS
+
+          cd "$ANALYZE_DIR"
+          ngcompass analyze --format json --force > report.json
+          node -e "JSON.parse(require('node:fs').readFileSync('report.json', 'utf8'))"
+
+          ngcompass analyze --format sarif --force > report.sarif
+          node -e "const r = JSON.parse(require('node:fs').readFileSync('report.sarif', 'utf8')); if (r.version !== '2.1.0') process.exit(1)"
+
+          ngcompass analyze --format html --force --output report.html
+          test -s report.html || (echo "ERROR: html report was not written" && exit 1)
+          echo "OK: analyze output formats verified"
+
       - name: Verify exit codes
         shell: bash
         run: |
@@ -113,14 +143,19 @@ jobs:
           [ $? -eq 0 ] || (echo "ERROR: --version exited non-zero" && exit 1)
 
           # Unknown command must exit non-zero
-          ngcompass __unknown_command__ 2>/dev/null || true
-          CODE=$?
-          [ $CODE -ne 0 ] || (echo "ERROR: unknown command exited 0" && exit 1)
+          if ngcompass __unknown_command__ 2>/dev/null; then
+            echo "ERROR: unknown command exited 0"
+            exit 1
+          fi
           echo "OK: exit codes correct"
 
       - name: Publish dry-run (catch file leakage before release)
+        env:
+          NODE_ENV: production
         shell: bash
         run: |
+          pnpm exec turbo build:prod
+
           for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
                      packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
             echo "=== $pkg ==="

@@ -10,6 +10,7 @@
 
 /** Restore the terminal cursor unconditionally (idempotent ANSI sequence). */
 const restoreCursor = (): void => {
+    if (!process.stdout.isTTY) return;
     process.stdout.write('\x1B[?25h');
 };
 

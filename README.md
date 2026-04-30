@@ -7,7 +7,7 @@ Angular static analysis tool for architecture, performance, SSR, and code qualit
 - Deep AST analysis of Angular components, templates, and services
 - Pluggable rule system with built-in presets (recommended, strict, performance, reactivity)
 - Incremental analysis with smart caching
-- Multiple output formats: console, JSON, HTML
+- Multiple output formats: console, JSON, SARIF, HTML
 - Fast execution powered by SWC and OXC parsers
 
 ## Installation
@@ -57,9 +57,9 @@ ngcompass config health
 |---|---|
 | `-p, --profile <name>` | Select a configuration profile from `profiles` in `ngcompass.config.*` |
 | `--force` | Force re-execution, ignoring cache |
-| `--format <fmt>` | Output format: `console` (default), `json`, `ui` |
+| `--format <fmt>` | Output format: `console` (default), `json`, `sarif`, `html`, `ui` |
 | `--compact` | ESLint-style compact output |
-| `--output <path>` | Write the `ui` HTML report to a file |
+| `--output <path>` | Write the `html` / `ui` report to a file |
 | `--rule <id>` | Run a single rule in isolation |
 
 ## Configuration
@@ -75,6 +75,42 @@ export default defineConfig({
   exclude: ['**/*.spec.ts'],
 });
 ```
+
+## Output Examples
+
+Write machine-readable JSON for automation:
+
+```bash
+ngcompass analyze --format json > ngcompass-results.json
+```
+
+Write SARIF for GitHub Code Scanning or other SARIF consumers:
+
+```bash
+ngcompass analyze --format sarif > ngcompass.sarif
+```
+
+Write a branded HTML report:
+
+```bash
+ngcompass analyze --format html --output ngcompass-report.html
+```
+
+Use ngcompass in CI and fail on violations:
+
+```bash
+ngcompass analyze --format console --compact
+```
+
+The CLI exits with `0` when analysis completes without errors and exits non-zero when errors are found or the command cannot run successfully.
+
+## Known Limitations
+
+- Beta releases may change rule names, rule messages, and report layout before `1.0`.
+- Angular support should be validated against your project before enforcing ngcompass as a required CI gate.
+- Template parsing and static analysis are best-effort; dynamic template construction and highly indirect patterns may not be fully understood.
+- SARIF output is intended for code scanning ingestion and may not include every visual detail from the HTML report.
+- HTML reports are static files and do not currently include live filtering backed by a server.
 
 ## Packages
 
@@ -95,7 +131,7 @@ This is a monorepo. Published packages:
 
 ## Requirements
 
-- Node.js >= 18
+- Node.js ^20.19.0 or >=22.12.0
 - pnpm >= 8
 
 ## License

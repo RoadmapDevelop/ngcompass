@@ -28,7 +28,10 @@ if (!packageJsonPath) {
 
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
 
-const restoreCursor = () => process.stdout.write('\x1B[?25h');
+const restoreCursor = () => {
+  if (!process.stdout.isTTY) return;
+  process.stdout.write('\x1B[?25h');
+};
 
 const FLUSH_TIMEOUT_MS = 10_000;
 
@@ -79,6 +82,7 @@ export async function run() {
       const actionOpts = actionCommand.opts();
       if (
         actionOpts.format !== 'json' &&
+        actionOpts.format !== 'sarif' &&
         actionOpts.format !== 'html' &&
         actionOpts.format !== 'ui'
       ) {

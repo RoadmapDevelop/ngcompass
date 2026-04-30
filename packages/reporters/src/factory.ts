@@ -1,6 +1,7 @@
 import { ConsoleReporter } from './reporters/console-reporter.js';
 import { JsonReporter } from './reporters/json-reporter.js';
 import { HtmlReporter } from './reporters/html-reporter.js';
+import { SarifReporter } from './reporters/sarif-reporter.js';
 import { TextConfigReporter } from './reporters/config.js';
 import { TextCacheReporter } from './reporters/cache.js';
 import { RulesReporter, type RulesReporterOptions } from './reporters/rules-reporter.js';
@@ -25,6 +26,8 @@ export function getReporter(
     switch (format) {
         case 'json':
             return new JsonReporter();
+        case 'sarif':
+            return new SarifReporter();
         case 'console':
             return new ConsoleReporter(undefined, options);
         case 'html':
