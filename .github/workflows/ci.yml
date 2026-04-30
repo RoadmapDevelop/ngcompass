@@ -101,9 +101,17 @@ jobs:
           mkdir -p "$INIT_DIR"
           ngcompass init --cwd "$INIT_DIR"
           # Confirm a config file was created
-          ls "$INIT_DIR"/.ngcompassrc* "$INIT_DIR"/ngcompass.config.* 2>/dev/null \
-            || ls "$INIT_DIR"/*.ngcompass* 2>/dev/null \
-            || (echo "ERROR: no config file created by ngcompass init" && exit 1)
+          shopt -s nullglob
+          config_files=(
+            "$INIT_DIR"/.ngcompassrc*
+            "$INIT_DIR"/ngcompass.config.*
+            "$INIT_DIR"/*.ngcompass*
+          )
+          if [ "${#config_files[@]}" -eq 0 ]; then
+            echo "ERROR: no config file created by ngcompass init"
+            exit 1
+          fi
+          printf '%s\n' "${config_files[@]}"
           echo "OK: config file created"
 
       - name: Verify analyze output formats
