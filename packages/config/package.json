@@ -1,6 +1,6 @@
 {
     "name": "@ngcompass/config",
-    "version": "0.0.1",
+    "version": "0.1.0-beta",
     "description": "Config loading, resolution and validation for ngcompass",
     "sideEffects": false,
     "main": "./dist/index.cjs",

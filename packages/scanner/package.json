@@ -1,6 +1,6 @@
 {
     "name": "@ngcompass/scanner",
-    "version": "0.0.1",
+    "version": "0.1.0-beta",
     "description": "File system scanning (glob, git, gitignore) for ngcompass",
     "sideEffects": false,
     "main": "./dist/index.cjs",

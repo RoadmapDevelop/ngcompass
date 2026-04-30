@@ -1,6 +1,6 @@
 {
     "name": "@ngcompass/cli",
-    "version": "0.0.1",
+    "version": "0.1.0-beta",
     "description": "Command line interface for ngcompass",
     "sideEffects": false,
     "bin": {

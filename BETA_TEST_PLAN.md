@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-26
 **Branch:** `pre_release_v1_beta`
-**Version under test:** 0.0.1 (pre-beta)
+**Version under test:** 0.1.0-beta
 **Checklist status:** 33 done / 72 remaining (105 total).
 
 ---
