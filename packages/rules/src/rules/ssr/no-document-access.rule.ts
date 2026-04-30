@@ -123,7 +123,7 @@ export const noDocumentAccessRule = createAnyAngularClassRule(
                         failures.push({
                             filePath: context.filePath,
                             ruleName: 'no-document-access',
-                            message: `Direct access to \`${rootName}\` breaks Angular SSR. Inject \`DOCUMENT\`, use \`afterNextRender()\`, or guard with \`isPlatformBrowser()\`.`,
+                            message: `Direct access to \`${rootName}\` can run during SSR where browser globals do not exist.`,
                             line,
                             column,
                             severity: 'error',

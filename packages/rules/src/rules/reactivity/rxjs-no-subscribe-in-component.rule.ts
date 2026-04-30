@@ -55,7 +55,7 @@ function isFireAndForget(node: AstNode): boolean {
 }
 
 function getFailureMessage(node: CallExpression, context: RuleContext): string {
-    const generic = 'Avoid open-ended subscriptions in components. Use toSignal() for reactive state, or scope long-lived streams with takeUntilDestroyed(). HTTP calls are exempt.';
+    const generic = 'Open-ended subscriptions in components can outlive the component and make state harder to track.';
     const templateRefs = context.crossRef?.templateReferences;
     if (!templateRefs) return generic;
 
@@ -66,7 +66,7 @@ function getFailureMessage(node: CallExpression, context: RuleContext): string {
 
     const baseName = propName.endsWith('$') ? propName.slice(0, -1) : propName;
     if (templateRefs.has(propName) || templateRefs.has(baseName)) {
-        return `'${propName}' is used in your template. Replace this subscription with toSignal(${propName}) to simplify your component and improve performance.`;
+        return `'${propName}' is read by the template, so subscribing manually adds state and teardown work the template can own.`;
     }
 
     return generic;
@@ -101,4 +101,4 @@ export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
         };
     },
     { requires: { projectContext: true } }
-);
+);

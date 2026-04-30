@@ -33,7 +33,7 @@ export const templatePreferControlFlowRule = createTemplateAttributeRule(
         return {
             filePath: context.filePath,
             ruleName: RULE_NAME,
-            message: `Replace \`${node.name}\` with the Angular 17+ built-in \`${modern}\` control flow block for better performance and type-narrowing.`,
+            message: `\`${node.name}\` uses legacy structural directive syntax, so it misses the \`${modern}\` control flow benefits.`,
             line,
             column,
             severity: 'error',

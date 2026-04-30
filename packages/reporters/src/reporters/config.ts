@@ -133,11 +133,14 @@ export class TextConfigReporter implements ConfigReporter {
      */
     renderInitResult(result: InitResult): void {
         if (result.success) {
-            this.out.write(`${pc.green('OK')} ${result.filePath}`);
+            this.out.write(`${pc.green('Created')} ${result.filePath}`);
+            this.out.write(pc.dim('Next: run `ngcompass analyze` to scan this project.'));
         } else if (result.alreadyExists) {
-            this.out.write(`${pc.yellow('exists')} ${result.filePath} ${pc.gray('(exists)')}`);
+            this.out.write(`${pc.yellow('Already exists')} ${result.filePath}`);
+            this.out.write(pc.dim('Use `ngcompass init --force` to overwrite it.'));
         } else {
             this.out.error(`${pc.red('x')} initialization failed`);
+            this.out.error(pc.dim('Check file permissions or pass `--cwd <path>` to choose a project directory.'));
         }
     }
 
@@ -183,7 +186,7 @@ export class TextConfigReporter implements ConfigReporter {
         const isHealthy = errors.length === 0 && warnings.length === 0;
 
         if (isHealthy) {
-            this.out.write(`${pc.green('No issues found.')} ${pc.bold('status')} ${pc.green('OK')}`);
+            this.out.write(`${pc.green('Configuration OK.')} No issues found.`);
             return;
         }
 

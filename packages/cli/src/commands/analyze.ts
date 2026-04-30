@@ -88,7 +88,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .command('analyze')
         .description('Analyze your project and report rule violations and architecture risks')
         .option('-p, --profile <name>', 'Configuration profile to run')
-        .option('--force', 'Ignore cached results and re-run all analysis tasks')
+        .option('--force', 'Ignore cached results and re-run all checks')
         .option('--format <fmt>', 'Reporter format: console | json | sarif | html | ui')
         .option('--compact', 'Use compact, ESLint-style output')
         .option('--output <path>', 'Output path for UI reports (default: ngcompass-report.html)')
@@ -115,7 +115,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
 
                 const { config } = configResult;
                 activeCache = createRuntimeCache(config, process.cwd());
-                reporter = getReporter(resolveReporterFormat(options.format, config.outputFormat), {
+                const reporterFormat = resolveReporterFormat(options.format, config.outputFormat);
+                reporter = getReporter(reporterFormat, {
                     compact: !!options.compact,
                     verbose: isVerbose,
                     outputPath: options.output ?? config.outputPath,
@@ -139,10 +140,6 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
 
                 const duration = performance.now() - startTime;
 
-                // 6. Report Results
-                reporter.parseErrors(analysis.parseErrors as ParseError[]);
-                reporter.report(analysis.results as RuleResult[]);
-
                 const summary: ResultSummary = {
                     totalFiles: analysis.stats.totalFiles,
                     totalTasks: plan.tasks.length,
@@ -151,7 +148,16 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     totalWarnings: analysis.stats.totalWarnings,
                     duration
                 };
-                reporter.summary(summary);
+                if (reporterFormat === 'console') {
+                    reporter.summary(summary);
+                }
+
+                reporter.parseErrors(analysis.parseErrors as ParseError[]);
+                reporter.report(analysis.results as RuleResult[]);
+
+                if (reporterFormat !== 'console') {
+                    reporter.summary(summary);
+                }
 
                 // 7. Save Results to Cache
                 if (!plan.precomputedAnalysis) {
@@ -181,7 +187,7 @@ async function loadConfigurationStep(
     reporter: Reporter
 ): Promise<{ config: NormalizedAnalyzerConfig } | null> {
     const tStart = performance.now();
-    reporter.step('Resolving configuration...');
+    reporter.step('› Loading configuration...');
 
     const configResult = await resolveConfig({
         profile: options.profile,
@@ -190,11 +196,11 @@ async function loadConfigurationStep(
     });
 
     if (!configResult.report.valid) {
-        reporter.error(new Error('Configuration validation failed'));
-        for (const issue of configResult.report.issues) {
+        const issueLines = configResult.report.issues.map((issue) => {
             const pathString = issue.path?.join('.') || 'root';
-            reporter.error(new Error(`[${issue.severity.toUpperCase()}] ${pathString}: ${issue.message}`));
-        }
+            return `[${issue.severity.toUpperCase()}] ${pathString}: ${issue.message}`;
+        });
+        reporter.error(new Error(['Configuration validation failed', ...issueLines].join('\n')));
         return null;
     }
 
@@ -205,7 +211,7 @@ async function loadConfigurationStep(
 
     const pluginList = configResult.config.plugins;
     if (pluginList && pluginList.length > 0) {
-        reporter.step(`Loading ${pluginList.length} plugin(s)...`);
+        reporter.step(`› Loading ${pluginList.length} plugin(s)...`);
         const configDir = process.cwd();
         await loadPlugins(pluginList, configDir, getGlobalRegistry());
         reporter.info(`Loaded ${pluginList.length} plugin(s)`);
@@ -222,7 +228,7 @@ async function discoverFilesStep(
     reporter: Reporter
 ): Promise<string[] | null> {
     const tStart = performance.now();
-    reporter.step('Discovering files...');
+    reporter.step('› Discovering files...');
 
     const scanResult = await scan({
         rootDir: process.cwd(),
@@ -240,7 +246,7 @@ async function discoverFilesStep(
         return null;
     }
 
-    reporter.info(`Found ${scanResult.data.files.length} files in ${(performance.now() - tStart).toFixed(0)}ms`);
+    reporter.info(`✓ Found ${scanResult.data.files.length} files in ${(performance.now() - tStart).toFixed(0)}ms`);
     reporter.debug(`File discovery: ${(performance.now() - tStart).toFixed(2)}ms`);
     return scanResult.data.files as string[];
 }
@@ -251,7 +257,7 @@ async function resolveRulesStep(
     reporter: Reporter
 ): Promise<ResolvedRulesMap | null> {
     const tStart = performance.now();
-    reporter.step('Resolving rules...');
+    reporter.step('› Loading rules...');
 
     let effectiveConfig: NormalizedAnalyzerConfig = config;
     if (options.rule) {
@@ -273,7 +279,7 @@ async function resolveRulesStep(
     }
 
     const enabledRules = getEnabledRules(rulesResult.data.rules);
-    reporter.info(`Resolved ${enabledRules.size} active rules in ${(performance.now() - tStart).toFixed(0)}ms`);
+    reporter.info(`✓ Loaded ${enabledRules.size} active rules in ${(performance.now() - tStart).toFixed(0)}ms`);
     reporter.debug(`Rule resolution: ${(performance.now() - tStart).toFixed(2)}ms`);
     return enabledRules;
 }
@@ -287,7 +293,7 @@ async function buildPlanStep(
     config: NormalizedAnalyzerConfig
 ): Promise<ExecutionPlanOutput | null> {
     const tStart = performance.now();
-    reporter.step('Building execution plan...');
+    reporter.step('› Planning analysis...');
 
     const planResult = await buildExecutionPlan({
         files,
@@ -306,9 +312,9 @@ async function buildPlanStep(
     }
 
     if (planResult.data.precomputedAnalysis) {
-        reporter.info('Using cached analysis plan (short-circuit)');
+        reporter.info('✓ Reused cached analysis plan');
     } else {
-        reporter.info(`Generated ${planResult.data.tasks.length} tasks in ${(performance.now() - tStart).toFixed(0)}ms`);
+        reporter.info(`✓ Prepared ${planResult.data.tasks.length.toLocaleString()} checks in ${(performance.now() - tStart).toFixed(0)}ms`);
     }
 
     reporter.debug(`Plan build: ${(performance.now() - tStart).toFixed(2)}ms`);
@@ -324,7 +330,7 @@ async function runAnalysisStep(
     config?: NormalizedAnalyzerConfig,
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
-    reporter.step('Running analysis...');
+    reporter.step('› Running analysis...');
 
     configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 

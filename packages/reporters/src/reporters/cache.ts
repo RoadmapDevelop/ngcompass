@@ -9,10 +9,11 @@ function writeLine(line = ''): void {
 export class TextCacheReporter implements CacheReporter {
     renderClearResult(type: 'ast' | 'config' | 'results' | 'all'): void {
         if (type === 'all') {
-            writeLine(pc.green('Cleared all caches'));
+            writeLine(pc.green('Cleared all caches.'));
         } else {
-            writeLine(pc.green(`Cleared ${type} cache`));
+            writeLine(pc.green(`Cleared ${type} cache.`));
         }
+        writeLine(pc.dim('The next analysis may take longer while ngcompass rebuilds cached data.'));
     }
 
     renderCacheInfo(info: CacheInfo): void {
@@ -20,6 +21,7 @@ export class TextCacheReporter implements CacheReporter {
         writeLine(pc.bold('Cache Status:'));
         writeLine(`${pc.dim('Location:')} ${info.location}`);
         writeLine(`${pc.dim('Version:')} ${info.version}`);
+        writeLine(`${pc.dim('Total size:')} ${this.formatSize(info.totalSize)}`);
         writeLine();
 
         writeLine(
@@ -31,11 +33,12 @@ export class TextCacheReporter implements CacheReporter {
         writeLine(pc.gray('─'.repeat(55)));
 
         this.printRow('Config', String(info.config.entries), this.formatSize(info.config.size));
-        this.printRow('AST (L1)', String(info.ast.l1.entries), this.formatSize(info.ast.l1.size));
+        this.printRow('AST (L1)', `${info.ast.l1.entries}/${info.ast.l1.maxEntries}`, this.formatSize(info.ast.l1.size));
         this.printRow('AST (L2)', String(info.ast.l2.entries), this.formatSize(info.ast.l2.size));
         this.printRow('Results', String(info.results.entries), this.formatSize(info.results.size));
 
         writeLine();
+        writeLine(pc.dim('Hit rate is not tracked yet; entries and size show current cache occupancy.'));
     }
 
     private formatSize(bytes: number): string {

@@ -157,7 +157,7 @@ function createFailure(
     return {
         filePath: context.filePath,
         ruleName: RULE_NAME,
-        message: 'Avoid calling methods directly in templates as they execute on every change detection cycle. Use Signals, computed state, or Pipes instead.',
+        message: 'Template method calls run on every change detection cycle and can make rendering slower.',
         line,
         column,
         severity: 'error',
@@ -180,4 +180,4 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
         requires: { htmlAst: true, typeChecker: true, projectContext: true },
     },
 );
-;
+;

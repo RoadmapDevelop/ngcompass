@@ -4,6 +4,12 @@ import { createTestOutput } from '../src/output.js';
 import type { RuleResult } from '@ngcompass/common';
 import type { ResultSummary } from '../src/types.js';
 
+const ANSI_RE = /\x1B\[[0-?]*[ -/]*[@-~]/g;
+
+function stripAnsi(value: string): string {
+    return value.replace(ANSI_RE, '');
+}
+
 function makeResult(failures: RuleResult['failures']): RuleResult {
     return { ruleName: 'test-rule', failures };
 }
@@ -67,6 +73,7 @@ describe('ConsoleReporter', () => {
             expect(summary).toContain('2 problems');
             expect(summary).toContain('1 error');
             expect(summary).toContain('1 warning');
+            expect(out.lines.some(l => l.includes('ngcompass analyze --format ui'))).toBe(true);
         });
 
         it('sorts files alphabetically', () => {
@@ -93,9 +100,22 @@ describe('ConsoleReporter', () => {
     });
 
     describe('summary()', () => {
-        it('does not output anything (minimal summary requested)', () => {
+        it('outputs a concise run summary', () => {
             reporter.summary(stats);
-            expect(out.lines.length).toBe(0);
+            const line = stripAnsi(out.lines[0]);
+            expect(line).toContain('✓ Analyzed 10 files');
+            expect(line).toContain('20 checks');
+            expect(line).toContain('5 cached');
+        });
+    });
+
+    describe('progress output', () => {
+        it('formats active and completed steps', () => {
+            reporter.step('› Loading rules...');
+            reporter.info('✓ Loaded 18 active rules in 1ms');
+
+            expect(stripAnsi(out.lines[0])).toContain('› Loading rules...');
+            expect(stripAnsi(out.lines[1])).toContain('✓ Loaded 18 active rules in 1ms');
         });
     });
 

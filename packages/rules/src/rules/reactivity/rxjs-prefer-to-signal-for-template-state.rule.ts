@@ -94,7 +94,7 @@ export const rxjsPreferToSignalRule = createAnyAngularClassRule(
             failures.push({
                 filePath: context.filePath,
                 ruleName: RULE_NAME,
-                message: `Property "${name}" is used in the template. Replace it with toSignal(${name}) for better performance and zoneless support.`,
+                message: `Observable "${name}" is read by the template, which can add async-pipe churn and weaker signal integration.`,
                 line,
                 column,
                 severity: 'warn',

@@ -57,6 +57,12 @@ ngcompass analyze
 
 That's it. ngcompass will scan your project and print a report to the terminal.
 
+For a visual report with search, filters, and per-file details, run:
+
+```bash
+ngcompass analyze --format ui
+```
+
 ---
 
 ## Output Formats
@@ -70,8 +76,8 @@ ngcompass analyze
 # Compact ESLint-style output (great for CI logs)
 ngcompass analyze --format console --compact
 
-# Interactive HTML report (opens in browser)
-ngcompass analyze --format html
+# Interactive UI report
+ngcompass analyze --format ui
 
 # Machine-readable JSON
 ngcompass analyze --format json > results.json

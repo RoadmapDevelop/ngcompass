@@ -148,6 +148,65 @@ function buildSummaryLine(errorCount: number, warningCount: number): string {
     );
 }
 
+function buildProblemNextAction(): string {
+    return pc.dim('Run `ngcompass analyze --format ui` for a full report.');
+}
+
+function formatDuration(ms: number): string {
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function buildAnalysisSummary(stats: ResultSummary): string {
+    const fileLabel = stats.totalFiles === 1 ? 'file' : 'files';
+    const checkLabel = stats.totalTasks === 1 ? 'check' : 'checks';
+    const cached = stats.cachedTasks && stats.cachedTasks > 0
+        ? `, ${stats.cachedTasks.toLocaleString()} cached`
+        : '';
+
+    return (
+        `Analyzed ${stats.totalFiles.toLocaleString()} ${fileLabel} ` +
+        `with ${stats.totalTasks.toLocaleString()} ${checkLabel}${cached} ` +
+        `in ${formatDuration(stats.duration)}.`
+    );
+}
+
+function formatStepMessage(message: string): string {
+    if (message.startsWith('› ')) {
+        return `${pc.cyan('›')} ${pc.bold(message.slice(2))}`;
+    }
+
+    return pc.bold(message);
+}
+
+function formatInfoMessage(message: string): string {
+    if (message.startsWith('✓ ')) {
+        return `${pc.green('✓')} ${pc.dim(message.slice(2))}`;
+    }
+
+    return pc.dim(message);
+}
+
+function guidanceForError(message: string): string | null {
+    if (/No configuration found/i.test(message)) {
+        return 'Run `ngcompass init` to create a starter configuration.';
+    }
+
+    if (/Configuration validation failed/i.test(message)) {
+        return 'Run `ngcompass config health` for a focused configuration check.';
+    }
+
+    if (/File discovery failed/i.test(message)) {
+        return 'Check your include/exclude globs and tsconfig parser options.';
+    }
+
+    if (/Rule resolution failed/i.test(message)) {
+        return 'Check rule names, presets, and plugin configuration.';
+    }
+
+    return null;
+}
+
 // ---------------------------------------------------------------------------
 // Compact-mode pure formatter
 // ---------------------------------------------------------------------------
@@ -299,24 +358,30 @@ export class ConsoleReporter implements Reporter {
         this.out.write('');
         this.renderFileBlocks(byFile, sortedFilePaths, allFailures.length);
         this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount)));
+        this.out.write(buildProblemNextAction());
     }
 
-    summary(_stats: ResultSummary): void {
-        // No-op as requested: "remove that says analyzed blah blah etc"
+    summary(stats: ResultSummary): void {
+        this.out.write(formatInfoMessage(`✓ ${buildAnalysisSummary(stats)}`));
     }
 
     error(error: Error): void {
-        if (this.verbose) return; // Do not log base errors when debug logs are streaming
         this.out.error(pc.red('× Analysis failed'));
         this.out.error(error.message);
-        if (error.stack) {
+
+        const guidance = guidanceForError(error.message);
+        if (guidance) {
+            this.out.error(pc.dim(guidance));
+        }
+
+        if (this.verbose && error.stack) {
             const stackWithoutHeader = error.stack.split('\n').slice(STACK_HEADER_LINE_SKIP).join('\n');
             this.out.error(pc.gray(stackWithoutHeader));
         }
     }
 
-    step(message: string): void { if (!this.verbose) this.out.write(pc.bold(message)); }
-    info(message: string): void { if (!this.verbose) this.out.write(pc.dim(message)); }
+    step(message: string): void { if (!this.verbose) this.out.write(formatStepMessage(message)); }
+    info(message: string): void { if (!this.verbose) this.out.write(formatInfoMessage(message)); }
 
     /**
      * No-op: debug logging is not handled by the reporter.

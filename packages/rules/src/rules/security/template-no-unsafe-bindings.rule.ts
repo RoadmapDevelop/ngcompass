@@ -34,7 +34,7 @@ export const templateNoUnsafeBindingsRule = createTemplateAttributeRule(
         return {
             filePath: context.filePath,
             ruleName: 'template-no-unsafe-bindings',
-            message: `\`${node.name}\` is an unsafe binding: ${entry.desc}. Ensure the value is sanitized, or use Angular's SafeHtml pipe.`,
+            message: `\`${node.name}\` binds raw content: ${entry.desc}. Unsanitized values can create injection risk.`,
             line,
             column,
             severity: entry.severity,

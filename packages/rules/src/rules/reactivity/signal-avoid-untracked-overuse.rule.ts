@@ -71,7 +71,7 @@ export const signalAvoidUntrackedRule = createCallExpressionRule(
         return {
             filePath: context.filePath,
             ruleName: 'signal-avoid-untracked-overuse',
-            message: 'Review this untracked() call. Each usage intentionally opts out of reactive tracking—ensure it is deliberate and necessary to avoid masking dependency bugs.',
+            message: 'untracked() hides this read from dependency tracking, which can mask stale reactive state.',
             line,
             column,
             severity: 'warn',

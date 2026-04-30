@@ -150,6 +150,17 @@ describe('Analyze Command', () => {
         }));
     });
 
+    it('prints console summary before findings', async () => {
+        setupSuccessfulPipeline();
+
+        registerAnalyzeCommand(program, { flush: vi.fn().mockResolvedValue(undefined) } as any);
+        await program.parseAsync(['node', 'test', 'analyze']);
+
+        expect(mockReporter.summary.mock.invocationCallOrder[0]).toBeLessThan(
+            mockReporter.report.mock.invocationCallOrder[0],
+        );
+    });
+
     it('lets CLI format and output override config defaults', async () => {
         setupSuccessfulPipeline({
             outputFormat: 'html',

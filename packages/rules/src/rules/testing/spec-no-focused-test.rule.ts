@@ -74,7 +74,7 @@ export const specNoFocusedTestRule = createCallExpressionRule(
                 return {
                     filePath: context.filePath,
                     ruleName: 'spec-no-focused-test',
-                    message: '`pending()` marks the enclosing test as pending. Remove it before committing.',
+                    message: '`pending()` disables the test body, so the committed suite can miss coverage.',
                     line,
                     column,
                     severity: 'error',
@@ -84,13 +84,12 @@ export const specNoFocusedTestRule = createCallExpressionRule(
             return null;
         }
 
-        const replacement = FOCUSED_MAP[focusedName];
         const start = getNodeStart(node as unknown as AstNode);
         const { line, column } = context.locator.location(start);
 
         const message = SKIPPED_NAMES.has(focusedName)
-            ? `\`${focusedName}\` disables a test that may be forgotten. Re-enable with \`${replacement}\` or remove the test entirely.`
-            : `\`${focusedName}\` is a focused test helper that silently skips all other tests in CI. Replace with \`${replacement}\`.`;
+            ? `\`${focusedName}\` disables a test that may be forgotten.`
+            : `\`${focusedName}\` is a focused test helper that can skip the rest of the suite in CI.`;
 
         return {
             filePath: context.filePath,
