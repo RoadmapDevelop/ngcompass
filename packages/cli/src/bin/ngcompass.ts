@@ -1,34 +1,13 @@
 import { Command } from 'commander';
 import { registerCommands } from '../commands/index.js';
-import fs from 'node:fs';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { enableDebug } from '@ngcompass/common';
+import { enableDebug, PACKAGE_VERSION } from '@ngcompass/common';
 import { createCacheContext, CacheContext } from '@ngcompass/cache';
 import { registerAllBuiltinRules } from '@ngcompass/rules';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-let packageJsonPath = '';
-let currentDir = __dirname;
-while (currentDir !== path.parse(currentDir).root) {
-  const checkPath = path.join(currentDir, 'package.json');
-  if (fs.existsSync(checkPath)) {
-    packageJsonPath = checkPath;
-    break;
-  }
-  currentDir = path.dirname(currentDir);
-}
-
-if (!packageJsonPath) {
-  throw new Error(
-    '[ngcompass] Could not find package.json above this CLI install. Reinstall the package or run from a project that contains package.json.'
-  );
-}
-
-const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
-
-const restoreCursor = () => process.stdout.write('\x1B[?25h');
+const restoreCursor = () => {
+  if (!process.stdout.isTTY) return;
+  process.stdout.write('\x1B[?25h');
+};
 
 const FLUSH_TIMEOUT_MS = 10_000;
 
@@ -64,7 +43,7 @@ export async function run() {
     .description(
       'Static analysis and architecture insights for Angular codebases.'
     )
-    .version(`v${packageJson.version}`, '-V, --version', 'Display ngcompass version')
+    .version(PACKAGE_VERSION, '-V, --version', 'Display ngcompass version')
     .option('--debug', 'Enable detailed debug logs across all modules')
     .addHelpText(
       'after',
@@ -79,12 +58,13 @@ export async function run() {
       const actionOpts = actionCommand.opts();
       if (
         actionOpts.format !== 'json' &&
+        actionOpts.format !== 'sarif' &&
         actionOpts.format !== 'html' &&
         actionOpts.format !== 'ui'
       ) {
         const { default: pc } = await import('picocolors');
         process.stdout.write(
-          `${pc.bold('ngcompass')} ${pc.cyan(packageJson.version)}\n`
+          `${pc.bold('ngcompass')} ${pc.cyan(PACKAGE_VERSION)}\n`
         );
       }
     });

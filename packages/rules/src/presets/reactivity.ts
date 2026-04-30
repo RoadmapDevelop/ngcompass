@@ -22,7 +22,6 @@ export const reactivityPreset: PresetConfig = {
         'signal-no-side-effects-in-computed': 'error',
         'signal-prefer-computed-over-sync-effect': 'warn',
         'signal-effect-must-be-destroy-scoped': 'error',
-        'signal-no-effect-in-constructor': 'warn',
         'signal-avoid-untracked-overuse': 'warn',
     },
 };

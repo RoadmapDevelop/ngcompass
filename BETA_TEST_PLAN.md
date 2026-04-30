@@ -2,7 +2,8 @@
 
 **Date:** 2026-04-26
 **Branch:** `pre_release_v1_beta`
-**Version under test:** 0.0.1 (pre-beta)
+**Version under test:** 0.1.0-beta
+**Checklist status:** 33 done / 72 remaining (105 total).
 
 ---
 
@@ -103,8 +104,8 @@ Behavior:
 
 `.github/workflows/ci.yml`:
 - **Triggers:** push to `main`/`develop`; PRs.
-- **Matrix:** Node 18 / 20 / 22 on **`ubuntu-latest` only**.
-- **Steps:** checkout → pnpm install (frozen) → `turbo typecheck test build` (concurrency 4) → coverage gate on Node 20 only → `pnpm audit --prod` → upload to Codecov on Node 20.
+- **Matrix:** Node 20.19.x / 22.x on `ubuntu-latest`, `windows-latest`, and `macos-latest`.
+- **Steps:** checkout → pnpm install (frozen) → `turbo typecheck test build` (concurrency 4) → packed tarball install smoke → CLI command/output smoke checks → production build + publish dry-run → coverage gate on Node 20.19.x / Ubuntu only → `pnpm audit --prod` → upload to Codecov on Node 20.19.x / Ubuntu.
 
 ### 1.8 Build & distribution
 
@@ -141,11 +142,12 @@ Caching: memory LRU + disk `cacache`; per-task and per-run global cache.
 
 CI today is Linux-only; the developer machine is Windows.
 
-- [ ] Add `windows-latest` and `macos-latest` to the CI matrix.
+- [x] Add `windows-latest` and `macos-latest` to the CI matrix.
 - [ ] Path handling on Windows (backslashes vs forward slashes) — scanner, cache, config discovery, `outputPath`.
 - [ ] Cache directory creation across OSes.
 - [ ] Worker thread spawn — confirm `packages/rules/dist/execution-worker.js` resolves after a packed install on every OS.
-- [ ] ANSI color rendering: Windows Terminal, `cmd.exe`, PowerShell, CI logs; verify `NO_COLOR` / `FORCE_COLOR` honored.
+- [x] ANSI color rendering: CI logs; verify `NO_COLOR` honored.
+- [ ] ANSI color rendering: Windows Terminal, `cmd.exe`, PowerShell; verify `FORCE_COLOR` honored.
 
 **Execution matrix**
 
@@ -158,12 +160,14 @@ CI today is Linux-only; the developer machine is Windows.
 
 **Minimum smoke script per OS**
 
-- [ ] `ngcompass --version`
-- [ ] `ngcompass --help`
-- [ ] `ngcompass init` in a fresh temp dir
-- [ ] `ngcompass analyze --format json`
+- [x] `ngcompass --version`
+- [x] `ngcompass --help`
+- [x] `ngcompass init` in a fresh temp dir
+- [x] `ngcompass analyze --format json`
+- [x] `ngcompass analyze --format sarif`
+- [x] `ngcompass analyze --format html --output report.html`
 - [ ] `ngcompass analyze --format ui --output report.html`
-- [ ] `ngcompass cache info`
+- [x] `ngcompass cache info`
 - [ ] `ngcompass cache path`
 
 **Windows-specific checks**
@@ -171,38 +175,44 @@ CI today is Linux-only; the developer machine is Windows.
 - [ ] Project path contains spaces, e.g. `C:\Temp\ng beta app\`
 - [ ] Config uses relative `outputPath` and `cache.location`
 - [ ] Report path uses backslashes and mixed separators
-- [ ] `NO_COLOR=1` disables ANSI escapes in console output
+- [x] `NO_COLOR=1` disables ANSI escapes in console output
 - [ ] Ctrl+C restores cursor and exits cleanly
 
 **Pass criteria**
 
 - [ ] No OS-specific stack traces
-- [ ] Same command returns the same exit code on all supported OSes
-- [ ] Packed CLI can resolve worker entry and write reports on all OSes
+- [x] Same command returns the same exit code on all supported OSes
+- [x] Packed CLI can resolve worker entry and write reports on all CI OSes
 - [ ] Generated report and cache artifacts land in the expected directories on all OSes
 
 ### 2.2 Distribution / install validation
 
 Local `pnpm test` does not exercise the published shape.
 
-- [ ] `pnpm pack` each package; install tarballs into a fresh project; run `ngcompass --version` and `ngcompass --help`.
-- [ ] Install with **npm**, **pnpm**, **yarn classic**, **yarn berry**.
+- [x] `pnpm pack` each package; install tarballs into a fresh project; run `ngcompass --version` and `ngcompass --help`.
+- [x] Install packed tarballs with **npm**.
+- [ ] Install with **pnpm**, **yarn classic**, **yarn berry**.
 - [ ] Global install (`npm i -g`) and `npx ngcompass`.
 - [ ] Resolve correctly from consumer projects with `"type": "module"` and without (ESM + CJS).
-- [ ] `dist/` matches `package.json#files` / `exports`; no `src/` leakage.
-- [ ] Shebang preserved on `dist/cli.js` after pack.
-- [ ] `npm audit --omit=dev` clean of high/critical advisories.
+- [x] `dist/` matches `package.json#files` / `exports`; no `src/` leakage.
+- [x] Shebang preserved on `dist/cli.js` after pack.
+- [x] `npm audit --omit=dev` clean of high/critical advisories in CI.
 
 ### 2.3 Command-surface functional matrix
 
 - [ ] `analyze` — happy path, plus every flag combination listed in §1.2.
-- [ ] `init` — fresh dir; existing-config dir without `--force` must refuse; `--cwd` to a remote directory.
+- [x] `init` — fresh dir.
+- [ ] `init` — existing-config dir without `--force` must refuse; `--cwd` to a remote directory.
 - [ ] `config health` — valid, broken, missing config.
 - [ ] `cache clear` per `--type`; verify on-disk state after.
-- [ ] `cache info` — empty cache, populated cache, corrupted entry.
-- [ ] `rules` (list) and `rules <name>` (detail) for each `--preset`.
-- [ ] **Exit codes:** 0 success; non-zero on `failOnSeverity` / `maxWarnings` breach; distinct code for fatal vs. analysis-found-issues.
-- [ ] Unknown command / unknown flag → helpful error, no stack trace.
+- [x] `cache info` — empty cache.
+- [ ] `cache info` — populated cache, corrupted entry.
+- [x] `rules` (list).
+- [ ] `rules <name>` (detail) for each `--preset`.
+- [x] **Exit codes:** 0 success; non-zero on `failOnSeverity` / `maxWarnings` breach.
+- [ ] **Exit codes:** distinct code for fatal vs. analysis-found-issues.
+- [x] Unknown command → non-zero exit.
+- [ ] Unknown flag → helpful error, no stack trace.
 
 ### 2.4 Real Angular project dogfooding
 
@@ -249,9 +259,12 @@ Synthetic fixtures alone are not enough.
 ### 2.8 Output formats
 
 - [ ] **JSON** — pin and publish a JSON schema; validate output against it; document forwards-compat policy.
+- [x] **HTML** — generated by installed CLI and covered by reporter regression tests.
 - [ ] **HTML** — open in Chrome / Firefox / Safari; CSS isolated when embedded; 10k-finding report renders without freezing the browser.
+- [x] **SARIF** — generated by installed CLI and parsed as SARIF 2.1.0 JSON.
 - [ ] **SARIF** — validate against the official 2.1.0 schema (consumed by GitHub code scanning).
 - [ ] **Console / text** — snapshot test plus visual review; check `--compact` and color-disable env vars.
+- [x] `--output` to: normal writable path.
 - [ ] `--output` to: existing path (overwrite policy?), missing parent dir, read-only file.
 
 ### 2.9 Error message quality
@@ -271,18 +284,20 @@ Synthetic fixtures alone are not enough.
 
 ### 2.11 Documentation parity
 
+- [x] README documents primary commands, output formats, and beta usage examples.
 - [ ] README documents every command, flag, and config key — diff `--help` against README.
-- [ ] `CHANGELOG.md` exists, starts at chosen beta version.
-- [ ] `LICENSE` present (MIT) and matches `package.json`.
-- [ ] Each package's `package.json` has `description`, `repository`, `homepage`, `bugs` populated.
-- [ ] Public types: `.d.ts` present in `dist/`; exported types match documented surface.
-- [ ] Beta-stability note: warn that config shape may change before 1.0.
+- [x] `CHANGELOG.md` exists, starts at chosen beta version.
+- [x] `LICENSE` present (MIT) and matches `package.json`.
+- [x] Each package's `package.json` has `description`, `repository`, `homepage`, `bugs` populated.
+- [x] Public types: `.d.ts` present in `dist/`.
+- [ ] Exported types match documented surface.
+- [x] Beta-stability note: warn that config shape may change before 1.0.
 
 ### 2.12 Telemetry, privacy, security
 
 - [ ] Re-confirm zero outbound network calls (run with `--network=none` in Docker).
-- [ ] No developer file paths leaked into shipped artifacts (sourcemaps, embedded errors).
-- [ ] `npm publish --dry-run` per package; inspect file list for `tests/`, `.env`, `node_modules`.
+- [x] No developer file paths leaked into shipped artifacts via sourcemaps in production package dry-run.
+- [x] `npm publish --dry-run` per package; inspect file list for `tests/`, `.env`, `node_modules`.
 - [ ] Worker entry path not user-controlled.
 
 ### 2.13 Beta release logistics
