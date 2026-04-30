@@ -17,7 +17,7 @@ export const performancePreset: PresetConfig = {
 
         // Template performance
         'template-no-call-expression': 'error',
-        'template-trackby-required-for-ngfor': 'error',
+        'template-trackby-required': 'error',
         'template-no-object-literal-binding': 'warn',
         'template-no-array-literal-binding': 'warn',
         'template-no-async-pipe-duplication': 'warn',

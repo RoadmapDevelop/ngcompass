@@ -217,8 +217,9 @@ function checkVersionRange(
 type VersionTuple = [number, number, number];
 
 function parseVersion(v: string): VersionTuple | null {
-    const parts = v.replace(/^v/, '').split('.').map(Number);
-    return parts.length >= 3 && !parts.some(isNaN) ? [parts[0], parts[1], parts[2]] : null;
+    const match = v.trim().match(/^v?\.?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/);
+    if (!match) return null;
+    return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 function compareVersions(a: VersionTuple, b: VersionTuple): number {

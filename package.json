@@ -1,6 +1,6 @@
 {
   "name": "ngcompass",
-  "version": "0.0.1",
+  "version": "0.1.0-beta",
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
   "repository": {
@@ -15,7 +15,7 @@
   "packageManager": "pnpm@10.33.0",
   "scripts": {
     "build": "turbo build",
-    "build:prod": "NODE_ENV=production turbo build:prod",
+    "build:prod": "turbo build:prod",
     "build:benchmark": "BENCHMARK=true pnpm run build",
     "build:profile": "turbo build --profile=profile.json && echo 'Profile saved to profile.json'",
     "build:trace": "turbo build --trace",

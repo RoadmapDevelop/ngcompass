@@ -11,6 +11,10 @@ function makeConfigReport(overrides: Partial<ConfigReport> = {}): ConfigReport {
     return { valid: true, issues: [], ...overrides };
 }
 
+function stripAnsi(text: string): string {
+    return text.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
 describe('TextConfigReporter', () => {
     let out: ReturnType<typeof createTestOutput>;
     let reporter: TextConfigReporter;
@@ -39,23 +43,23 @@ describe('TextConfigReporter', () => {
     });
 
     describe('renderInitResult()', () => {
-        it('outputs success checkmark', () => {
+        it('outputs success marker', () => {
             const result: InitResult = { success: true, filePath: 'ngcompass.json' };
             reporter.renderInitResult(result);
             expect(out.lines[0]).toContain('ngcompass.json');
-            expect(out.lines[0]).toContain('✓');
+            expect(out.lines[0]).toContain('OK');
         });
 
-        it('outputs middot with (exists) when file already exists', () => {
+        it('outputs exists marker with (exists) when file already exists', () => {
             const result: InitResult = { success: false, filePath: 'ngcompass.json', alreadyExists: true };
             reporter.renderInitResult(result);
             expect(out.lines[0]).toContain('(exists)');
         });
 
-        it('outputs error cross for a failed initialization', () => {
+        it('outputs error marker for a failed initialization', () => {
             const result: InitResult = { success: false, filePath: 'ngcompass.json' };
             reporter.renderInitResult(result);
-            expect(out.errors[0]).toContain('×');
+            expect(out.errors[0]).toContain('x');
         });
     });
 
@@ -90,6 +94,31 @@ describe('TextConfigReporter', () => {
             }));
             const output = out.lines.join('\n');
             expect(output).toContain('ngcompass.json');
+        });
+
+        it('left-aligns issue rows and aligns suggestions under the message', () => {
+            reporter.renderHealthReport(makeHealthReport({
+                valid: false,
+                issues: [
+                    {
+                        code: 'E1',
+                        message: 'Output directory does not exist',
+                        severity: 'error',
+                        file: 'ngcompass.config.ts',
+                        line: 13,
+                        column: 3,
+                        suggestion: 'Create the directory or update outputPath.',
+                    },
+                ],
+            }));
+
+            const physicalLines = out.lines.flatMap(line => stripAnsi(line).split('\n'));
+            const issueLine = physicalLines.find(line => line.includes('Output directory does not exist'))!;
+            const suggestionLine = physicalLines.find(line => line.includes('Create the directory'))!;
+
+            expect(issueLine.startsWith('13:3')).toBe(true);
+            expect(issueLine).toContain('error');
+            expect(suggestionLine.startsWith('               ::')).toBe(true);
         });
     });
 });

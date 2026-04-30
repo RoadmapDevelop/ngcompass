@@ -10,13 +10,10 @@ import type { ReporterOutput } from '../output.js';
 import { processOutput } from '../output.js';
 
 /** Minimum column width reserved for a `"line:col"` location label. */
-const LOCATION_COLUMN_WIDTH = 8;
+const LOCATION_COLUMN_WIDTH = 6;
 
-/**
- * Indentation applied to inline suggestions beneath a config issue line.
- * Width is chosen to visually align the suggestion arrow with the issue message body.
- */
-const SUGGESTION_INDENT = '          '; // 10 spaces
+/** Width reserved for the severity label before the issue message. */
+const SEVERITY_COLUMN_WIDTH = 5;
 
 // ---------------------------------------------------------------------------
 // Pure formatting helpers
@@ -40,18 +37,21 @@ function formatPath(pathSegments?: readonly (string | number)[]): string {
 /**
  * Formats a config issue into a coloured, optionally multi-line string.
  *
- * Single source of truth for issue presentation — used by both `reportConfig()`
+ * Single source of truth for issue presentation, used by both `reportConfig()`
  * and `renderIssues()` to avoid duplicated formatting logic.
  */
-function formatIssue(issue: ConfigIssue): string {
-    const label = issue.severity === 'error' ? pc.red('error') : pc.yellow('warn');
+function formatIssue(issue: ConfigIssue, suggestionIndent: string): string {
+    const rawLabel = issue.severity === 'error' ? 'error' : 'warn';
+    const label = issue.severity === 'error'
+        ? pc.red(rawLabel.padEnd(SEVERITY_COLUMN_WIDTH))
+        : pc.yellow(rawLabel.padEnd(SEVERITY_COLUMN_WIDTH));
     const pathStr = formatPath(issue.path);
     const pathInfo = pathStr ? ` ${pc.gray(`at ${pathStr}`)}` : '';
     const codeInfo = issue.code ? ` ${pc.dim(issue.code)}` : '';
 
-    let output = `${label} ${issue.message}${pathInfo}${codeInfo}`;
+    let output = `${label}  ${issue.message}${pathInfo}${codeInfo}`;
     if (issue.suggestion) {
-        output += `\n${SUGGESTION_INDENT}${pc.cyan('→')} ${pc.dim(issue.suggestion)}`;
+        output += `\n${suggestionIndent}${pc.cyan('::')} ${pc.dim(issue.suggestion)}`;
     }
     return output;
 }
@@ -69,7 +69,7 @@ function pluralise(count: number, word: string): string {
  * Groups a flat array of `ConfigIssue` objects by their source file path.
  *
  * Issues without a `file` property are placed under the `'unknown'` key.
- * Pure function — no rendering, no side effects.
+ * Pure function, no rendering, no side effects.
  */
 function groupIssuesByFile(issues: readonly ConfigIssue[]): Map<string, ConfigIssue[]> {
     return issues.reduce<Map<string, ConfigIssue[]>>((map, issue) => {
@@ -83,7 +83,7 @@ function groupIssuesByFile(issues: readonly ConfigIssue[]): Map<string, ConfigIs
  * Separates a flat issue list into error and warning buckets.
  *
  * Extracted to avoid filtering the issues array twice in `renderSummary` (DRY).
- * Pure function — returns a plain object, no I/O.
+ * Pure function, returns a plain object, no I/O.
  */
 function partitionIssuesBySeverity(issues: readonly ConfigIssue[]): {
     errors: ConfigIssue[];
@@ -119,10 +119,10 @@ export class TextConfigReporter implements ConfigReporter {
     reportConfig(report: ConfigReport): void {
         if (report.valid) return;
 
-        this.out.error(pc.red('× Configuration validation failed'));
+        this.out.error(pc.red('x Configuration validation failed'));
         for (const issue of report.issues) {
             const pathStr = formatPath(issue.path) || 'root';
-            this.out.error(`  [${issue.severity.toUpperCase()}] ${pathStr}: ${issue.message}`);
+            this.out.error(`[${issue.severity.toUpperCase()}] ${pathStr}: ${issue.message}`);
         }
     }
 
@@ -133,11 +133,11 @@ export class TextConfigReporter implements ConfigReporter {
      */
     renderInitResult(result: InitResult): void {
         if (result.success) {
-            this.out.write(`${pc.green('✓')} ${result.filePath}`);
+            this.out.write(`${pc.green('OK')} ${result.filePath}`);
         } else if (result.alreadyExists) {
-            this.out.write(`${pc.yellow('·')} ${result.filePath} ${pc.gray('(exists)')}`);
+            this.out.write(`${pc.yellow('exists')} ${result.filePath} ${pc.gray('(exists)')}`);
         } else {
-            this.out.error(`${pc.red('×')} initialization failed`);
+            this.out.error(`${pc.red('x')} initialization failed`);
         }
     }
 
@@ -151,11 +151,10 @@ export class TextConfigReporter implements ConfigReporter {
         this.renderSummary(report);
     }
 
-
     private renderIssues(report: HealthReport): void {
         if (report.issues.length === 0) return;
 
-        // Group by file using a pure helper — avoids mutable bucket.push() pattern.
+        // Group by file using a pure helper to keep the render path predictable.
         const byFile = groupIssuesByFile(report.issues);
 
         this.out.write('');
@@ -165,8 +164,14 @@ export class TextConfigReporter implements ConfigReporter {
 
             for (const issue of issues) {
                 const location = issue.line ? `${issue.line}:${issue.column ?? 1}` : '';
-                const locationLabel = location ? pc.gray(location.padEnd(LOCATION_COLUMN_WIDTH)) : '';
-                this.out.write(`  ${locationLabel}  ${formatIssue(issue)}`);
+                const locationPrefix = location
+                    ? `${pc.gray(location.padEnd(LOCATION_COLUMN_WIDTH))}  `
+                    : '';
+                const suggestionIndent = ' '.repeat(location
+                    ? LOCATION_COLUMN_WIDTH + 2 + SEVERITY_COLUMN_WIDTH + 2
+                    : SEVERITY_COLUMN_WIDTH + 2);
+
+                this.out.write(`${locationPrefix}${formatIssue(issue, suggestionIndent)}`);
             }
 
             this.out.write('');

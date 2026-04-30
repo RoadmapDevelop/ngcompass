@@ -28,12 +28,11 @@ export const strictPreset: PresetConfig = {
         'signal-no-side-effects-in-computed': 'error',
         'signal-prefer-computed-over-sync-effect': 'error',
         'signal-effect-must-be-destroy-scoped': 'error',
-        'signal-no-effect-in-constructor': 'error',
         'signal-avoid-untracked-overuse': 'error',
 
         // Template performance
         'template-no-call-expression': 'error',
-        'template-trackby-required-for-ngfor': 'error',
+        'template-trackby-required': 'error',
         'template-no-object-literal-binding': 'error',
         'template-no-array-literal-binding': 'error',
         'template-no-async-pipe-duplication': 'error',

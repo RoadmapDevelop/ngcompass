@@ -12,7 +12,7 @@ import type { ConfigReport, HealthReport, InitResult, RuleResult } from '@ngcomp
 import type { CacheInfo } from '@ngcompass/cache';
 
 /** Supported output encodings for analysis results. */
-export type ReporterFormat = 'console' | 'json' | 'html' | 'ui';
+export type ReporterFormat = 'console' | 'json' | 'html' | 'ui' | 'sarif';
 
 export interface ConsoleReporterOptions {
     /** Enables additional diagnostic output (verbose/fix recommendations). */
