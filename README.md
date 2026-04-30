@@ -86,7 +86,7 @@ ngcompass analyze --format json > results.json
 ngcompass analyze --format sarif > results.sarif
 ```
 
-The HTML report gives you a full visual breakdown — severity charts, per-file drill-down, search and filter — all in a single self-contained file.
+The UI report gives you a full visual breakdown — severity charts, per-file drill-down, search and filter — all in a single self-contained file.
 
 ---
 
@@ -98,7 +98,7 @@ Run `ngcompass init` to generate `ngcompass.config.ts` in your project root:
 import { defineConfig } from '@ngcompass/config';
 
 export default defineConfig({
-  // Start from a preset: 'ngcompass:recommended' | 'ngcompass:strict' | 'ngcompass:performance'
+  // Start from a preset: 'ngcompass:recommended' | 'ngcompass:strict' | 'ngcompass:performance' | 'ngcompass:reactivity' | 'ngcompass:all'
   extends: 'ngcompass:recommended',
 
   // Files to scan
@@ -107,8 +107,8 @@ export default defineConfig({
 
   // Override individual rules
   rules: {
-    'no-missing-on-push': 'error',
-    'no-ssr-unsafe-globals': 'warn',
+    'prefer-on-push-component-change-detection': 'error',
+    'no-document-access': 'warn',
   },
 });
 ```
@@ -120,6 +120,23 @@ export default defineConfig({
 | `ngcompass:recommended` | Balanced set of rules for most Angular projects |
 | `ngcompass:strict` | Stricter checks including all recommended rules |
 | `ngcompass:performance` | Focus on rendering performance and change detection |
+| `ngcompass:reactivity` | Signals correctness and RxJS-to-Signals migration rules |
+| `ngcompass:all` | Every built-in rule enabled at its default severity |
+
+### Supported Rules
+
+Run `ngcompass rules` to inspect the same list from the CLI.
+
+| Category | Rules |
+|---|---|
+| Correctness | `component-no-manual-detect-changes`, `signal-no-side-effects-in-computed`, `signal-effect-must-be-destroy-scoped`, `rxjs-no-nested-subscribe` |
+| Performance | `prefer-on-push-component-change-detection`, `template-no-call-expression`, `template-trackby-required`, `template-no-object-literal-binding`, `template-no-array-literal-binding` |
+| Security | `no-bypass-sanitization`, `template-no-unsafe-bindings` |
+| SSR | `no-document-access`, `prefer-after-render-over-after-view-init` |
+| Reactivity | `rxjs-no-subscribe-in-component`, `rxjs-require-takeUntilDestroyed`, `rxjs-avoid-subject-as-event-bus`, `rxjs-prefer-toSignal-for-template-state`, `toSignal-require-initialValue`, `signal-prefer-computed-over-sync-effect`, `signal-avoid-untracked-overuse` |
+| Modern API | `prefer-inject-over-constructor-di`, `signal-prefer-input-signal`, `signal-prefer-output-function`, `signal-prefer-model` |
+| Template | `template-prefer-control-flow`, `template-no-async-pipe-duplication` |
+| Testing | `spec-no-focused-test` |
 
 ---
 
@@ -140,8 +157,8 @@ export default defineConfig({
 
 | Option | Description |
 |---|---|
-| `--format <fmt>` | Output format: `console`, `json`, `sarif`, `html` |
-| `--output <path>` | Write HTML report to a specific file path |
+| `--format <fmt>` | Output format: `console`, `json`, `sarif`, `ui` |
+| `--output <path>` | Write the UI report to a specific file path |
 | `--compact` | ESLint-style compact one-line-per-issue output |
 | `--rule <id>` | Run a single rule in isolation |
 | `--force` | Skip cache and re-run full analysis |
