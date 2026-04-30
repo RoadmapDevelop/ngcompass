@@ -118,7 +118,7 @@ describe('TextConfigReporter', () => {
 
             expect(issueLine.startsWith('13:3')).toBe(true);
             expect(issueLine).toContain('error');
-            expect(suggestionLine.startsWith('               ->')).toBe(true);
+            expect(suggestionLine.startsWith('               ::')).toBe(true);
         });
     });
 });
