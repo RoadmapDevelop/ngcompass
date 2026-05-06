@@ -184,10 +184,12 @@ jobs:
 
           @Component({
             selector: 'app-root',
-            template: '<button (click)="save()">Save</button>',
+            template: '<h1>{{ title() }}</h1>',
           })
           export class AppComponent {
-            save() {}
+            title() {
+              return 'Hello';
+            }
           }
           TS
 
