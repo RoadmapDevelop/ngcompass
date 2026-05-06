@@ -51,7 +51,7 @@ function formatIssue(issue: ConfigIssue, suggestionIndent: string): string {
 
     let output = `${label}  ${issue.message}${pathInfo}${codeInfo}`;
     if (issue.suggestion) {
-        output += `\n${suggestionIndent}${pc.cyan('::')} ${pc.dim(issue.suggestion)}`;
+        output += `\n${suggestionIndent}${pc.cyan('→')} ${pc.dim(issue.suggestion)}`;
     }
     return output;
 }
@@ -122,7 +122,10 @@ export class TextConfigReporter implements ConfigReporter {
         this.out.error(pc.red('x Configuration validation failed'));
         for (const issue of report.issues) {
             const pathStr = formatPath(issue.path) || 'root';
-            this.out.error(`[${issue.severity.toUpperCase()}] ${pathStr}: ${issue.message}`);
+            const tag = issue.severity === 'error'
+                ? pc.bold(pc.red('[ERROR]'))
+                : pc.bold(pc.yellow('[WARNING]'));
+            this.out.error(`${tag} ${pc.dim(pathStr + ':')} ${issue.message}`);
         }
     }
 
@@ -133,11 +136,14 @@ export class TextConfigReporter implements ConfigReporter {
      */
     renderInitResult(result: InitResult): void {
         if (result.success) {
-            this.out.write(`${pc.green('OK')} ${result.filePath}`);
+            this.out.write(`${pc.green('Created')} ${result.filePath}`);
+            this.out.write(pc.dim('Next: run `ngcompass analyze` to scan this project.'));
         } else if (result.alreadyExists) {
-            this.out.write(`${pc.yellow('exists')} ${result.filePath} ${pc.gray('(exists)')}`);
+            this.out.write(`${pc.yellow('Already exists')} ${result.filePath}`);
+            this.out.write(pc.dim('Use `ngcompass init --force` to overwrite it.'));
         } else {
             this.out.error(`${pc.red('x')} initialization failed`);
+            this.out.error(pc.dim('Check file permissions or pass `--cwd <path>` to choose a project directory.'));
         }
     }
 
@@ -183,7 +189,7 @@ export class TextConfigReporter implements ConfigReporter {
         const isHealthy = errors.length === 0 && warnings.length === 0;
 
         if (isHealthy) {
-            this.out.write(`${pc.green('No issues found.')} ${pc.bold('status')} ${pc.green('OK')}`);
+            this.out.write(`${pc.green('Configuration OK.')} No issues found.`);
             return;
         }
 

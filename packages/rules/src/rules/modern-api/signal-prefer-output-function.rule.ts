@@ -57,7 +57,7 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
                 failures.push({
                     filePath: context.filePath,
                     ruleName: RULE_NAME,
-                    message: `'${name}' uses the legacy @Output() EventEmitter pattern. Prefer the \`output()\` function API (Angular 17.3+) for a more modern, idiomatic output declaration.`,
+                    message: `'${name}' uses @Output() EventEmitter, which adds boilerplate compared with output().`,
                     line,
                     column,
                     severity: 'warn',
@@ -68,4 +68,4 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
         }
         return failures.length > 0 ? failures : null;
     }
-);
+);

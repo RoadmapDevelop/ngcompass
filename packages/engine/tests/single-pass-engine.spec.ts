@@ -11,10 +11,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { runSinglePassAnalysis } from '../src/single-pass-engine.js';
-import { createCallExpressionRule } from '../src/rule-handler.js';
+import { createCallExpressionRule, createTemplateExpressionRule } from '../src/rule-handler.js';
 import type { RuleContext } from '../src/types.js';
 import type { RuleFailure } from '../src/types.js';
-import { parseTs } from '@ngcompass/ast';
+import { parseHtml, parseTs } from '@ngcompass/ast';
 import { Locator } from '@ngcompass/common';
 
 // ---------------------------------------------------------------------------
@@ -139,6 +139,33 @@ describe('runSinglePassAnalysis — failure collection', () => {
         const { results } = runSinglePassAnalysis([handler], ctx);
         // Both foo() and bar() are CallExpression nodes
         expect(results[0].failures.length).toBeGreaterThanOrEqual(2);
+    });
+});
+
+describe('runSinglePassAnalysis - external template context', () => {
+    it('uses the HTML file context for template rules without changing TypeScript rule context', () => {
+        const tsPath = '/src/app/app.component.ts';
+        const htmlPath = '/src/app/app.component.html';
+        const html = '<button>{{ computeLabel() }}</button>';
+        const ctx: RuleContext = {
+            ...makeContext('foo();', tsPath),
+            template: parseHtml(html),
+            templateFilePath: htmlPath,
+            templateFileContent: html,
+            templateLocator: new Locator(html),
+        };
+
+        const tsHandler = createCallExpressionRule('ts-context', (_node, context) => (
+            makeFailure({ ruleName: 'ts-context', filePath: context.filePath })
+        ));
+        const templateHandler = createTemplateExpressionRule('template-context', (_node, context) => (
+            makeFailure({ ruleName: 'template-context', filePath: context.filePath })
+        ));
+
+        const { results } = runSinglePassAnalysis([tsHandler, templateHandler], ctx);
+
+        expect(results.find((result) => result.ruleName === 'ts-context')?.failures[0].filePath).toBe(tsPath);
+        expect(results.find((result) => result.ruleName === 'template-context')?.failures[0].filePath).toBe(htmlPath);
     });
 });
 

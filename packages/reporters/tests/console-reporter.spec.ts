@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+﻿import { describe, it, expect, beforeEach } from 'vitest';
 import { ConsoleReporter } from '../src/reporters/console-reporter.js';
 import { createTestOutput } from '../src/output.js';
 import type { RuleResult } from '@ngcompass/common';
 import type { ResultSummary } from '../src/types.js';
+
+const ANSI_RE = /\x1B\[[0-?]*[ -/]*[@-~]/g;
+
+function stripAnsi(value: string): string {
+    return value.replace(ANSI_RE, '');
+}
 
 function makeResult(failures: RuleResult['failures']): RuleResult {
     return { ruleName: 'test-rule', failures };
@@ -67,6 +73,7 @@ describe('ConsoleReporter', () => {
             expect(summary).toContain('2 problems');
             expect(summary).toContain('1 error');
             expect(summary).toContain('1 warning');
+            expect(out.lines.some(l => l.includes('ngcompass analyze --format ui'))).toBe(true);
         });
 
         it('sorts files alphabetically', () => {
@@ -90,12 +97,52 @@ describe('ConsoleReporter', () => {
             const output = out.lines.join('\n');
             expect(output).toMatch(/».*Step one. Step two/);
         });
+
+        it('renders external HTML code frames with aligned gutters and HTML content', () => {
+            const htmlPath = 'src/app.component.html';
+            reporter = new ConsoleReporter(out.output, undefined, {
+                readLines: () => [
+                    '<section>',
+                    '  <button type="button" (click)="save()">{{ label() }}</button>',
+                    '</section>',
+                ],
+            });
+
+            reporter.report([
+                makeResult([
+                    makeFailure({
+                        filePath: htmlPath,
+                        line: 2,
+                        column: 3,
+                        ruleName: 'template-no-call-expression',
+                    }),
+                ]),
+            ]);
+
+            const physicalLines = out.lines.flatMap(line => stripAnsi(line).split('\n'));
+            expect(physicalLines).toContain('    1 | <section>');
+            expect(physicalLines).toContain('  > 2 |   <button type="button" (click)="save()">{{ label() }}</button>');
+            expect(physicalLines.some(line => line.includes('    |   ^'))).toBe(true);
+        });
     });
 
     describe('summary()', () => {
-        it('does not output anything (minimal summary requested)', () => {
+        it('outputs a concise run summary', () => {
             reporter.summary(stats);
-            expect(out.lines.length).toBe(0);
+            const line = stripAnsi(out.lines[0]);
+            expect(line).toContain('❯ 10 files ·');
+            expect(line).toContain('20 checks');
+            expect(line).toContain('5 cached');
+        });
+    });
+
+    describe('progress output', () => {
+        it('formats active and completed steps', () => {
+            reporter.step('❯ Loading rules...');
+            reporter.info('❯ Loaded 18 active rules in 1ms');
+
+            expect(stripAnsi(out.lines[0])).toContain('❯ Loading rules...');
+            expect(stripAnsi(out.lines[1])).toContain('❯ Loaded 18 active rules in 1ms');
         });
     });
 

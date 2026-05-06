@@ -1,6 +1,7 @@
 import path from 'path';
 import { createMemoryDriver } from './drivers/memory.js';
 import { createDiskDriver } from './drivers/disk.js';
+import { createPackedFileDriver } from './drivers/packed.js';
 import { createAtomicDriver } from './drivers/atomic.js';
 import { createJsonFileDriver } from './drivers/json-file.js';
 import { createSourceCache, SourceEntry } from './services/source-cache.js';
@@ -64,9 +65,8 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
 
     const resultDriver = useMemoryOnly
         ? createAsyncMemoryDriver<unknown>(config.memory?.maxItems, config.memory?.ttl)
-        : createDiskDriver<unknown>({
+        : createPackedFileDriver<unknown>({
             path: path.join(config.disk?.path ?? defaultBaseDir, 'results'),
-            ttl: config.disk?.ttl,
         });
 
     const configDriver = useMemoryOnly

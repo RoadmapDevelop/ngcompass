@@ -59,7 +59,7 @@ export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
             failures.push({
                 filePath: context.filePath,
                 ruleName: 'prefer-after-render-over-after-view-init',
-                message: `\`${hookName}\` contains DOM access that will fail in SSR. Move browser-only DOM code into \`afterNextRender()\` to make it SSR-safe.`,
+                message: `\`${hookName}\` contains DOM access that can run before browser-only APIs are safe.`,
                 line,
                 column,
                 severity: 'warn',

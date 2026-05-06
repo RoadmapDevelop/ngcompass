@@ -49,7 +49,7 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
         return {
             filePath: context.filePath,
             ruleName: 'rxjs-require-takeUntilDestroyed',
-            message: 'Subscriptions in components must include a teardown operator in the subscribe chain (takeUntilDestroyed, takeUntil, take, first, takeWhile) to reduce leak risk.',
+            message: 'A component subscription without teardown can keep running after the component is destroyed.',
             line,
             column,
             severity: 'error',

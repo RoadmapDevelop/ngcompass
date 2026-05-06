@@ -35,7 +35,8 @@
     "turbo:daemon": "turbo daemon",
     "turbo:daemon:status": "turbo daemon status",
     "ci": "turbo build test typecheck --concurrency=4",
-    "ci:affected": "turbo build test typecheck --filter=[HEAD^1]"
+    "ci:affected": "turbo build test typecheck --filter=[HEAD^1]",
+    "smoke": "node scripts/smoke-test.mjs"
   },
   "keywords": [
     "angular",

@@ -44,6 +44,9 @@ export const detectFileType = (filePath: string): FileType => {
     if (ext === '.css' || ext === '.scss' || ext === '.sass' || ext === '.less') return 'style';
     if (basename.endsWith('.config.ts') || ext === '.json') return 'config';
 
+    // Spec/test files get their own type so spec-scoped rules are routed correctly.
+    if (basename.endsWith('.spec.ts') || basename.endsWith('.test.ts')) return 'spec';
+
     // Non-Angular TypeScript files (utilities, helpers, etc.) are still valid
     // analysis targets for rules with dependencyType 'standalone' or 'imports'.
     if (ext === '.ts') return 'logic';

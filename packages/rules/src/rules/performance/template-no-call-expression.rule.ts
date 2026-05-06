@@ -93,6 +93,10 @@ function isSignalSymbol(symbol: ts.Symbol, typeChecker: ts.TypeChecker): boolean
 function isSignalReference(name: string, context: RuleContext): boolean {
     const looksLikeGetter = name.startsWith('get') || name.startsWith('is') || name.startsWith('has');
 
+    if (context.crossRef?.signalMembers?.has(name)) {
+        return true;
+    }
+
     if (context.typeChecker && context.crossRef?.componentPath) {
         try {
             const typeChecker = context.typeChecker;
@@ -157,7 +161,7 @@ function createFailure(
     return {
         filePath: context.filePath,
         ruleName: RULE_NAME,
-        message: 'Avoid calling methods directly in templates as they execute on every change detection cycle. Use Signals, computed state, or Pipes instead.',
+        message: 'Template method calls run on every change detection cycle and can make rendering slower.',
         line,
         column,
         severity: 'error',
@@ -180,4 +184,4 @@ export const templateNoCallExpressionRule = createTemplateExpressionRule(
         requires: { htmlAst: true, typeChecker: true, projectContext: true },
     },
 );
-;
+;

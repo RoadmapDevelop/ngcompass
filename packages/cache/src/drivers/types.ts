@@ -9,6 +9,8 @@ export interface AsyncDriver<T> {
     delete(key: string): Promise<void>;
     clear(): Promise<void>;
     getStats(): Promise<DriverStats>;
+    /** Optional: write many entries in a single atomic I/O operation. */
+    bulkSet?(entries: ReadonlyArray<readonly [string, T]>): Promise<void>;
 }
 
 /**

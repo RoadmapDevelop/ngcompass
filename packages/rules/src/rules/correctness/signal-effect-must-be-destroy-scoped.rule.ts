@@ -61,7 +61,7 @@ function createFailure(node: AstNode, methodName: string, context: RuleContext):
     return {
         filePath: context.filePath,
         ruleName: RULE_NAME,
-        message: `effect() called inside "${methodName}" without explicit lifecycle ownership. Create effects in an injection context (constructor or field initializer), or pass { injector } or { manualCleanup: true }.`,
+        message: `effect() inside "${methodName}" has no explicit lifecycle owner, so cleanup can be unclear.`,
         line,
         column,
         severity: 'error',
@@ -101,4 +101,4 @@ export const signalEffectDestroyScopedRule = createAnyAngularClassRule(
 
         return failures.length > 0 ? failures : null;
     },
-);
+);

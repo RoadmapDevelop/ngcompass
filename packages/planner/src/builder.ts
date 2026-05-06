@@ -73,7 +73,7 @@ export const buildExecutionPlan = async (
         // resolve template/styles/spec paths in O(1) instead of per-file dir scans.
         if (!cachedPlan) {
             const graph = new ComponentDependencyGraph();
-            graph.build(options.files);
+            await graph.build(options.files);
             context.componentGraph = graph;
             context.graphStats = { hits: 0, misses: 0, fallbacks: 0 };
             debug("planner", "Component dependency graph built");
@@ -254,6 +254,10 @@ const tryLoadPlanFromCache = async (
     const globalHash = await calculateGlobalHash(files, rules, context.hashCache!, options.cacheKeyCtx);
     context.globalHash = globalHash;
 
+    // --force: skip all cache reads so every layer re-runs from scratch.
+    // globalHash is still needed above so the post-run save works correctly.
+    if (options.incremental?.forceRerun) return null;
+
     // Check precomputed analysis first (Short-circuit)
     const analysisCache = options.cache.analysis;
     const precomputedAnalysis = await analysisCache.get(globalHash);
@@ -275,7 +279,7 @@ const tryLoadPlanFromCache = async (
                 tasksBySeverityLevel: { off: [], warn: [], error: [] },
                 filesByType: {
                     component: [], directive: [], pipe: [], service: [],
-                    module: [], guard: [], logic: [], template: [],
+                    module: [], guard: [], logic: [], spec: [], template: [],
                     style: [], config: [], unknown: [],
                 },
                 tasksBySeverity: { off: 0, warn: 0, error: 0 },

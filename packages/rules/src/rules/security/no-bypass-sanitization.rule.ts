@@ -33,7 +33,7 @@ export const noBypassSanitizationRule = createCallExpressionRule(
         return {
             filePath: context.filePath,
             ruleName: 'no-bypass-sanitization',
-            message: `\`${name}\` bypasses Angular's ${BYPASS_METHODS.get(name)} sanitization. Only use this when content is provably safe and sourced from trusted input.`,
+            message: `\`${name}\` bypasses Angular's ${BYPASS_METHODS.get(name)} sanitization, which can expose unsafe content.`,
             line,
             column,
             severity: 'error',

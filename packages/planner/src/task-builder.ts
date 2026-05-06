@@ -59,6 +59,10 @@ export const shouldApplyRule = (rule: ResolvedRule, fileType: FileType): boolean
         return fileType === "component";
     }
 
+    if (dependencyType === "spec") {
+        return fileType === "spec";
+    }
+
     return false;
 };
 
@@ -89,6 +93,7 @@ export interface RuleGroups {
     allTs: ResolvedRule[];
     component: ResolvedRule[];
     directive: ResolvedRule[];
+    spec: ResolvedRule[];
 }
 
 /**
@@ -98,7 +103,7 @@ export interface RuleGroups {
  * @returns Grouped rules
  */
 export const getRulesByFileType = (rules: ReadonlyMap<string, ResolvedRule>): RuleGroups => {
-    const groups: RuleGroups = { allTs: [], component: [], directive: [] };
+    const groups: RuleGroups = { allTs: [], component: [], directive: [], spec: [] };
 
     for (const rule of rules.values()) {
         const { dependencyType } = rule.metadata;
@@ -116,6 +121,11 @@ export const getRulesByFileType = (rules: ReadonlyMap<string, ResolvedRule>): Ru
 
         if (dependencyType === "styles") {
             groups.component.push(rule);
+            continue;
+        }
+
+        if (dependencyType === "spec") {
+            groups.spec.push(rule);
         }
     }
 
@@ -136,6 +146,7 @@ export const groupRulesByDependencyType = (
         component: [],
         styles: [],
         imports: [],
+        spec: [],
     };
 
     for (const rule of rules.values()) {

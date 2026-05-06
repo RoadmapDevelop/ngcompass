@@ -8,8 +8,8 @@ const NGFOR_RULE_NAME = 'template-trackby-required-for-ngfor';
 const ATFOR_RULE_NAME = 'template-track-required-for-atfor';
 const COMBINED_RULE_NAME = 'template-trackby-required';
 
-const NGFOR_MESSAGE = 'Add a trackBy function to *ngFor to reduce unnecessary DOM updates for dynamic lists.';
-const ATFOR_MESSAGE = 'Add a track expression to @for to reduce unnecessary DOM updates for dynamic lists.';
+const NGFOR_MESSAGE = '*ngFor without trackBy can recreate DOM nodes unnecessarily when list items change.';
+const ATFOR_MESSAGE = '@for without a track expression can recreate DOM nodes unnecessarily when list items change.';
 
 function createFailure(
     context: RuleContext,
@@ -68,4 +68,4 @@ export const templateTrackByRequiredRule = createTemplateRule(
     {
         requires: { htmlAst: true },
     }
-);
+);
