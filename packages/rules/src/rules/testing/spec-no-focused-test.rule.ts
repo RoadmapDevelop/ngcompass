@@ -100,5 +100,6 @@ export const specNoFocusedTestRule = createCallExpressionRule(
             severity: 'error',
             fix: RECOMMENDATIONS['spec-no-focused-test'],
         };
-    }
+    },
+    { dependencyType: 'spec', requires: { tsAst: true } }
 );

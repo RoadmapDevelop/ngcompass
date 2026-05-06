@@ -70,15 +70,25 @@ export const createTypeAwareAnalysisContext = (
             tsconfigRootDir
         );
 
+        // Use only the files we are actually analyzing as TS Program roots.
+        // The full tsconfig.fileNames for a monorepo can be 10,000+ files
+        // (test, demo, tool packages) whose ASTs we never need — loading them
+        // all blows the heap.  TypeScript still resolves every import
+        // transitively, so type accuracy is unaffected.
+        const tsFileRoots = files.filter(
+            f => (f.endsWith('.ts') || f.endsWith('.tsx')) && !f.endsWith('.d.ts')
+        );
+        const programRoots = tsFileRoots.length > 0 ? tsFileRoots : parsedCommandLine.fileNames;
+
         program = ts.createProgram({
-            rootNames: parsedCommandLine.fileNames,
+            rootNames: programRoots,
             options: parsedCommandLine.options,
         });
 
         debug(
             'engine',
             `TypeScript Program initialized in ${(performance.now() - tsStart).toFixed(2)}ms` +
-            ` with ${parsedCommandLine.fileNames.length} files`,
+            ` with ${programRoots.length} roots (tsconfig had ${parsedCommandLine.fileNames.length})`,
         );
     } else {
         debug('engine', 'Could not find tsconfig.json; TypeChecker and ProjectContext will be unavailable.');

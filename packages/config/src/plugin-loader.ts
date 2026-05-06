@@ -88,14 +88,14 @@ export const loadPlugins = async (
                     const error = validateManifestCompatibility(manifest, capabilities);
                     if (error) throw new Error(error);
 
-                    debug('plugin-loader', `✓ Validated: ${manifest.name}@${manifest.version}`);
+                    debug('plugin-loader', `❯ Validated: ${manifest.name}@${manifest.version}`);
                 } else {
                     warn('plugin-loader', `Plugin "${pluginRef}" is missing a manifest. Please update for future compatibility.`);
                 }
 
                 registry.register(plugin);
                 registeredCount++;
-                debug('plugin-loader', `✓ Registered Rule: ${plugin.name}`);
+                debug('plugin-loader', `❯ Registered Rule: ${plugin.name}`);
             }
 
             debug('plugin-loader', `Plugin "${pluginRef}" processed: ${registeredCount} rules active.`);

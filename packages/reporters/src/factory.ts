@@ -1,3 +1,5 @@
+import process from 'node:process';
+import pc from 'picocolors';
 import { ConsoleReporter } from './reporters/console-reporter.js';
 import { JsonReporter } from './reporters/json-reporter.js';
 import { HtmlReporter } from './reporters/html-reporter.js';
@@ -5,7 +7,77 @@ import { SarifReporter } from './reporters/sarif-reporter.js';
 import { TextConfigReporter } from './reporters/config.js';
 import { TextCacheReporter } from './reporters/cache.js';
 import { RulesReporter, type RulesReporterOptions } from './reporters/rules-reporter.js';
-import type { Reporter, ConfigReporter, CacheReporter, ReporterFormat, ConsoleReporterOptions } from './types.js';
+import type { Reporter, ConfigReporter, CacheReporter, ReporterFormat, ConsoleReporterOptions, ResultSummary, ParseError } from './types.js';
+import type { RuleResult } from '@ngcompass/common';
+
+/**
+ * Wraps a file/structured reporter (HTML, JSON, SARIF) and forwards all progress
+ * methods to a ConsoleReporter that writes to stderr.
+ *
+ * This ensures step/info/summary messages always appear in the terminal regardless
+ * of the output format. Stderr is used so that structured stdout (JSON, SARIF) is
+ * never polluted.
+ */
+class CompoundReporter implements Reporter {
+    private readonly progress: ConsoleReporter;
+    private pendingResults?: ReadonlyArray<RuleResult>;
+
+    constructor(
+        private readonly inner: Reporter,
+        options?: ConsoleReporterOptions,
+    ) {
+        const stderrOutput = {
+            write: (line: string) => process.stderr.write(line + '\n'),
+            error: (line: string) => process.stderr.write(line + '\n'),
+        };
+        this.progress = new ConsoleReporter(stderrOutput, {
+            ...options,
+            compact: false,
+            phaseStream: process.stderr as NodeJS.WriteStream,
+        });
+    }
+
+    report(results: ReadonlyArray<RuleResult>): void {
+        this.inner.report(results);
+        this.pendingResults = results;
+    }
+
+    parseErrors(errors: ReadonlyArray<ParseError>): void {
+        if (errors.length > 0) this.progress.parseErrors(errors);
+        this.inner.parseErrors(errors);
+    }
+
+    error(error: Error): void {
+        this.progress.error(error);
+    }
+
+    summary(stats: ResultSummary): void {
+        this.progress.summary(stats);
+        this.inner.summary(stats);
+
+        if (this.pendingResults) {
+            const scannedFiles = stats.discoveredFiles ?? stats.scannedFiles ?? 0;
+            if (scannedFiles > 0) {
+                const filesWithViolations = new Set(
+                    this.pendingResults.flatMap(r => r.failures.map(f => f.filePath))
+                ).size;
+                const cleanFiles = scannedFiles - filesWithViolations;
+                const violationPart = filesWithViolations > 0
+                    ? `  ${pc.red('✗')} ${pc.red(`${filesWithViolations.toLocaleString()} files with violations`)}`
+                    : '';
+                process.stderr.write(
+                    `${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}\n`
+                );
+            }
+            this.pendingResults = undefined;
+        }
+    }
+
+    step(message: string): void { this.progress.step(message); }
+    info(message: string): void { this.progress.info(message); }
+    debug(message: string): void { this.progress.debug(message); }
+    clearLine(): void { this.progress.clearLine(); }
+}
 
 /**
  * Creates an analysis reporter instance based on the requested format.
@@ -25,14 +97,14 @@ export function getReporter(
 ): Reporter {
     switch (format) {
         case 'json':
-            return new JsonReporter();
+            return new CompoundReporter(new JsonReporter(), options);
         case 'sarif':
-            return new SarifReporter();
+            return new CompoundReporter(new SarifReporter(), options);
         case 'console':
             return new ConsoleReporter(undefined, options);
         case 'html':
         case 'ui':
-            return new HtmlReporter(options?.outputPath, undefined, true);
+            return new CompoundReporter(new HtmlReporter(options?.outputPath, undefined, true), options);
         default: {
             // TypeScript narrows `format` to `never` here if `ReporterFormat` is exhaustive.
             // The cast exists so we can emit a clear runtime message if called from JS or

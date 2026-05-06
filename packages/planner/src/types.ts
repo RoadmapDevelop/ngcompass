@@ -106,6 +106,7 @@ export type FileType =
     | 'module'
     | 'guard'
     | 'logic'
+    | 'spec'
     | 'template'
     | 'style'
     | 'config'

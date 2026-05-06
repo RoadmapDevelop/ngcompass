@@ -17,7 +17,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
         .option('--type <type>', 'Cache type to clear: ast | config | results | all', 'all')
         .action(async (options: { type: string; profile?: string }) => {
             const reporter = getCacheReporter();
-            process.stdout.write('Clearing cache...\n');
+            process.stdout.write(pc.dim('  › Clearing cache...\n'));
 
             const type = options.type as 'ast' | 'config' | 'results' | 'all';
 

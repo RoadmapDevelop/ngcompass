@@ -1,5 +1,6 @@
-import { Command } from 'commander';
+﻿import { Command } from 'commander';
 import path from 'node:path';
+import pc from 'picocolors';
 import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult, type ParseError, type ParserOptions } from '@ngcompass/common';
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
@@ -7,7 +8,7 @@ import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { exitWithError } from './exit.js';
 import { getGlobalRegistry, executeBatchedNewEngineRules, isNewEngineRule } from '@ngcompass/rules';
 import { loadPlugins } from '@ngcompass/config';
-import { runAnalysis, configureRuleExecutor } from '@ngcompass/engine';
+import { runAnalysis, configureRuleExecutor, type AnalysisFileProgress } from '@ngcompass/engine';
 import { ExecutionPlanOutput, buildExecutionPlan } from '@ngcompass/planner';
 import { scan } from '@ngcompass/scanner';
 import { resolveRules, getEnabledRules } from '@ngcompass/rules';
@@ -18,8 +19,13 @@ interface AnalyzeOptions {
     debug?: boolean;
     format?: ReporterFormat;
     compact?: boolean;
+    quiet?: boolean;
+    recommendation?: boolean;
     rule?: string;
     output?: string;
+    maxWorkers?: string;
+    typeAwareChunkSize?: string;
+    skipTypeCheck?: boolean;
 }
 
 function normalizeReporterFormat(format: ReporterFormat | undefined): ReporterFormat {
@@ -83,6 +89,62 @@ function resolveParserProjectPath(
     return path.resolve(rootDir, parserOptions.project);
 }
 
+function formatDuration(ms: number): string {
+    if (ms < 1000) return `${Math.max(0, Math.round(ms))}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function pluralise(count: number, singular: string): string {
+    return `${count.toLocaleString()} ${singular}${count === 1 ? '' : 's'}`;
+}
+
+function createFileProgressLogger(plan: ExecutionPlanOutput, stream: NodeJS.WriteStream, cwd: string) {
+    const expectedTasksByFile = new Map<string, number>();
+    const executableTaskFiles = plan.tasks
+        .map(task => task.filePath)
+        .filter((filePath): filePath is string => typeof filePath === 'string' && filePath.length > 0);
+
+    for (const filePath of executableTaskFiles) {
+        expectedTasksByFile.set(filePath, (expectedTasksByFile.get(filePath) ?? 0) + 1);
+    }
+
+    const completedByFile = new Map<string, AnalysisFileProgress>();
+    const printedFiles = new Set<string>();
+
+    return (event: AnalysisFileProgress) => {
+        if (printedFiles.has(event.filePath)) return;
+
+        const accumulated = completedByFile.get(event.filePath);
+        const next: AnalysisFileProgress = accumulated
+            ? {
+                filePath: event.filePath,
+                taskCount: accumulated.taskCount + event.taskCount,
+                issueCount: accumulated.issueCount + event.issueCount,
+                errorCount: accumulated.errorCount + event.errorCount,
+                warningCount: accumulated.warningCount + event.warningCount,
+                duration: accumulated.duration + event.duration,
+            }
+            : event;
+        completedByFile.set(event.filePath, next);
+
+        const expectedTasks = expectedTasksByFile.get(event.filePath) ?? next.taskCount;
+        if (next.taskCount < expectedTasks) return;
+        printedFiles.add(event.filePath);
+
+        const relativePath = path.relative(cwd, event.filePath) || event.filePath;
+        const hasIssues = next.issueCount > 0;
+        const status = hasIssues ? pc.red('❯') : pc.green('❯');
+        const duration = hasIssues
+            ? pc.red(formatDuration(next.duration))
+            : pc.green(formatDuration(next.duration));
+        const fileLine = hasIssues
+            ? `${status} ${pc.red(relativePath)}  ${duration}   ${pc.red(pluralise(next.issueCount, 'issue'))}`
+            : `${status} ${pc.dim(relativePath)}  ${duration}`;
+
+        stream.write(`${fileLine}\n`);
+    };
+}
+
 export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
     program
         .command('analyze')
@@ -91,8 +153,13 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--force', 'Ignore cached results and re-run all checks')
         .option('--format <fmt>', 'Reporter format: console | json | sarif | html | ui')
         .option('--compact', 'Use compact, ESLint-style output')
+        .option('-q, --quiet', 'Show summary counts only, suppress violation details')
+        .option('--no-recommendation', 'Suppress fix recommendations from output')
         .option('--output <path>', 'Output path for UI reports (default: ngcompass-report.html)')
         .option('--rule <id>', 'Run only one rule (useful for debugging or focused checks)')
+        .option('--max-workers <n>', 'Cap the number of worker threads (lower = less memory, e.g. --max-workers 2)')
+        .option('--type-aware-chunk-size <n>', 'Files per type-aware chunk (default 400; lower = less peak memory)')
+        .option('--skip-type-check', 'Skip rules that require the TypeScript type checker (fastest, lowest memory)')
         .action(async (options: AnalyzeOptions) => {
             const globalOptions = program.opts();
             const isDebug = !!globalOptions.debug;
@@ -103,6 +170,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 compact: !!options.compact,
                 verbose: isVerbose,
                 outputPath: options.output,
+                quiet: !!options.quiet,
+                noRecommendation: options.recommendation === false,
             });
             let activeCache: CacheContext | undefined = cache;
 
@@ -120,6 +189,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     compact: !!options.compact,
                     verbose: isVerbose,
                     outputPath: options.output ?? config.outputPath,
+                    quiet: !!options.quiet,
+                    noRecommendation: options.recommendation === false,
                 });
 
                 // 2. Discover Files
@@ -135,15 +206,26 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
-                const analysis = await runAnalysisStep(plan, activeCache, options, reporter, files, config);
+                const progressStream = (reporterFormat === 'console' ? process.stdout : process.stderr) as NodeJS.WriteStream;
+                const logFileProgress = createFileProgressLogger(plan, progressStream, process.cwd());
+                const analysis = await runAnalysisStep(plan, activeCache, options, reporter, files, config, undefined, config.maxWorkers, logFileProgress);
                 if (!analysis) { exitCode = 1; return; }
 
                 const duration = performance.now() - startTime;
 
+                // Unique files that had at least one task planned (= files the
+                // planner actually analysed, regardless of whether they had violations).
+                const scannedFiles = new Set([
+                    ...plan.tasks.map(t => t.filePath),
+                    ...(plan.skippedTasks ?? []).map(t => t.filePath),
+                ]).size;
+
                 const summary: ResultSummary = {
+                    scannedFiles,
+                    discoveredFiles: files.length,
                     totalFiles: analysis.stats.totalFiles,
-                    totalTasks: plan.tasks.length,
-                    cachedTasks: plan.precomputedAnalysis ? plan.tasks.length : undefined, // Approximation if precomputed
+                    totalTasks: plan.tasks.length + (plan.skippedTasks?.length ?? 0),
+                    cachedTasks: plan.precomputedAnalysis ? plan.tasks.length : undefined,
                     totalErrors: analysis.stats.totalErrors,
                     totalWarnings: analysis.stats.totalWarnings,
                     duration
@@ -156,6 +238,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 reporter.report(analysis.results as RuleResult[]);
 
                 if (reporterFormat !== 'console') {
+                    reporter.step('❯ Writing report...');
                     reporter.summary(summary);
                 }
 
@@ -187,7 +270,7 @@ async function loadConfigurationStep(
     reporter: Reporter
 ): Promise<{ config: NormalizedAnalyzerConfig } | null> {
     const tStart = performance.now();
-    reporter.step('› Loading configuration...');
+    reporter.step('❯ Loading configuration...');
 
     const configResult = await resolveConfig({
         profile: options.profile,
@@ -211,7 +294,7 @@ async function loadConfigurationStep(
 
     const pluginList = configResult.config.plugins;
     if (pluginList && pluginList.length > 0) {
-        reporter.step(`› Loading ${pluginList.length} plugin(s)...`);
+        reporter.step(`❯ Loading ${pluginList.length} plugin(s)...`);
         const configDir = process.cwd();
         await loadPlugins(pluginList, configDir, getGlobalRegistry());
         reporter.info(`Loaded ${pluginList.length} plugin(s)`);
@@ -228,7 +311,7 @@ async function discoverFilesStep(
     reporter: Reporter
 ): Promise<string[] | null> {
     const tStart = performance.now();
-    reporter.step('› Discovering files...');
+    reporter.step('❯ Discovering files...');
 
     const scanResult = await scan({
         rootDir: process.cwd(),
@@ -246,7 +329,7 @@ async function discoverFilesStep(
         return null;
     }
 
-    reporter.info(`✓ Found ${scanResult.data.files.length} files in ${(performance.now() - tStart).toFixed(0)}ms`);
+    reporter.info(`❯ Found ${scanResult.data.files.length} files in ${(performance.now() - tStart).toFixed(0)}ms`);
     reporter.debug(`File discovery: ${(performance.now() - tStart).toFixed(2)}ms`);
     return scanResult.data.files as string[];
 }
@@ -257,7 +340,7 @@ async function resolveRulesStep(
     reporter: Reporter
 ): Promise<ResolvedRulesMap | null> {
     const tStart = performance.now();
-    reporter.step('› Loading rules...');
+    reporter.step('❯ Loading rules...');
 
     let effectiveConfig: NormalizedAnalyzerConfig = config;
     if (options.rule) {
@@ -279,7 +362,7 @@ async function resolveRulesStep(
     }
 
     const enabledRules = getEnabledRules(rulesResult.data.rules);
-    reporter.info(`✓ Loaded ${enabledRules.size} active rules in ${(performance.now() - tStart).toFixed(0)}ms`);
+    reporter.info(`❯ Loaded ${enabledRules.size} active rules in ${(performance.now() - tStart).toFixed(0)}ms`);
     reporter.debug(`Rule resolution: ${(performance.now() - tStart).toFixed(2)}ms`);
     return enabledRules;
 }
@@ -293,7 +376,7 @@ async function buildPlanStep(
     config: NormalizedAnalyzerConfig
 ): Promise<ExecutionPlanOutput | null> {
     const tStart = performance.now();
-    reporter.step('› Planning analysis...');
+    reporter.step('❯ Planning analysis...');
 
     const planResult = await buildExecutionPlan({
         files,
@@ -312,9 +395,9 @@ async function buildPlanStep(
     }
 
     if (planResult.data.precomputedAnalysis) {
-        reporter.info('✓ Reused cached analysis plan');
+        reporter.info('❯ Reused cached analysis plan');
     } else {
-        reporter.info(`✓ Prepared ${planResult.data.tasks.length.toLocaleString()} checks in ${(performance.now() - tStart).toFixed(0)}ms`);
+        reporter.info(`❯ Prepared ${planResult.data.tasks.length.toLocaleString()} checks in ${(performance.now() - tStart).toFixed(0)}ms`);
     }
 
     reporter.debug(`Plan build: ${(performance.now() - tStart).toFixed(2)}ms`);
@@ -328,19 +411,28 @@ async function runAnalysisStep(
     reporter: Reporter,
     files?: ReadonlyArray<string>,
     config?: NormalizedAnalyzerConfig,
+    onProgress?: (completed: number, total: number) => void,
+    _workerCountForCompatibility?: number,
+    onFileProgress?: (event: AnalysisFileProgress) => void,
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
-    reporter.step('› Running analysis...');
+    reporter.step('❯ Running analysis...');
 
     configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
+    const cliMaxWorkers = options.maxWorkers ? parseInt(options.maxWorkers, 10) : undefined;
+    const cliChunkSize = options.typeAwareChunkSize ? parseInt(options.typeAwareChunkSize, 10) : undefined;
     const result = await runAnalysis(plan, {
         rootDir: process.cwd(),
         cache,
         debug: options.debug,
         files,
-        maxWorkers: config?.maxWorkers,
+        maxWorkers: cliMaxWorkers ?? config?.maxWorkers,
+        typeAwareChunkSize: cliChunkSize,
+        skipTypeCheck: options.skipTypeCheck,
         parserOptions: config?.parserOptions,
+        onProgress,
+        onFileProgress,
     });
 
     if (!result.ok) {

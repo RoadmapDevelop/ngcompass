@@ -93,6 +93,10 @@ function isSignalSymbol(symbol: ts.Symbol, typeChecker: ts.TypeChecker): boolean
 function isSignalReference(name: string, context: RuleContext): boolean {
     const looksLikeGetter = name.startsWith('get') || name.startsWith('is') || name.startsWith('has');
 
+    if (context.crossRef?.signalMembers?.has(name)) {
+        return true;
+    }
+
     if (context.typeChecker && context.crossRef?.componentPath) {
         try {
             const typeChecker = context.typeChecker;

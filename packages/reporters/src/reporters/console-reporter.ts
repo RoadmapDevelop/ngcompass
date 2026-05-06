@@ -1,4 +1,4 @@
-import pc from 'picocolors';
+﻿import pc from 'picocolors';
 import path from 'node:path';
 import process from 'node:process';
 import type {
@@ -55,12 +55,23 @@ const TRAILING_PERIOD_RE = /\.$/;
  * @param index - 1-based card index.
  * @param total - Total number of failures across all files.
  */
+function buildViolationsDivider(): string {
+    const visibleLabel = '   Violations   ';
+    const styledLabel = '  ' + pc.bgRed(pc.white(pc.bold(' Violations '))) + '  ';
+    const width = process.stdout.columns ?? 80;
+    const sides = Math.max(0, width - visibleLabel.length);
+    const left = Math.floor(sides / 2);
+    const right = sides - left;
+    return pc.red('·'.repeat(left)) + styledLabel + pc.red('·'.repeat(right));
+}
+
 function buildIndexedSeparator(index: number, total: number): string {
-    const label = `[${index}/${total}]`;
-    const width = Math.min(process.stdout.columns ?? 80, 120);
-    const dotCount = Math.max(1, width - label.length);
-    const content = '·'.repeat(dotCount) + label;
-    return pc.dim(pc.gray(content));
+    const visibleLabel = ` ${index}/${total} `;
+    const styledLabel = '  ' + pc.bgWhite(pc.black(pc.bold(visibleLabel))) + '  ';
+    const visibleWidth = visibleLabel.length + 4;
+    const width = process.stdout.columns ?? 80;
+    const dotCount = Math.max(0, width - visibleWidth);
+    return pc.dim('·'.repeat(dotCount)) + styledLabel;
 }
 
 // ---------------------------------------------------------------------------
@@ -158,35 +169,43 @@ function formatDuration(ms: number): string {
 }
 
 function buildAnalysisSummary(stats: ResultSummary): string {
-    const fileLabel = stats.totalFiles === 1 ? 'file' : 'files';
+    const files = stats.discoveredFiles ?? stats.scannedFiles ?? stats.totalFiles;
+
+    if (stats.totalTasks === 0 && stats.cachedTasks !== undefined) {
+        return (
+            `${files.toLocaleString()} files · ` +
+            `${pc.dim('fully cached')} · ` +
+            `${formatDuration(stats.duration)}`
+        );
+    }
+
     const checkLabel = stats.totalTasks === 1 ? 'check' : 'checks';
     const cached = stats.cachedTasks && stats.cachedTasks > 0
         ? `, ${stats.cachedTasks.toLocaleString()} cached`
         : '';
 
     return (
-        `Analyzed ${stats.totalFiles.toLocaleString()} ${fileLabel} ` +
-        `with ${stats.totalTasks.toLocaleString()} ${checkLabel}${cached} ` +
-        `in ${formatDuration(stats.duration)}.`
+        `${files.toLocaleString()} files · ` +
+        `${stats.totalTasks.toLocaleString()} ${checkLabel}${cached} · ` +
+        `${formatDuration(stats.duration)}`
     );
 }
 
 function formatStepMessage(message: string): string {
-    if (message.startsWith('› ')) {
-        return `${pc.cyan('›')} ${pc.bold(message.slice(2))}`;
-    }
-
-    return pc.bold(message);
-}
-
-function formatInfoMessage(message: string): string {
-    if (message.startsWith('✓ ')) {
-        return `${pc.green('✓')} ${pc.dim(message.slice(2))}`;
+    if (message.startsWith('❯ ')) {
+        return `${pc.cyan('❯')} ${pc.dim(message.slice(2))}`;
     }
 
     return pc.dim(message);
 }
 
+function formatInfoMessage(message: string): string {
+    if (/^[❯✔✓√]\s/.test(message)) {
+        return `${pc.green('❯')} ${pc.dim(message.slice(2))}`;
+    }
+
+    return pc.dim(message);
+}
 function guidanceForError(message: string): string | null {
     if (/No configuration found/i.test(message)) {
         return 'Run `ngcompass init` to create a starter configuration.';
@@ -311,8 +330,11 @@ interface FailureCard {
 export class ConsoleReporter implements Reporter {
     private readonly verbose: boolean;
     private readonly compact: boolean;
+    private readonly quiet: boolean;
+    private readonly noRecommendation: boolean;
     private readonly sourceReader: SourceReader;
     private readonly cwd: string;
+    private lastSummary?: ResultSummary;
 
     constructor(
         private readonly out: ReporterOutput = processOutput,
@@ -333,6 +355,8 @@ export class ConsoleReporter implements Reporter {
     ) {
         this.verbose = options?.verbose ?? false;
         this.compact = options?.compact ?? false;
+        this.quiet = options?.quiet ?? false;
+        this.noRecommendation = options?.noRecommendation ?? false;
         this.sourceReader = sourceReader;
         this.cwd = cwd;
     }
@@ -344,25 +368,46 @@ export class ConsoleReporter implements Reporter {
      */
     report(results: ReadonlyArray<RuleResult>): void {
         const allFailures = this.extractAllFailures(results);
+        const scannedFiles = this.lastSummary?.discoveredFiles ?? this.lastSummary?.scannedFiles ?? 0;
 
         if (allFailures.length === 0) {
-            this.out.write(pc.green('✓ No violations found'));
+            if (scannedFiles > 0) {
+                this.out.write(`${pc.green('❯')} ${pc.bold(scannedFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}`);
+            } else {
+                this.out.write(pc.green('❯ No violations found'));
+            }
             return;
         }
 
         const byFile = groupFailuresByFile(allFailures, this.cwd);
         const sortedFilePaths = Array.from(byFile.keys()).sort();
-
         const { errorCount, warningCount } = countSeverities(allFailures);
 
+        const cleanFiles = scannedFiles - byFile.size;
+        if (cleanFiles > 0) {
+            const violationPart = byFile.size > 0
+                ? `  ${pc.red('✗')} ${pc.red(`${byFile.size.toLocaleString()} files with violations`)}`
+                : '';
+            this.out.write(`${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}`);
+        }
+
         this.out.write('');
+
+        if (this.quiet) {
+            this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount)));
+            this.out.write(buildProblemNextAction());
+            return;
+        }
+
+        this.out.write(buildViolationsDivider());
         this.renderFileBlocks(byFile, sortedFilePaths, allFailures.length);
         this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount)));
         this.out.write(buildProblemNextAction());
     }
 
     summary(stats: ResultSummary): void {
-        this.out.write(formatInfoMessage(`✓ ${buildAnalysisSummary(stats)}`));
+        this.lastSummary = stats;
+        this.out.write(formatInfoMessage(`❯ ${buildAnalysisSummary(stats)}`));
     }
 
     error(error: Error): void {
@@ -380,8 +425,19 @@ export class ConsoleReporter implements Reporter {
         }
     }
 
-    step(message: string): void { if (!this.verbose) this.out.write(formatStepMessage(message)); }
-    info(message: string): void { if (!this.verbose) this.out.write(formatInfoMessage(message)); }
+    step(message: string): void {
+        if (this.verbose) return;
+        this.out.write(formatStepMessage(message));
+    }
+
+    info(message: string): void {
+        if (this.verbose) return;
+        this.out.write(formatInfoMessage(message));
+    }
+
+    clearLine(): void {
+        // Append-only output keeps the full progress log visible.
+    }
 
     /**
      * No-op: debug logging is not handled by the reporter.
@@ -460,7 +516,7 @@ export class ConsoleReporter implements Reporter {
         for (const failure of sorted) {
             this.out.write(buildCompactFailureLine(failure, locationWidth, typeWidth));
 
-            if (this.verbose && failure.fix) {
+            if (failure.fix && !this.noRecommendation) {
                 this.out.write(`      ${pc.yellow('→')} ${pc.gray(failure.fix)}`);
             }
         }
@@ -561,7 +617,7 @@ export class ConsoleReporter implements Reporter {
     }
 
     private renderCardRecommendation(failure: RuleFailure): void {
-        if (!failure.fix) return;
+        if (!failure.fix || this.noRecommendation) return;
         this.out.write(`${pc.gray('»')} ${pc.gray(failure.fix)}`);
         this.out.write('');
     }

@@ -51,7 +51,7 @@ function formatIssue(issue: ConfigIssue, suggestionIndent: string): string {
 
     let output = `${label}  ${issue.message}${pathInfo}${codeInfo}`;
     if (issue.suggestion) {
-        output += `\n${suggestionIndent}${pc.cyan('::')} ${pc.dim(issue.suggestion)}`;
+        output += `\n${suggestionIndent}${pc.cyan('→')} ${pc.dim(issue.suggestion)}`;
     }
     return output;
 }
@@ -122,7 +122,10 @@ export class TextConfigReporter implements ConfigReporter {
         this.out.error(pc.red('x Configuration validation failed'));
         for (const issue of report.issues) {
             const pathStr = formatPath(issue.path) || 'root';
-            this.out.error(`[${issue.severity.toUpperCase()}] ${pathStr}: ${issue.message}`);
+            const tag = issue.severity === 'error'
+                ? pc.bold(pc.red('[ERROR]'))
+                : pc.bold(pc.yellow('[WARNING]'));
+            this.out.error(`${tag} ${pc.dim(pathStr + ':')} ${issue.message}`);
         }
     }
 
