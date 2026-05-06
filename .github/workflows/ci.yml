@@ -184,10 +184,10 @@ jobs:
 
           @Component({
             selector: 'app-root',
-            template: '<h1>{{ title() }}</h1>',
+            template: '<h1>{{ getTitle() }}</h1>',
           })
           export class AppComponent {
-            title() {
+            getTitle() {
               return 'Hello';
             }
           }
