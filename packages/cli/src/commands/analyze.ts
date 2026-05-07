@@ -162,9 +162,6 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--type-aware-chunk-size <n>', 'Files per type-aware chunk (default 400; lower = less peak memory)')
         .option('--skip-type-check', 'Skip rules that require the TypeScript type checker (fastest, lowest memory)')
         .action(async (options: AnalyzeOptions) => {
-            const globalOptions = program.opts();
-            const isDebug = !!globalOptions.debug;
-
             const startTime = performance.now();
             let reporter = getReporter(normalizeReporterFormat(options.format), {
                 compact: !!options.compact,
