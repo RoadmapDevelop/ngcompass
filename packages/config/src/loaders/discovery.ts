@@ -35,6 +35,8 @@ const jitiLoader = (filepath: string): Promise<unknown> => {
     });
 };
 
+const jsonLoader = (_filepath: string, content: string): unknown => JSON.parse(content.replace(/^\uFEFF/, ''));
+
 /**
  * Discovery result interface.
  */
@@ -59,7 +61,9 @@ export const findAndLoadConfig = async (cwd: string = process.cwd()): Promise<Co
             '.ts': jitiLoader,
             '.js': jitiLoader,
             '.mjs': jitiLoader,
-            '.cjs': jitiLoader
+            '.cjs': jitiLoader,
+            '.json': jsonLoader,
+            noExt: jsonLoader
         }
     });
 
