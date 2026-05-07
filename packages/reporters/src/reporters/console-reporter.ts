@@ -22,12 +22,6 @@ import { getAnalysisStatus } from '../analysis-status.js';
 const TYPE_WIDTH_COMPACT = 5;
 
 /**
- * Number of lines to skip at the start of `Error.stack` to omit the redundant
- * header line, which duplicates `error.message`.
- */
-const STACK_HEADER_LINE_SKIP = 1;
-
-/**
  * Trailing-period pattern stripped from violation messages before display.
  *
  * Why: messages are embedded inside sentences in compact mode; a terminal period
