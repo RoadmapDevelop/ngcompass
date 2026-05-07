@@ -5,9 +5,11 @@ import type { ParseError, Reporter, ResultSummary } from '../types.js';
 import type { ReporterOutput } from '../output.js';
 import { processOutput } from '../output.js';
 import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
+import { getAnalysisStatus } from '../analysis-status.js';
 
 const SARIF_SCHEMA = 'https://json.schemastore.org/sarif-2.1.0.json';
 const SARIF_VERSION = '2.1.0';
+const TOOL_INFORMATION_URI = 'https://ngcompass.dev/docs';
 
 type SarifLevel = 'error' | 'warning' | 'note';
 
@@ -27,6 +29,17 @@ interface SarifRun {
     };
     readonly results: readonly SarifResult[];
     readonly invocations?: readonly SarifInvocation[];
+    readonly properties?: {
+        readonly ngcompass: {
+            readonly status: string;
+            readonly statusLabel: string;
+            readonly totalViolations: number;
+            readonly totalErrors: number;
+            readonly totalWarnings: number;
+            readonly failOnSeverity?: 'warn' | 'error';
+            readonly maxWarnings?: number;
+        };
+    };
 }
 
 interface SarifRule {
@@ -137,6 +150,10 @@ function collectResults(results: ReadonlyArray<RuleResult>): SarifResult[] {
         .map(toSarifResult);
 }
 
+function countViolations(results: ReadonlyArray<RuleResult>): number {
+    return results.reduce((count, result) => count + result.failures.length, 0);
+}
+
 function toParseErrorNotification(error: ParseError): SarifNotification {
     return {
         level: 'warning',
@@ -152,6 +169,7 @@ function toParseErrorNotification(error: ParseError): SarifNotification {
 function buildSarifReport(
     results: ReadonlyArray<RuleResult>,
     parseErrors: ReadonlyArray<ParseError>,
+    summary: ResultSummary,
 ): SarifReport {
     const notifications = parseErrors.map(toParseErrorNotification);
     const invocation = notifications.length > 0
@@ -160,6 +178,7 @@ function buildSarifReport(
             toolExecutionNotifications: notifications,
         }]
         : undefined;
+    const status = getAnalysisStatus(summary);
 
     return {
         version: SARIF_VERSION,
@@ -168,11 +187,22 @@ function buildSarifReport(
             tool: {
                 driver: {
                     name: 'ngcompass',
-                    informationUri: 'https://github.com/SigoudisEftimis/ngcompass_',
+                    informationUri: TOOL_INFORMATION_URI,
                     rules: collectRules(results),
                 },
             },
             results: collectResults(results),
+            properties: {
+                ngcompass: {
+                    status: status.status,
+                    statusLabel: status.label,
+                    totalViolations: countViolations(results),
+                    totalErrors: summary.totalErrors,
+                    totalWarnings: summary.totalWarnings,
+                    failOnSeverity: summary.failOnSeverity,
+                    maxWarnings: summary.maxWarnings,
+                },
+            },
             ...(invocation ? { invocations: invocation } : {}),
         }],
     };
@@ -180,11 +210,12 @@ function buildSarifReport(
 
 export class SarifReporter implements Reporter {
     private readonly parseErrorBuffer: ParseError[] = [];
+    private readonly resultBuffer: RuleResult[] = [];
 
     constructor(private readonly out: ReporterOutput = processOutput) {}
 
     report(results: ReadonlyArray<RuleResult>): void {
-        this.out.write(JSON.stringify(buildSarifReport(results, this.parseErrorBuffer), null, 2));
+        for (const result of results) this.resultBuffer.push(result);
     }
 
     parseErrors(errors: ReadonlyArray<ParseError>): void {
@@ -197,7 +228,10 @@ export class SarifReporter implements Reporter {
         this.out.error(JSON.stringify({ error: error.message }, null, 2));
     }
 
-    summary(_stats: ResultSummary): void {}
+    summary(stats: ResultSummary): void {
+        this.out.write(JSON.stringify(buildSarifReport(this.resultBuffer, this.parseErrorBuffer, stats), null, 2));
+    }
+
     step(_message: string): void {}
     info(_message: string): void {}
     debug(_message: string): void {}

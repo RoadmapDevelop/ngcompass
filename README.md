@@ -102,8 +102,20 @@ export default defineConfig({
   extends: 'ngcompass:recommended',
 
   // Files to scan
-  include: ['src/**/*.ts'],
-  exclude: ['**/*.spec.ts', '**/*.stories.ts'],
+  include: [
+    'src/**/*.ts',
+    'src/**/*.html',
+  ],
+
+  exclude: [
+    'node_modules/**',
+    'dist/**',
+    'build/**',
+    'coverage/**',
+    '**/*.d.ts',
+    '**/*.spec.ts',
+    '**/*.test.ts',
+  ],
 
   // Override individual rules
   rules: {

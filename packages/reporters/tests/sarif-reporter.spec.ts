@@ -20,6 +20,20 @@ function makeResult(filePath: string, overrides: Partial<RuleResult['failures'][
     };
 }
 
+function summary(overrides: Record<string, unknown> = {}) {
+    return {
+        scannedFiles: 1,
+        totalFiles: 1,
+        totalTasks: 1,
+        totalErrors: 1,
+        totalWarnings: 0,
+        failOnSeverity: 'error' as const,
+        maxWarnings: 10,
+        duration: 1,
+        ...overrides,
+    };
+}
+
 describe('SarifReporter', () => {
     let out: ReturnType<typeof createTestOutput>;
     let reporter: SarifReporter;
@@ -32,16 +46,20 @@ describe('SarifReporter', () => {
     describe('report()', () => {
         it('emits a SARIF 2.1.0 document for zero results', () => {
             reporter.report([]);
+            reporter.summary(summary({ totalErrors: 0, totalFiles: 0, totalTasks: 0 }));
             const parsed = JSON.parse(out.lines[0]);
 
             expect(parsed.version).toBe('2.1.0');
             expect(parsed.$schema).toBe('https://json.schemastore.org/sarif-2.1.0.json');
             expect(parsed.runs[0].tool.driver.name).toBe('ngcompass');
+            expect(parsed.runs[0].tool.driver.informationUri).toBe('https://ngcompass.dev/docs');
             expect(parsed.runs[0].results).toEqual([]);
+            expect(parsed.runs[0].properties.ngcompass.statusLabel).toBe('PASS');
         });
 
         it('maps rule failures to SARIF results and rule metadata', () => {
             reporter.report([makeResult('src/app.component.ts', { ruleName: 'prefer-on-push' })]);
+            reporter.summary(summary());
             const parsed = JSON.parse(out.lines[0]);
 
             expect(parsed.runs[0].tool.driver.rules[0].id).toBe('prefer-on-push');
@@ -58,9 +76,11 @@ describe('SarifReporter', () => {
 
         it('maps warn severity to SARIF warning level', () => {
             reporter.report([makeResult('src/app.component.ts', { severity: 'warn' })]);
+            reporter.summary(summary({ totalErrors: 0, totalWarnings: 1 }));
             const parsed = JSON.parse(out.lines[0]);
 
             expect(parsed.runs[0].results[0].level).toBe('warning');
+            expect(parsed.runs[0].properties.ngcompass.statusLabel).toBe('PASS WITH WARNINGS');
         });
 
         it('sorts results by file path then source position', () => {
@@ -74,6 +94,7 @@ describe('SarifReporter', () => {
                     ],
                 },
             ]);
+            reporter.summary(summary({ totalErrors: 3 }));
             const parsed = JSON.parse(out.lines[0]);
 
             expect(parsed.runs[0].results.map((result: any) => result.message.text)).toEqual(['a', 'b', 'z']);
@@ -82,6 +103,7 @@ describe('SarifReporter', () => {
         it('includes parse errors as tool execution notifications', () => {
             reporter.parseErrors([{ filePath: 'src/broken.ts', message: 'Unexpected token' }]);
             reporter.report([]);
+            reporter.summary(summary({ totalErrors: 0, totalWarnings: 0 }));
             const parsed = JSON.parse(out.lines[0]);
 
             expect(parsed.runs[0].invocations[0].executionSuccessful).toBe(true);
@@ -95,9 +117,18 @@ describe('SarifReporter', () => {
     });
 
     describe('summary()', () => {
-        it('produces no output', () => {
-            reporter.summary({ totalFiles: 1, totalTasks: 1, totalErrors: 0, totalWarnings: 0, duration: 0 });
-            expect(out.lines).toHaveLength(0);
+        it('emits run-level ngcompass status', () => {
+            reporter.report([makeResult('src/app.component.ts')]);
+            reporter.summary(summary());
+            const parsed = JSON.parse(out.lines[0]);
+
+            expect(parsed.runs[0].properties.ngcompass).toMatchObject({
+                status: 'failed',
+                statusLabel: 'FAILED',
+                totalViolations: 1,
+                totalErrors: 1,
+                totalWarnings: 0,
+            });
         });
     });
 

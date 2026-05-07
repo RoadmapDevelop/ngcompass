@@ -60,6 +60,8 @@ export interface ResultSummary {
     readonly cachedTasks?: number;
     readonly totalErrors: number;
     readonly totalWarnings: number;
+    readonly failOnSeverity?: 'warn' | 'error';
+    readonly maxWarnings?: number;
     readonly duration: number;
 }
 

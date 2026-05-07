@@ -6,6 +6,7 @@ import type { RuleResult, RuleFailure } from '@ngcompass/common';
 import type { Reporter, ResultSummary, ParseError } from '../types.js';
 import { isErrorSeverity, severityRank, compareByPosition } from '../severity-utils.js';
 import { processOutput, type ReporterOutput } from '../output.js';
+import { getAnalysisStatus } from '../analysis-status.js';
 
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';
 const SEVERITY_ORDER = ['critical', 'high', 'error', 'moderate', 'warn', 'low', 'info', 'hint'] as const;
@@ -577,6 +578,11 @@ html:not([data-theme="dark"]) .theme-icon-sun { display: none; }
   background: hsl(var(--success-soft));
   color: hsl(var(--success));
   border-color: hsl(var(--success) / 0.25);
+}
+.status-indicator.warn {
+  background: hsl(var(--warning-soft));
+  color: hsl(var(--warning));
+  border-color: hsl(var(--warning) / 0.32);
 }
 .status-indicator.fail {
   background: hsl(var(--destructive-soft));
@@ -1612,7 +1618,15 @@ function buildHtml(
     const totalFiles = summary.discoveredFiles ?? summary.scannedFiles ?? summary.totalFiles;
     const affectedFiles = fileBuckets.length;
     const hasIssues = totalViolations > 0 || parseErrors.length > 0;
-    const passed = totalViolations === 0 && parseErrors.length === 0;
+    const status = parseErrors.length > 0
+        ? { status: 'failed' as const, label: 'FAILED' as const }
+        : getAnalysisStatus(summary);
+    const passed = status.status === 'passed' && parseErrors.length === 0;
+    const statusClass = status.status === 'failed'
+        ? 'fail'
+        : status.status === 'passed-with-warnings'
+            ? 'warn'
+            : 'pass';
     const cachedCopy = typeof summary.cachedTasks === 'number' && summary.cachedTasks > 0
         ? `${summary.cachedTasks.toLocaleString()} cached`
         : 'No cache';
@@ -1694,6 +1708,7 @@ function buildHtml(
       <div class="hero">
         <div class="hero-copy">
           <div class="eyebrow">Angular static analysis Β· ${totalFiles.toLocaleString()} files scanned</div>
+          <div class="status-indicator ${statusClass}">${escapeHtml(status.label)}</div>
           <h1 class="hero-title ${passed ? 'pass' : 'fail'}">${passed ? 'Analysis Passed' : 'Issues Found'}</h1>
           <div class="hero-subtitle">${escapeHtml(subtitle)}</div>
         </div>

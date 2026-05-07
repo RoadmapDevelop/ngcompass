@@ -228,6 +228,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     cachedTasks: plan.precomputedAnalysis ? plan.tasks.length : undefined,
                     totalErrors: analysis.stats.totalErrors,
                     totalWarnings: analysis.stats.totalWarnings,
+                    failOnSeverity: config.failOnSeverity,
+                    maxWarnings: config.maxWarnings,
                     duration
                 };
                 if (reporterFormat === 'console') {

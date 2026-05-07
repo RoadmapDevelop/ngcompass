@@ -54,6 +54,8 @@ describe('HtmlReporter', () => {
             totalTasks: 1,
             totalErrors: 1,
             totalWarnings: 0,
+            failOnSeverity: 'error',
+            maxWarnings: 10,
             duration: 42,
             ...summaryOverrides,
         });
@@ -72,6 +74,8 @@ describe('HtmlReporter', () => {
         expect(html).toContain('Errors');
         expect(html).toContain('Warnings');
         expect(html).toContain('Violations');
+        expect(html).toContain('status-indicator fail');
+        expect(html).toContain('FAILED');
         expect(html).toContain('Category breakdown');
         expect(html).toContain('id="categoryFilter"');
         expect(html).toContain('id="ruleFilter"');
@@ -144,7 +148,22 @@ describe('HtmlReporter', () => {
         });
 
         expect(html).toContain('Analysis Passed');
+        expect(html).toContain('status-indicator pass');
+        expect(html).toContain('PASS');
         expect(html).toContain('No violations found');
         expect(html).toContain('No violations found across 3 files.');
+    });
+
+    it('renders pass-with-warnings status when warnings are below the failure threshold', async () => {
+        const { html } = await renderHtml([
+            makeResult(makeFailure({ severity: 'warn' })),
+        ], [], {
+            totalErrors: 0,
+            totalWarnings: 1,
+            maxWarnings: 10,
+        });
+
+        expect(html).toContain('status-indicator warn');
+        expect(html).toContain('PASS WITH WARNINGS');
     });
 });
