@@ -164,6 +164,6 @@ describe('HtmlReporter', () => {
         });
 
         expect(html).toContain('status-indicator warn');
-        expect(html).toContain('PASS WITH WARNINGS');
+        expect(html).toContain('WARN');
     });
 });

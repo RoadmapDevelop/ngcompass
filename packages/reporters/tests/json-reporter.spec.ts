@@ -61,7 +61,7 @@ describe('JsonReporter', () => {
             reporter.report([makeResult('/a.ts', { severity: 'warning' })]);
             reporter.summary({ ...summary, totalErrors: 0, totalWarnings: 1 });
             const parsed: { summary: { statusLabel: string }, results: FileDiagnosticResult[] } = JSON.parse(out.lines[0]);
-            expect(parsed.summary.statusLabel).toBe('PASS WITH WARNINGS');
+            expect(parsed.summary.statusLabel).toBe('WARN');
             expect(parsed.results[0].messages[0].severity).toBe(1);
             expect(parsed.results[0].warningCount).toBe(1);
             expect(parsed.results[0].errorCount).toBe(0);

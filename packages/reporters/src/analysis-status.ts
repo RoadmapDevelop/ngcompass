@@ -4,7 +4,7 @@ export type AnalysisStatus = 'passed' | 'passed-with-warnings' | 'failed';
 
 export interface AnalysisStatusInfo {
     readonly status: AnalysisStatus;
-    readonly label: 'PASS' | 'PASS WITH WARNINGS' | 'FAILED';
+    readonly label: 'PASS' | 'WARN' | 'FAILED';
 }
 
 export function getAnalysisStatus(summary: Pick<ResultSummary, 'totalErrors' | 'totalWarnings' | 'failOnSeverity' | 'maxWarnings'>): AnalysisStatusInfo {
@@ -20,7 +20,7 @@ export function getAnalysisStatus(summary: Pick<ResultSummary, 'totalErrors' | '
     }
 
     if (summary.totalWarnings > 0) {
-        return { status: 'passed-with-warnings', label: 'PASS WITH WARNINGS' };
+        return { status: 'passed-with-warnings', label: 'WARN' };
     }
 
     return { status: 'passed', label: 'PASS' };

@@ -92,7 +92,7 @@ describe('ConsoleReporter', () => {
             ]);
 
             const output = stripAnsi(out.lines.join('\n'));
-            expect(output).toContain('PASS WITH WARNINGS');
+            expect(output).toContain('WARN');
             expect(output).not.toContain('Analysis passed with warnings');
         });
 

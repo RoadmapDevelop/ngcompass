@@ -144,7 +144,7 @@ function computeLocationWidth(failures: RuleFailure[]): number {
 
 function buildSummaryLine(errorCount: number, warningCount: number, stats?: ResultSummary): string {
     const total = errorCount + warningCount;
-    const status = stats ? getAnalysisStatus(stats) : (errorCount > 0 ? { status: 'failed' as const, label: 'FAILED' as const } : { status: 'passed-with-warnings' as const, label: 'PASS WITH WARNINGS' as const });
+    const status = stats ? getAnalysisStatus(stats) : (errorCount > 0 ? { status: 'failed' as const, label: 'FAILED' as const } : { status: 'passed-with-warnings' as const, label: 'WARN' as const });
     const failed = status.status === 'failed';
     const hasErrors = errorCount > 0;
     const statusColor = failed ? pc.red : pc.yellow;

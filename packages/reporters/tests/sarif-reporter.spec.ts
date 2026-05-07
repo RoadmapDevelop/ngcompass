@@ -80,7 +80,7 @@ describe('SarifReporter', () => {
             const parsed = JSON.parse(out.lines[0]);
 
             expect(parsed.runs[0].results[0].level).toBe('warning');
-            expect(parsed.runs[0].properties.ngcompass.statusLabel).toBe('PASS WITH WARNINGS');
+            expect(parsed.runs[0].properties.ngcompass.statusLabel).toBe('WARN');
         });
 
         it('sorts results by file path then source position', () => {

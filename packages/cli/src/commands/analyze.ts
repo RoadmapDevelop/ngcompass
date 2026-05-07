@@ -6,6 +6,7 @@ import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } f
 import process from 'node:process';
 import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { exitWithError } from './exit.js';
+import { Spinner } from '../spinner.js';
 import { getGlobalRegistry, executeBatchedNewEngineRules, isNewEngineRule } from '@ngcompass/rules';
 import { loadPlugins } from '@ngcompass/config';
 import { runAnalysis, configureRuleExecutor, type AnalysisFileProgress } from '@ngcompass/engine';
@@ -98,7 +99,7 @@ function pluralise(count: number, singular: string): string {
     return `${count.toLocaleString()} ${singular}${count === 1 ? '' : 's'}`;
 }
 
-function createFileProgressLogger(plan: ExecutionPlanOutput, stream: NodeJS.WriteStream, cwd: string) {
+function createFileProgressLogger(plan: ExecutionPlanOutput, writeLine: (line: string) => void, cwd: string) {
     const expectedTasksByFile = new Map<string, number>();
     const executableTaskFiles = plan.tasks
         .map(task => task.filePath)
@@ -141,7 +142,7 @@ function createFileProgressLogger(plan: ExecutionPlanOutput, stream: NodeJS.Writ
             ? `${status} ${pc.red(relativePath)}  ${duration}   ${pc.red(pluralise(next.issueCount, 'issue'))}`
             : `${status} ${pc.dim(relativePath)}  ${duration}`;
 
-        stream.write(`${fileLine}\n`);
+        writeLine(fileLine);
     };
 }
 
@@ -207,8 +208,11 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
 
                 // 5. Run Analysis
                 const progressStream = (reporterFormat === 'console' ? process.stdout : process.stderr) as NodeJS.WriteStream;
-                const logFileProgress = createFileProgressLogger(plan, progressStream, process.cwd());
+                const spinner = new Spinner(progressStream);
+                spinner.start('Running analysis...');
+                const logFileProgress = createFileProgressLogger(plan, line => spinner.writeLine(line), process.cwd());
                 const analysis = await runAnalysisStep(plan, activeCache, options, reporter, files, config, undefined, config.maxWorkers, logFileProgress);
+                spinner.stop();
                 if (!analysis) { exitCode = 1; return; }
 
                 const duration = performance.now() - startTime;
@@ -418,7 +422,7 @@ async function runAnalysisStep(
     onFileProgress?: (event: AnalysisFileProgress) => void,
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
-    reporter.step('❯ Running analysis...');
+    // spinner shown by caller
 
     configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
