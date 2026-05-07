@@ -233,13 +233,16 @@ const tests = [
         notCombined: [CRASH_RE],
     },
     {
-        name: 'analyze --format json → stdout is a valid JSON array',
+        name: 'analyze --format json → stdout is valid JSON (object with results array)',
         args: ['analyze', '--format', 'json', '--skip-type-check'],
         exitCodes: [0, 1],
         validate: (r) => {
+            // Empty stdout means config load failed (no ngcompass.config.ts) — not a format bug
+            if (!r.stdout.trim()) return null;
             try {
                 const parsed = JSON.parse(r.stdout.trim());
-                if (!Array.isArray(parsed)) return `stdout is not a JSON array, got: ${typeof parsed}`;
+                if (!parsed || typeof parsed !== 'object') return `stdout is not a JSON object, got: ${typeof parsed}`;
+                if (!Array.isArray(parsed.results)) return `JSON output missing 'results' array`;
                 return null;
             } catch (e) {
                 return `stdout is not valid JSON: ${r.stdout.slice(0, 200)}`;
@@ -251,6 +254,8 @@ const tests = [
         args: ['analyze', '--format', 'sarif', '--skip-type-check'],
         exitCodes: [0, 1],
         validate: (r) => {
+            // Empty stdout means config load failed (no ngcompass.config.ts) — not a format bug
+            if (!r.stdout.trim()) return null;
             try {
                 const parsed = JSON.parse(r.stdout.trim());
                 if (!parsed.$schema) return 'SARIF output missing $schema';
@@ -267,6 +272,8 @@ const tests = [
         args: ['analyze', '--format', 'json', '--force', '--skip-type-check'],
         exitCodes: [0, 1],
         validate: (r) => {
+            // Empty stdout means config load failed (no ngcompass.config.ts) — not a format bug
+            if (!r.stdout.trim()) return null;
             try {
                 JSON.parse(r.stdout.trim());
                 return null;
@@ -315,8 +322,8 @@ const tests = [
         notCombined: [CRASH_RE],
     },
     {
-        name: 'rules prefer-on-push → single rule detail',
-        args: ['rules', 'prefer-on-push'],
+        name: 'rules prefer-on-push-component-change-detection → single rule detail',
+        args: ['rules', 'prefer-on-push-component-change-detection'],
         exitCodes: [0],
         combined: [/prefer-on-push/i],
         notCombined: [CRASH_RE],

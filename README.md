@@ -76,7 +76,11 @@ ngcompass analyze
 # Compact ESLint-style output (great for CI logs)
 ngcompass analyze --format console --compact
 
-# Interactive UI report
+# HTML report written to a file (default: ngcompass-report.html)
+ngcompass analyze --format html
+ngcompass analyze --format html --output my-report.html
+
+# Interactive UI report (alias for html — same output)
 ngcompass analyze --format ui
 
 # Machine-readable JSON
@@ -86,7 +90,7 @@ ngcompass analyze --format json > results.json
 ngcompass analyze --format sarif > results.sarif
 ```
 
-The UI report gives you a full visual breakdown — severity charts, per-file drill-down, search and filter — all in a single self-contained file.
+The HTML/UI report gives you a full visual breakdown — severity charts, per-file drill-down, search and filter — all in a single self-contained file.
 
 ---
 
@@ -102,8 +106,20 @@ export default defineConfig({
   extends: 'ngcompass:recommended',
 
   // Files to scan
-  include: ['src/**/*.ts'],
-  exclude: ['**/*.spec.ts', '**/*.stories.ts'],
+  include: [
+    'src/**/*.ts',
+    'src/**/*.html',
+  ],
+
+  exclude: [
+    'node_modules/**',
+    'dist/**',
+    'build/**',
+    'coverage/**',
+    '**/*.d.ts',
+    '**/*.spec.ts',
+    '**/*.test.ts',
+  ],
 
   // Override individual rules
   rules: {
@@ -153,17 +169,64 @@ Run `ngcompass rules` to inspect the same list from the CLI.
 | `ngcompass cache clear` | Clear the analysis cache |
 | `ngcompass cache path` | Show the cache directory location |
 
+### Global Options
+
+| Option | Description |
+|---|---|
+| `--debug` | Enable detailed debug logs across all modules |
+| `-V, --version` | Display the ngcompass version |
+
 ### Analyze Options
 
 | Option | Description |
 |---|---|
-| `--format <fmt>` | Output format: `console`, `json`, `sarif`, `ui` |
-| `--output <path>` | Write the UI report to a specific file path |
+| `--format <fmt>` | Output format: `console`, `json`, `sarif`, `html`, `ui` |
+| `--output <path>` | Output path for HTML/UI reports (default: `ngcompass-report.html`) |
 | `--compact` | ESLint-style compact one-line-per-issue output |
+| `-q, --quiet` | Show summary counts only; suppress violation details |
+| `--no-recommendation` | Suppress fix recommendations from output |
 | `--rule <id>` | Run a single rule in isolation |
 | `--force` | Skip cache and re-run full analysis |
 | `--profile <name>` | Use a named profile from your config |
-| `--debug` | Enable verbose debug output |
+| `--max-workers <n>` | Cap the number of worker threads (e.g. `--max-workers 2`) |
+| `--type-aware-chunk-size <n>` | Files per type-aware chunk (default `400`; lower = less peak memory) |
+| `--skip-type-check` | Skip rules that require the TypeScript type checker |
+
+### Init Options
+
+| Option | Description |
+|---|---|
+| `-f, --force` | Overwrite an existing configuration file |
+| `--cwd <path>` | Project directory where the configuration will be created |
+
+### Rules Options
+
+| Option | Description |
+|---|---|
+| `--preset <name>` | Filter rules by preset: `recommended`, `strict`, `performance`, `reactivity`, or `all` |
+
+### Cache Options
+
+All `cache` subcommands accept `-p, --profile <name>` to resolve cache settings from a named config profile.
+
+#### `cache clear`
+
+| Option | Description |
+|---|---|
+| `--type <type>` | Cache type to clear: `ast`, `config`, `results`, or `all` (default: `all`) |
+| `-p, --profile <name>` | Configuration profile used to resolve cache settings |
+
+#### `cache info` / `cache path`
+
+| Option | Description |
+|---|---|
+| `-p, --profile <name>` | Configuration profile used to resolve cache settings |
+
+### Config Health Options
+
+| Option | Description |
+|---|---|
+| `-p, --profile <name>` | Configuration profile to validate |
 
 ---
 

@@ -9,15 +9,8 @@ import { TextCacheReporter } from './reporters/cache.js';
 import { RulesReporter, type RulesReporterOptions } from './reporters/rules-reporter.js';
 import type { Reporter, ConfigReporter, CacheReporter, ReporterFormat, ConsoleReporterOptions, ResultSummary, ParseError } from './types.js';
 import type { RuleResult } from '@ngcompass/common';
+import { getAnalysisStatus } from './analysis-status.js';
 
-/**
- * Wraps a file/structured reporter (HTML, JSON, SARIF) and forwards all progress
- * methods to a ConsoleReporter that writes to stderr.
- *
- * This ensures step/info/summary messages always appear in the terminal regardless
- * of the output format. Stderr is used so that structured stdout (JSON, SARIF) is
- * never polluted.
- */
 class CompoundReporter implements Reporter {
     private readonly progress: ConsoleReporter;
     private pendingResults?: ReadonlyArray<RuleResult>;
@@ -59,16 +52,34 @@ class CompoundReporter implements Reporter {
             const scannedFiles = stats.discoveredFiles ?? stats.scannedFiles ?? 0;
             if (scannedFiles > 0) {
                 const filesWithViolations = new Set(
-                    this.pendingResults.flatMap(r => r.failures.map(f => f.filePath))
+                    this.pendingResults.flatMap(r => r.failures.map(f => f.filePath)),
                 ).size;
                 const cleanFiles = scannedFiles - filesWithViolations;
                 const violationPart = filesWithViolations > 0
                     ? `  ${pc.red('✗')} ${pc.red(`${filesWithViolations.toLocaleString()} files with violations`)}`
                     : '';
                 process.stderr.write(
-                    `${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}\n`
+                    `${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}\n`,
                 );
             }
+
+            const { totalErrors, totalWarnings } = stats;
+            const total = totalErrors + totalWarnings;
+
+            if (total > 0) {
+                const { status, label } = getAnalysisStatus(stats);
+                const failed = status === 'failed';
+                const errorText = pc.red(`${totalErrors} error${totalErrors !== 1 ? 's' : ''}`);
+                const warningText = pc.yellow(`${totalWarnings} warning${totalWarnings !== 1 ? 's' : ''}`);
+                const icon = failed ? pc.red('×') : pc.yellow('!');
+                const statusLabel = failed ? pc.bold(pc.red(label)) : pc.bold(pc.yellow(label));
+                process.stderr.write(
+                    `${icon} ${total} violation${total !== 1 ? 's' : ''} (${errorText}, ${warningText})  ${statusLabel}\n`,
+                );
+            } else {
+                process.stderr.write(`${pc.green('❯')} ${pc.green('No violations found')}\n`);
+            }
+
             this.pendingResults = undefined;
         }
     }
@@ -79,18 +90,6 @@ class CompoundReporter implements Reporter {
     clearLine(): void { this.progress.clearLine(); }
 }
 
-/**
- * Creates an analysis reporter instance based on the requested format.
- *
- * @param format - Output format. Defaults to `'console'`.
- * @param options - Console-specific rendering options (verbose, compact).
- * @returns A reporter implementing the full `Reporter` contract.
- * @throws {Error} When an unrecognised format string is provided.
- *
- * Why throw on unknown format rather than silently falling through to a default:
- * an unknown format is almost certainly a caller bug. Silent fallback would hide the
- * misconfiguration and produce unexpectedly formatted output (Principle of Least Astonishment).
- */
 export function getReporter(
     format: ReporterFormat = 'console',
     options?: ConsoleReporterOptions,
@@ -106,42 +105,20 @@ export function getReporter(
         case 'ui':
             return new CompoundReporter(new HtmlReporter(options?.outputPath, undefined, true), options);
         default: {
-            // TypeScript narrows `format` to `never` here if `ReporterFormat` is exhaustive.
-            // The cast exists so we can emit a clear runtime message if called from JS or
-            // with a value that bypasses the type system (e.g., CLI flag parsing).
             const exhaustive: never = format;
             throw new Error(`Unknown reporter format: "${exhaustive as string}"`);
         }
     }
 }
 
-/**
- * Creates a configuration reporter instance.
- *
- * Used for config-specific commands like `compass config health` or `compass init`.
- *
- * @returns A reporter implementing the `ConfigReporter` contract.
- */
 export function getConfigReporter(): ConfigReporter {
     return new TextConfigReporter();
 }
 
-/**
- * Creates a cache reporter instance.
- *
- * Used for cache-specific commands like `compass cache info` and `compass cache clear`.
- *
- * @returns A reporter implementing the `CacheReporter` contract.
- */
 export function getCacheReporter(): CacheReporter {
     return new TextCacheReporter();
 }
 
-/**
- * Creates a rules reporter instance.
- *
- * Used by `compass rules` to render the rule list to stdout.
- */
 export function getRulesReporter(options?: RulesReporterOptions): RulesReporter {
     return new RulesReporter(options);
 }
