@@ -259,6 +259,15 @@ function buildCompactFailureLine(
     );
 }
 
+function buildCompactRecommendationLine(
+    fix: string,
+    locationWidth: number,
+    typeWidth: number,
+): string {
+    const messageIndent = ' '.repeat(locationWidth + 2 + typeWidth + 2);
+    return `${messageIndent}${pc.yellow('→')} ${pc.gray(fix)}`;
+}
+
 // ---------------------------------------------------------------------------
 // Rich-mode pure formatters
 // ---------------------------------------------------------------------------
@@ -525,7 +534,7 @@ export class ConsoleReporter implements Reporter {
             this.out.write(buildCompactFailureLine(failure, locationWidth, TYPE_WIDTH_COMPACT));
 
             if (failure.fix && !this.noRecommendation) {
-                this.out.write(`      ${pc.yellow('→')} ${pc.gray(failure.fix)}`);
+                this.out.write(buildCompactRecommendationLine(failure.fix, locationWidth, TYPE_WIDTH_COMPACT));
             }
         }
 

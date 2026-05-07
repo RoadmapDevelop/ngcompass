@@ -2,6 +2,8 @@ import { lilconfig } from 'lilconfig';
 import { createJiti } from 'jiti';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { debug, time, timeEnd } from '@ngcompass/common';
 
 const MODULE_NAME = 'ngcompass';
@@ -25,7 +27,15 @@ const SEARCH_PLACES = [
  * Default loader for TS/JS files using jiti.
  */
 const jitiLoader = (filepath: string): Promise<unknown> => {
-    const jiti = createJiti(process.cwd()); // Use cwd context
+    const currentFile = fileURLToPath(import.meta.url);
+    const configPackageEntry = path.basename(currentFile).startsWith('index.')
+        ? currentFile
+        : fileURLToPath(new URL('../index.ts', import.meta.url));
+    const jiti = createJiti(filepath, {
+        alias: {
+            '@ngcompass/config': configPackageEntry
+        }
+    });
     return jiti.import(filepath).then((mod: unknown) => {
         // Handle export default vs export =
         if (mod && typeof mod === 'object' && 'default' in mod) {

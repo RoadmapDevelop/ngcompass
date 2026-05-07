@@ -1,12 +1,14 @@
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { initConfig } from '../src/actions/init.js';
+import { findAndLoadConfig } from '../src/loaders/discovery.js';
 
 const createdDirs: string[] = [];
 
 async function makeWorkspace(): Promise<string> {
-    const dir = await fs.mkdtemp(path.join(process.cwd(), '.tmp-ngcompass-init-'));
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ngcompass-init-'));
     createdDirs.push(dir);
     return dir;
 }
@@ -54,5 +56,22 @@ export default defineConfig({
   },
 });
 `);
+    });
+
+    it('loads the generated config from a directory without local ngcompass dependencies', async () => {
+        const cwd = await makeWorkspace();
+
+        await initConfig({ cwd });
+        const loaded = await findAndLoadConfig(cwd);
+
+        expect(loaded?.config).toMatchObject({
+            extends: 'ngcompass:recommended',
+            profiles: {
+                ci: {
+                    outputFormat: 'json',
+                    maxWarnings: 0,
+                },
+            },
+        });
     });
 });

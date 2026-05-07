@@ -172,6 +172,28 @@ describe('ConsoleReporter', () => {
             expect(output).toContain('warn');
             expect(output).not.toContain('warning  Use OnPush');
         });
+
+        it('aligns compact recommendations with the violation message', () => {
+            reporter = new ConsoleReporter(out.output, { compact: true });
+
+            reporter.report([
+                makeResult([
+                    makeFailure({
+                        line: 250,
+                        column: 7,
+                        severity: 'error',
+                        message: 'A component subscription without teardown',
+                        fix: 'Add `takeUntilDestroyed()` before `subscribe()`.',
+                    }),
+                ]),
+            ]);
+
+            const physicalLines = out.lines.flatMap(line => stripAnsi(line).split('\n'));
+            const failureLine = physicalLines.find(line => line.includes('A component subscription'))!;
+            const recommendationLine = physicalLines.find(line => line.includes('Add `takeUntilDestroyed()`'))!;
+
+            expect(recommendationLine.indexOf('→')).toBe(failureLine.indexOf('A component subscription'));
+        });
     });
 
     describe('summary()', () => {
