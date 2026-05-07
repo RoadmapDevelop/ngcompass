@@ -15,9 +15,6 @@ import type { CacheInfo } from '@ngcompass/cache';
 export type ReporterFormat = 'console' | 'json' | 'html' | 'ui' | 'sarif';
 
 export interface ConsoleReporterOptions {
-    /** Enables additional diagnostic output (verbose/fix recommendations). */
-    readonly verbose?: boolean;
-
     /**
      * Uses compact, standard one-line-per-violation layout.
      * Suitable for CI environments and editor integration.

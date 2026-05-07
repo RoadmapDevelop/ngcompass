@@ -346,7 +346,6 @@ interface FailureCard {
 // ---------------------------------------------------------------------------
 
 export class ConsoleReporter implements Reporter {
-    private readonly verbose: boolean;
     private readonly compact: boolean;
     private readonly quiet: boolean;
     private readonly noRecommendation: boolean;
@@ -371,7 +370,6 @@ export class ConsoleReporter implements Reporter {
          */
         cwd: string = process.cwd(),
     ) {
-        this.verbose = options?.verbose ?? false;
         this.compact = options?.compact ?? false;
         this.quiet = options?.quiet ?? false;
         this.noRecommendation = options?.noRecommendation ?? false;
@@ -440,19 +438,13 @@ export class ConsoleReporter implements Reporter {
             this.out.error(pc.dim(guidance));
         }
 
-        if (this.verbose && error.stack) {
-            const stackWithoutHeader = error.stack.split('\n').slice(STACK_HEADER_LINE_SKIP).join('\n');
-            this.out.error(pc.gray(stackWithoutHeader));
-        }
     }
 
     step(message: string): void {
-        if (this.verbose) return;
         this.out.write(formatStepMessage(message));
     }
 
     info(message: string): void {
-        if (this.verbose) return;
         this.out.write(formatInfoMessage(message));
     }
 

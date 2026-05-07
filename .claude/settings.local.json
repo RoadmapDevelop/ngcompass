@@ -146,7 +146,8 @@
       "Bash(pnpm --filter @ngcompass/cache lint)",
       "Bash(echo \"EXIT: $?\")",
       "Bash(pnpm --filter @ngcompass/planner build)",
-      "Bash(npm list *)"
+      "Bash(npm list *)",
+      "WebFetch(domain:ngcompass.dev)"
     ]
   }
 }

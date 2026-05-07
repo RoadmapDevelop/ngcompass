@@ -63,7 +63,10 @@ export async function run() {
         actionOpts.format !== 'ui'
       ) {
         const { default: pc } = await import('picocolors');
-        const commandName = actionCommand.name();
+        const parent = actionCommand.parent;
+        const commandName = (parent && parent.name() !== 'ngcompass')
+          ? parent.name()
+          : actionCommand.name();
         const cwd = process.cwd();
         process.stdout.write(
           [

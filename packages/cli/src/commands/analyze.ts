@@ -164,12 +164,10 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .action(async (options: AnalyzeOptions) => {
             const globalOptions = program.opts();
             const isDebug = !!globalOptions.debug;
-            const isVerbose = !!globalOptions.verbose || isDebug;
 
             const startTime = performance.now();
             let reporter = getReporter(normalizeReporterFormat(options.format), {
                 compact: !!options.compact,
-                verbose: isVerbose,
                 outputPath: options.output,
                 quiet: !!options.quiet,
                 noRecommendation: options.recommendation === false,
@@ -188,7 +186,6 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 const reporterFormat = resolveReporterFormat(options.format, config.outputFormat);
                 reporter = getReporter(reporterFormat, {
                     compact: !!options.compact,
-                    verbose: isVerbose,
                     outputPath: options.output ?? config.outputPath,
                     quiet: !!options.quiet,
                     noRecommendation: options.recommendation === false,
