@@ -4,7 +4,7 @@
   <p><strong>Static analysis for Angular — catch architecture problems, performance issues, and code quality violations before they reach production.</strong></p>
 
   <p>
-    <a href="https://www.npmjs.com/package/@ngcompass/cli"><img src="https://img.shields.io/npm/v/@ngcompass/cli/beta?label=beta&color=ec4899" alt="npm beta"></a>
+    <a href="https://www.npmjs.com/package/ngcompass"><img src="https://img.shields.io/npm/v/ngcompass/beta?label=beta&color=ec4899" alt="npm beta"></a>
     <img src="https://img.shields.io/badge/Angular-v15%2B-dd0031" alt="Angular v15+">
     <img src="https://img.shields.io/badge/Node.js-20%2B-339933" alt="Node.js 20+">
     <img src="https://img.shields.io/badge/license-MIT-blue" alt="MIT License">
@@ -32,10 +32,10 @@ Think of it as **ESLint — but Angular-aware**. It understands the relationship
 
 ```bash
 # npm
-npm install -g @ngcompass/cli@beta
+npm install -g ngcompass@beta
 
 # pnpm
-pnpm add -g @ngcompass/cli@beta
+pnpm add -g ngcompass@beta
 ```
 
 > This is a **beta release**. Install with `@beta` to opt in.
@@ -261,11 +261,11 @@ ngcompass analyze --force  # skip cache for this run
 
 ## Packages
 
-ngcompass is a monorepo. All packages are published under the `@ngcompass` scope:
+ngcompass is a monorepo. The CLI is published as `ngcompass`; internal libraries use the `@ngcompass` scope:
 
 | Package | Description |
 |---|---|
-| [`@ngcompass/cli`](packages/cli) | The CLI tool — this is what you install |
+| [`ngcompass`](packages/cli) | The CLI tool — this is what you install |
 | [`@ngcompass/engine`](packages/engine) | Rule execution engine |
 | [`@ngcompass/rules`](packages/rules) | Built-in rule collection |
 | [`@ngcompass/ast`](packages/ast) | AST parsers and visitors |

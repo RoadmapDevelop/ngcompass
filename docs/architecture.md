@@ -22,7 +22,7 @@ ngcompass follows these core design principles:
 
 ```mermaid
 flowchart TB
-    CLI["@ngcompass/cli<br/>Command parsing and run orchestration"]
+    CLI["ngcompass<br/>Command parsing and run orchestration"]
     CONFIG["@ngcompass/config<br/>Config discovery, loading, validation, profiles, plugins"]
     SCANNER["@ngcompass/scanner<br/>Git/glob file discovery and filtering"]
     RULES["@ngcompass/rules<br/>Built-in rules, presets, registry, resolution"]
@@ -62,7 +62,7 @@ flowchart TB
 
 | Package | Primary Responsibility | Key Artifacts |
 |---|---|---|
-| `@ngcompass/cli` | User-facing command line orchestration | `ngcompass analyze`, `init`, `config`, `cache`, `rules` |
+| `ngcompass` | User-facing command line orchestration | `ngcompass analyze`, `init`, `config`, `cache`, `rules` |
 | `@ngcompass/config` | Discover, load, normalize, validate, and profile configuration | `resolveConfig`, config health checks, plugin loader |
 | `@ngcompass/scanner` | Discover source files from Git or glob patterns | `scan`, git discovery, filters, stats |
 | `@ngcompass/rules` | Built-in rules, presets, rule registry, rule resolution | `registerAllBuiltinRules`, `resolveRules`, presets |
@@ -75,7 +75,7 @@ flowchart TB
 
 ## 4. End-to-End Analysis Lifecycle
 
-The `analyze` command is the primary workflow. It starts in `@ngcompass/cli`, then delegates to each subsystem in a strict sequence.
+The `analyze` command is the primary workflow. It starts in `ngcompass` (CLI), then delegates to each subsystem in a strict sequence.
 
 ```mermaid
 sequenceDiagram
