@@ -63,8 +63,21 @@ export async function run() {
         actionOpts.format !== 'ui'
       ) {
         const { default: pc } = await import('picocolors');
+        const parent = actionCommand.parent;
+        const commandName = (parent && parent.name() !== 'ngcompass')
+          ? parent.name()
+          : actionCommand.name();
+        const cwd = process.cwd();
         process.stdout.write(
-          `${pc.bold('ngcompass')} ${pc.cyan(PACKAGE_VERSION)}\n`
+          [
+            ``,
+            `${pc.dim('>')} ${pc.dim(`ngcompass@${PACKAGE_VERSION}`)} ${pc.dim(commandName)} ${pc.dim(cwd)}`,
+            `${pc.dim('>')} ${pc.dim('ngcompass')} ${pc.dim('run')}`,
+            ``,
+            ` ${pc.bgCyan(pc.white(pc.bold(` ${commandName.toUpperCase()} `)))}  ${pc.cyan(PACKAGE_VERSION)}  ${pc.dim(cwd)}`,
+            ``,
+            ``,
+          ].join('\n')
         );
       }
     });

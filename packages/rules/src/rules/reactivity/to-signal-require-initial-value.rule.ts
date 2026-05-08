@@ -28,7 +28,7 @@ export const toSignalRequireInitialValueRule = createCallExpressionRule(
             return {
                 filePath: context.filePath,
                 ruleName: RULE_NAME,
-                message: 'Provide toSignal() options with initialValue (preferred) or requireSync: true for predictable state and stronger typing.',
+                message: 'toSignal() can emit undefined before the observable produces a value.',
                 line,
                 column,
                 severity: 'warn',

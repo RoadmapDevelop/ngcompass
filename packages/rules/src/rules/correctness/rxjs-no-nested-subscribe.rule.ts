@@ -104,7 +104,7 @@ function createFailure(node: AstNode, context: RuleContext): RuleFailure {
     return {
         filePath: context.filePath,
         ruleName: RULE_NAME,
-        message: 'Avoid nesting `.subscribe()` inside another `.subscribe()`. Prefer higher-order RxJS composition such as `switchMap`, `mergeMap`, `concatMap`, or `exhaustMap`.',
+        message: 'Nested subscribe() calls make stream lifetimes harder to reason about and can leak work.',
         line,
         column,
         severity: 'error',
@@ -130,4 +130,4 @@ export const rxjsNoNestedSubscribeRule = createCallExpressionRule(
 
         return null;
     },
-);
+);

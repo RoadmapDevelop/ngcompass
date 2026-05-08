@@ -143,6 +143,70 @@ jobs:
           test -s report.html || (echo "ERROR: html report was not written" && exit 1)
           echo "OK: analyze output formats verified"
 
+      - name: Verify console analyze output
+        shell: bash
+        run: |
+          CONSOLE_DIR="$RUNNER_TEMP/ngcompass-console-test"
+          mkdir -p "$CONSOLE_DIR/src"
+          ngcompass init --cwd "$CONSOLE_DIR"
+
+          cat > "$CONSOLE_DIR/src/app.component.ts" <<'TS'
+          import { ChangeDetectionStrategy, Component } from '@angular/core';
+
+          @Component({
+            selector: 'app-root',
+            template: '<h1>Hello</h1>',
+            changeDetection: ChangeDetectionStrategy.OnPush,
+          })
+          export class AppComponent {}
+          TS
+
+          cd "$CONSOLE_DIR"
+          NO_COLOR=1 ngcompass analyze --format console --force > console.txt 2>&1
+          cat console.txt
+
+          grep -Eq '[›❯] Running analysis' console.txt
+          grep -Eq '[›❯] .*app.component.ts' console.txt
+          grep -q 'ms' console.txt
+
+          node -e "const s = require('node:fs').readFileSync('console.txt', 'utf8'); if (/\x1b\[[0-9;]*[A-Za-z]/.test(s)) { console.error('ERROR: ANSI escape codes present despite NO_COLOR=1'); process.exit(1); }"
+          echo "OK: console analyze output verified"
+
+      - name: Verify analyze exits non-zero on violations
+        shell: bash
+        run: |
+          FAIL_DIR="$RUNNER_TEMP/ngcompass-fail-test"
+          mkdir -p "$FAIL_DIR/src"
+          ngcompass init --cwd "$FAIL_DIR"
+
+          cat > "$FAIL_DIR/src/app.component.ts" <<'TS'
+          import { Component } from '@angular/core';
+
+          @Component({
+            selector: 'app-root',
+            template: '<h1>{{ getTitle() }}</h1>',
+          })
+          export class AppComponent {
+            getTitle() {
+              return 'Hello';
+            }
+          }
+          TS
+
+          cd "$FAIL_DIR"
+          set +e
+          ngcompass analyze --force --rule template-no-call-expression > output.txt 2>&1
+          code=$?
+          set -e
+
+          cat output.txt
+          if [ "$code" -eq 0 ]; then
+            echo "ERROR: analyze exited 0 despite expected violation"
+            exit 1
+          fi
+          grep -q 'template-no-call-expression' output.txt
+          echo "OK: analyze exits non-zero on violations"
+
       - name: Verify exit codes
         shell: bash
         run: |
@@ -158,6 +222,7 @@ jobs:
           echo "OK: exit codes correct"
 
       - name: Publish dry-run (catch file leakage before release)
+        if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         env:
           NODE_ENV: production
         shell: bash

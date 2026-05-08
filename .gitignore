@@ -43,3 +43,4 @@ debug-*.ts
 test-output.txt
 packages/*/test-results/
 .test-cache-config/
+.claude/worktrees/

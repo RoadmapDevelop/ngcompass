@@ -114,7 +114,7 @@ function getSubjectsWithPipe(classBody: AstNode[]): Set<string> {
 export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
     RULE_NAME,
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts')) return null;
+        if (streamNode.decoratorName !== 'Component' && streamNode.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(streamNode.node as unknown as AstNode);
         if (classBody.length === 0) return null;
@@ -139,8 +139,8 @@ export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
                 filePath: context.filePath,
                 ruleName: RULE_NAME,
                 message: UI_STATE_PATTERN.test(name)
-                    ? `Avoid using ${type} for component UI state ('${name}'). Replace with signal() for better performance and zoneless compatibility.`
-                    : `Avoid using ${type} ('${name}') as a local event bus. Use standard method calls for interactions, or move complex async logic to a Service.`,
+                    ? `${type} '${name}' is used for component UI state, which adds stream overhead to local state updates.`
+                    : `${type} '${name}' is acting as a local event bus, which makes component interactions harder to trace.`,
                 line,
                 column,
                 severity: 'warn',
@@ -150,4 +150,4 @@ export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
         }
         return failures.length ? failures : null;
     }
-);
+);

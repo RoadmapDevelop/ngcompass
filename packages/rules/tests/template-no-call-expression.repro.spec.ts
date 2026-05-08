@@ -36,6 +36,45 @@ describe('template-no-call-expression (repro)', () => {
         expect(results!.length).toBe(1);
     });
 
+    it('flags is-prefixed zero-argument methods unless they are known signals', () => {
+        const ctx = makeContext('', '/src/app.component.ts');
+        const fakeNode = {
+            expression: {
+                type: 'CallExpression',
+                callee: { type: 'Identifier', name: 'isLoggedIn' },
+                arguments: []
+            },
+            sourceSpan: { start: 10, end: 22 }
+        } as any;
+
+        const results = templateNoCallExpressionRule.handle(fakeNode, ctx);
+        expect(results).not.toBeNull();
+        expect(results!.length).toBe(1);
+    });
+
+    it('does NOT flag is-prefixed calls when the component member is a signal', () => {
+        const ctx = {
+            ...makeContext('', '/src/app.component.html'),
+            crossRef: {
+                componentPath: '/src/app.component.ts',
+                templatePath: '/src/app.component.html',
+                stylePaths: [],
+                signalMembers: new Set(['isLoggedIn']),
+            },
+        };
+        const fakeNode = {
+            expression: {
+                type: 'CallExpression',
+                callee: { type: 'Identifier', name: 'isLoggedIn' },
+                arguments: []
+            },
+            sourceSpan: { start: 10, end: 22 }
+        } as any;
+
+        const results = templateNoCallExpressionRule.handle(fakeNode, ctx);
+        expect(results).toBeNull();
+    });
+
     it('does NOT flag a Signal-like call title() (heuristic fallback)', () => {
         const ctx = makeContext('', '/src/app.component.ts');
         const fakeNode = {

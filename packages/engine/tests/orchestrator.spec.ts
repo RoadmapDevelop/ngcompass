@@ -192,6 +192,32 @@ describe('runAnalysis — local execution', () => {
         expect(result.data.results).toHaveLength(2);
     });
 
+    it('emits file-level progress when each local file batch completes', async () => {
+        const task1 = makeTask({ filePath: '/fake/a.ts', taskId: 'task-a' });
+        const task2 = makeTask({ filePath: '/fake/b.ts', taskId: 'task-b' });
+        const onFileProgress = vi.fn();
+        const plan = makeEmptyPlan({ tasks: [task1, task2] });
+
+        const result = await runAnalysis(plan, {
+            rootDir: '/fake',
+            parallelThreshold: 9999,
+            onFileProgress,
+        });
+
+        expect(result.ok).toBe(true);
+        expect(onFileProgress).toHaveBeenCalledTimes(2);
+        expect(onFileProgress).toHaveBeenCalledWith(expect.objectContaining({
+            filePath: '/fake/a.ts',
+            taskCount: 1,
+            issueCount: 0,
+        }));
+        expect(onFileProgress).toHaveBeenCalledWith(expect.objectContaining({
+            filePath: '/fake/b.ts',
+            taskCount: 1,
+            issueCount: 0,
+        }));
+    });
+
     it('caches the final result when cache and globalHash are provided', async () => {
         const mockCache = {
             analysis: { set: vi.fn().mockResolvedValue(undefined), get: vi.fn() },

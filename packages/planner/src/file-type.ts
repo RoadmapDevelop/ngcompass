@@ -9,6 +9,13 @@ import path from 'node:path';
 import type { FileType } from './types.js';
 
 /**
+ * Matches an Angular class decorator at the start of a decorator expression.
+ * Used for Level-2 content-based classification of plain `.ts` files that do
+ * not follow Angular naming conventions (e.g. library-style `button.ts`).
+ */
+export const ANGULAR_DECORATOR_RE = /\@(Component|Directive|Pipe|Injectable|NgModule)\s*[\(\{]/;
+
+/**
  * Detects file type based on file path and naming conventions.
  *
  * Convention rules:
@@ -43,6 +50,9 @@ export const detectFileType = (filePath: string): FileType => {
     if (ext === '.html') return 'template';
     if (ext === '.css' || ext === '.scss' || ext === '.sass' || ext === '.less') return 'style';
     if (basename.endsWith('.config.ts') || ext === '.json') return 'config';
+
+    // Spec/test files get their own type so spec-scoped rules are routed correctly.
+    if (basename.endsWith('.spec.ts') || basename.endsWith('.test.ts')) return 'spec';
 
     // Non-Angular TypeScript files (utilities, helpers, etc.) are still valid
     // analysis targets for rules with dependencyType 'standalone' or 'imports'.

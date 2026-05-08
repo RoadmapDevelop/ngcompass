@@ -41,7 +41,7 @@ function getMemberName(member: AstNode): string | null {
 export const signalPreferModelRule = createAnyAngularClassRule(
     RULE_NAME,
     (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
+        if (classNodeWrapper.decoratorName !== 'Component' && classNodeWrapper.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(classNodeWrapper.node as AstNode);
         const inputs = new Map<string, AstNode>();
@@ -69,7 +69,7 @@ export const signalPreferModelRule = createAnyAngularClassRule(
                 failures.push({
                     filePath: context.filePath,
                     ruleName: RULE_NAME,
-                    message: `The \`${base}\` / \`${name}\` pair implements two-way binding. Prefer the \`model()\` signal API (Angular 17.2+) for simpler, idiomatic two-way data flow.`,
+                    message: `The \`${base}\` / \`${name}\` pair implements two-way binding with extra wiring that model() avoids.`,
                     line,
                     column,
                     severity: 'warn',
@@ -80,4 +80,4 @@ export const signalPreferModelRule = createAnyAngularClassRule(
         }
         return failures.length > 0 ? failures : null;
     }
-);
+);

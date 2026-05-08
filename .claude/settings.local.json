@@ -145,7 +145,10 @@
       "Bash(pnpm --filter @ngcompass/rules exec eslint src --ext .ts --fix)",
       "Bash(pnpm --filter @ngcompass/cache lint)",
       "Bash(echo \"EXIT: $?\")",
-      "Bash(pnpm --filter @ngcompass/planner build)"
+      "Bash(pnpm --filter @ngcompass/planner build)",
+      "Bash(npm list *)",
+      "WebFetch(domain:ngcompass.dev)",
+      "PowerShell(& \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\scripts\\\\benchmark-ngcompass.ps1\" 2>&1)"
     ]
   }
 }

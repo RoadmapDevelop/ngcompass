@@ -71,12 +71,24 @@ export class RuleContextFactory {
         }
 
         let template: TemplateAst | undefined;
+        let templateFilePath: string | undefined;
+        let templateFileContent: string | undefined;
+        let templateLocator: Locator | undefined;
         if (needsTemplate) {
             template = await this.context.getTemplate(filePath);
         }
 
         const project: ProjectContext | undefined =
             this.context.getProjectContext?.();
+
+        if (needsTemplate && !template && project) {
+            templateFilePath = this.resolveExternalTemplatePath(filePath, project);
+            if (templateFilePath) {
+                template = await this.context.getTemplate(templateFilePath);
+                templateFileContent = await this.context.readFile(templateFilePath);
+                templateLocator = new Locator(templateFileContent);
+            }
+        }
 
         const crossRef = project
             ? await this.buildCrossRef(filePath, template, project)
@@ -89,6 +101,9 @@ export class RuleContextFactory {
             program,
             typeChecker,
             template,
+            templateFilePath,
+            templateFileContent,
+            templateLocator,
             options,
             project,
             crossRef,
@@ -103,6 +118,18 @@ export class RuleContextFactory {
      *
      * Returns `undefined` for all other file types.
      */
+    private resolveExternalTemplatePath(
+        filePath: string,
+        project: ProjectContext,
+    ): string | undefined {
+        const componentPath = filePath.endsWith('.component.ts')
+            ? filePath
+            : project.templateToComponent.get(filePath);
+
+        if (!componentPath) return undefined;
+        return project.componentGraph.get(componentPath)?.templatePath;
+    }
+
     private async buildCrossRef(
         filePath: string,
         loadedTemplate: TemplateAst | undefined,
@@ -123,13 +150,15 @@ export class RuleContextFactory {
         const specPath = cluster?.specPath;
 
         let publicMembers: ReadonlySet<string> | undefined;
-        const tsSourceFile = this.context.getTsSourceFile?.(componentPath);
-        if (tsSourceFile) {
-            try {
+        let signalMembers: ReadonlySet<string> | undefined;
+        try {
+            const tsSourceFile = await this.getComponentSourceFile(componentPath);
+            if (tsSourceFile) {
                 publicMembers = extractPublicMembers(tsSourceFile);
-            } catch {
-                // Best-effort: skip when extraction fails (e.g., malformed AST).
+                signalMembers = extractSignalMembers(tsSourceFile);
             }
+        } catch {
+            // Best-effort: skip when extraction fails (e.g., malformed AST).
         }
 
         // Resolve the template to extract references.
@@ -157,7 +186,15 @@ export class RuleContextFactory {
             }
         }
 
-        return { componentPath, templatePath, stylePaths, specPath, publicMembers, templateReferences };
+        return { componentPath, templatePath, stylePaths, specPath, publicMembers, signalMembers, templateReferences };
+    }
+
+    private async getComponentSourceFile(componentPath: string): Promise<ts.SourceFile | undefined> {
+        const existing = this.context.getTsSourceFile?.(componentPath);
+        if (existing) return existing;
+
+        const source = await this.context.readFile(componentPath);
+        return ts.createSourceFile(componentPath, source, ts.ScriptTarget.Latest, true);
     }
 }
 
@@ -203,6 +240,57 @@ function extractPublicMembers(sourceFile: ts.SourceFile): ReadonlySet<string> {
                 members.add(name.text);
             } else if (ts.isStringLiteral(name)) {
                 members.add(name.text);
+            }
+        }
+    }
+
+    return members;
+}
+
+const SIGNAL_FACTORY_NAMES = new Set([
+    'signal',
+    'computed',
+    'linkedSignal',
+    'input',
+    'model',
+    'toSignal',
+]);
+
+function getSignalFactoryName(expr: ts.Expression): string | undefined {
+    const unwrapped = ts.isAsExpression(expr) || ts.isSatisfiesExpression(expr)
+        ? expr.expression
+        : expr;
+
+    if (!ts.isCallExpression(unwrapped)) return undefined;
+
+    const callee = unwrapped.expression;
+    if (ts.isIdentifier(callee)) return callee.text;
+
+    if (ts.isPropertyAccessExpression(callee)) {
+        if (ts.isIdentifier(callee.expression) && callee.expression.text === 'input') {
+            return 'input';
+        }
+        return callee.name.text;
+    }
+
+    return undefined;
+}
+
+function extractSignalMembers(sourceFile: ts.SourceFile): ReadonlySet<string> {
+    const members = new Set<string>();
+
+    for (const statement of sourceFile.statements) {
+        if (!ts.isClassDeclaration(statement)) continue;
+
+        for (const member of statement.members) {
+            if (!ts.isPropertyDeclaration(member) || !member.initializer) continue;
+            if (!member.name || ts.isPrivateIdentifier(member.name)) continue;
+
+            const factoryName = getSignalFactoryName(member.initializer);
+            if (!factoryName || !SIGNAL_FACTORY_NAMES.has(factoryName)) continue;
+
+            if (ts.isIdentifier(member.name) || ts.isStringLiteral(member.name)) {
+                members.add(member.name.text);
             }
         }
     }

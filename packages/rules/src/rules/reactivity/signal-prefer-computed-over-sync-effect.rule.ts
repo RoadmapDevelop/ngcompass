@@ -94,7 +94,7 @@ export const signalPreferComputedRule = createCallExpressionRule(
         return {
             filePath: context.filePath,
             ruleName: 'signal-prefer-computed-over-sync-effect',
-            message: 'Prefer computed() over effect() for synchronous derived state. This effect appears to synchronously read reactive values and write derived state; computed() avoids extra cycles and is easier to reason about.',
+            message: 'This effect reads reactive values and writes derived state, which adds extra reactive cycles.',
             line,
             column,
             severity: 'warn',

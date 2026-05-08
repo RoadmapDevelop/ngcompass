@@ -9,6 +9,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { RuleContextFactory, type ExecutionContext } from '../src/rule-context-factory.js';
 import { Locator } from '@ngcompass/common';
 import { parseTs } from '@ngcompass/ast';
+import ts from 'typescript';
 
 // ---------------------------------------------------------------------------
 // Mock helpers
@@ -19,6 +20,17 @@ const COMPONENT_TS = `
 import { Component } from '@angular/core';
 @Component({ selector: 'app-root', template: '<div>Hello</div>' })
 export class AppComponent { title = 'app'; }
+`;
+
+const SIGNAL_COMPONENT_TS = `
+import { Component, computed, input, signal } from '@angular/core';
+@Component({ selector: 'app-root', templateUrl: './app.component.html' })
+export class AppComponent {
+  readonly isLoggedIn = signal(true);
+  readonly label = computed(() => 'ready');
+  readonly count = input.required<number>();
+  isReady() { return true; }
+}
 `;
 
 function makeFakeProgram(source: string, fileName: string) {
@@ -93,6 +105,45 @@ describe('RuleContextFactory.build', () => {
         const factory = new RuleContextFactory(ctx);
         const result = await factory.build('/src/foo.ts', {}, true);
         expect(result.template).toBe(fakeTemplate);
+    });
+
+    it('loads an external component template when template rules need it', async () => {
+        const componentPath = '/src/app/app.component.ts';
+        const templatePath = '/src/app/app.component.html';
+        const templateContent = '<button>{{ computeLabel() }}</button>';
+        const fakeTemplate = { rootNodes: [{ type: 'Element' }] } as any;
+        const fakeProject = {
+            componentGraph: new Map([[componentPath, {
+                templatePath,
+                stylePaths: [],
+                specPath: undefined,
+            }]]),
+            importGraph: new Map(),
+            templateToComponent: new Map([[templatePath, componentPath]]),
+            barrelFiles: new Set(),
+        } as any;
+        const program = makeFakeProgram(COMPONENT_TS, componentPath);
+        const getTemplate = vi.fn(async (path: string) => (
+            path === templatePath ? fakeTemplate : undefined
+        ));
+        const ctx = makeBaseContext({
+            readFile: vi.fn(async (path: string) => (
+                path === templatePath ? templateContent : COMPONENT_TS
+            )),
+            getProgram: vi.fn().mockResolvedValue(program),
+            getTemplate,
+            getProjectContext: vi.fn().mockReturnValue(fakeProject),
+        });
+        const factory = new RuleContextFactory(ctx);
+
+        const result = await factory.build(componentPath, {}, true);
+
+        expect(getTemplate).toHaveBeenCalledWith(componentPath);
+        expect(getTemplate).toHaveBeenCalledWith(templatePath);
+        expect(result.template).toBe(fakeTemplate);
+        expect(result.templateFilePath).toBe(templatePath);
+        expect(result.templateFileContent).toBe(templateContent);
+        expect(result.templateLocator).toBeInstanceOf(Locator);
     });
 
     it('populates options on the context', async () => {
@@ -172,5 +223,58 @@ describe('RuleContextFactory.build', () => {
         const result = await factory.build(componentPath, {}, false);
         expect(result.crossRef).toBeDefined();
         expect(result.crossRef!.componentPath).toBe(componentPath);
+    });
+
+    it('crossRef.signalMembers contains signal-like component fields but not methods', async () => {
+        const componentPath = '/src/app/app.component.ts';
+        const sourceFile = ts.createSourceFile(componentPath, SIGNAL_COMPONENT_TS, ts.ScriptTarget.Latest, true);
+        const fakeProject = {
+            componentGraph: new Map([[componentPath, {
+                templatePath: '/src/app/app.component.html',
+                stylePaths: [],
+                specPath: undefined,
+            }]]),
+            importGraph: new Map(),
+            templateToComponent: new Map(),
+            barrelFiles: new Set(),
+        } as any;
+        const program = makeFakeProgram(SIGNAL_COMPONENT_TS, componentPath);
+        const ctx = makeBaseContext({
+            readFile: vi.fn().mockResolvedValue(SIGNAL_COMPONENT_TS),
+            getProgram: vi.fn().mockResolvedValue(program),
+            getProjectContext: vi.fn().mockReturnValue(fakeProject),
+            getTsSourceFile: vi.fn().mockReturnValue(sourceFile),
+        });
+        const factory = new RuleContextFactory(ctx);
+
+        const result = await factory.build(componentPath, {}, false);
+
+        expect(result.crossRef?.signalMembers).toEqual(new Set(['isLoggedIn', 'label', 'count']));
+        expect(result.crossRef?.signalMembers?.has('isReady')).toBe(false);
+    });
+
+    it('crossRef.signalMembers falls back to reading the component source in worker context', async () => {
+        const componentPath = '/src/app/app.component.ts';
+        const fakeProject = {
+            componentGraph: new Map([[componentPath, {
+                templatePath: '/src/app/app.component.html',
+                stylePaths: [],
+                specPath: undefined,
+            }]]),
+            importGraph: new Map(),
+            templateToComponent: new Map(),
+            barrelFiles: new Set(),
+        } as any;
+        const program = makeFakeProgram(SIGNAL_COMPONENT_TS, componentPath);
+        const ctx = makeBaseContext({
+            readFile: vi.fn().mockResolvedValue(SIGNAL_COMPONENT_TS),
+            getProgram: vi.fn().mockResolvedValue(program),
+            getProjectContext: vi.fn().mockReturnValue(fakeProject),
+        });
+        const factory = new RuleContextFactory(ctx);
+
+        const result = await factory.build(componentPath, {}, false);
+
+        expect(result.crossRef?.signalMembers).toEqual(new Set(['isLoggedIn', 'label', 'count']));
     });
 });
