@@ -1,13 +1,13 @@
-# @ngcompass/cli
+# ngcompass
 
 Command line interface for [ngcompass](../../README.md) - Angular static analysis tool.
 
 ## Installation
 
 ```bash
-npm install -g @ngcompass/cli
+npm install -g ngcompass
 # or
-pnpm add -g @ngcompass/cli
+pnpm add -g ngcompass
 ```
 
 ## Usage
