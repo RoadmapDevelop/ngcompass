@@ -11,7 +11,7 @@
  *   node scripts/smoke-test.mjs
  *
  * Requires the CLI to be built first:
- *   pnpm build  (or: pnpm --filter @ngcompass/cli build)
+ *   pnpm build  (or: pnpm --filter ngcompass build)
  */
 
 import { spawn } from 'node:child_process';
