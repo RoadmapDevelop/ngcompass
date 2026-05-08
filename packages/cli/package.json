@@ -1,6 +1,6 @@
 ﻿{
-    "name":  "@ngcompass/cli",
-    "version":  "0.1.0-beta",
+    "name":  "ngcompass",
+    "version":  "0.1.1-beta",
     "description":  "Command line interface for ngcompass",
     "sideEffects":  false,
     "bin":  {
@@ -21,9 +21,11 @@
                           }
                 },
     "files":  [
-                  "dist"
+                  "dist",
+                  "README.md"
               ],
     "scripts":  {
+                    "prepack":  "node -e \"require('fs').copyFileSync('../../README.md','./README.md')\"",
                     "build":  "tsup",
                     "build:prod":  "tsup --minify",
                     "dev":  "tsup --watch",
