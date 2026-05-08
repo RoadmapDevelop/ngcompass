@@ -166,6 +166,8 @@ export type BuiltinPreset =
     | 'strict'
     | 'performance'
     | 'reactivity'
+    | 'security'
+    | 'ssr'
     | 'all';
 
 /**

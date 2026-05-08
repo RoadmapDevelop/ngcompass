@@ -18,7 +18,8 @@ import type { ConfigOverride, ResolvedRule } from "@ngcompass/common";
 import { resolveOverridesForFile } from "./overrides.js";
 import { Ok, Err } from "./types.js";
 import { AnalysisResult, debug, time, timeLog } from "@ngcompass/common";
-import { detectFileType } from "./file-type.js";
+import { detectFileType, ANGULAR_DECORATOR_RE } from "./file-type.js";
+import { readFile } from "node:fs/promises";
 import { filterCachedTasks } from "./incremental.js";
 import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
 import { createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
@@ -279,7 +280,7 @@ const tryLoadPlanFromCache = async (
                 tasksBySeverityLevel: { off: [], warn: [], error: [] },
                 filesByType: {
                     component: [], directive: [], pipe: [], service: [],
-                    module: [], guard: [], logic: [], spec: [], template: [],
+                    module: [], guard: [], logic: [], 'angular-class': [], spec: [], template: [],
                     style: [], config: [], unknown: [],
                 },
                 tasksBySeverity: { off: 0, warn: 0, error: 0 },
@@ -423,12 +424,61 @@ const buildAllTasks = async (
     workerCount = 4,
     overrides?: ReadonlyArray<ConfigOverride>
 ): Promise<ReadonlyArray<Task>> => {
+    // Level-2 classification: upgrade plain 'logic' files that contain Angular
+    // decorators to 'angular-class' so component/directive rules are applied.
+    // Runs in parallel before either execution path so workers also benefit
+    // from the pre-populated fileTypeCache.
+    await preclassifyLogicFiles(files, fileTypeCache);
+
     if (files.length >= parallelThreshold) {
         const tasks = await tryBuildAllTasksParallel(files, rules, fileTypeCache, workerCount, overrides);
         if (tasks) return tasks;
     }
 
     return buildAllTasksSequential(files, rules, context, fileTypeCache, overrides);
+};
+
+/**
+ * Level-2 file classification: reads content of unclassified `.ts` files and
+ * upgrades them from `'logic'` to `'angular-class'` when they contain an
+ * Angular class decorator.
+ *
+ * All reads are issued concurrently so the overhead on a cold run is bounded
+ * by I/O latency rather than file count. Results are stored in `fileTypeCache`
+ * so the plan cache and worker threads both benefit without re-reading.
+ *
+ * @param files - All discovered files
+ * @param fileTypeCache - Shared type cache (mutated in-place)
+ */
+const preclassifyLogicFiles = async (
+    files: ReadonlyArray<string>,
+    fileTypeCache?: Map<string, FileType>
+): Promise<void> => {
+    if (!fileTypeCache) return;
+
+    // Collect files not yet classified that resolve to 'logic' by filename.
+    const candidates = files.filter(f => {
+        if (fileTypeCache.has(f)) return false;
+        return detectFileType(f) === 'logic';
+    });
+
+    if (candidates.length === 0) return;
+
+    debug("planner", `Level-2 classification: scanning ${candidates.length} unclassified .ts files for Angular decorators`);
+    const t = performance.now();
+
+    await Promise.all(candidates.map(async (filePath) => {
+        try {
+            const content = await readFile(filePath, 'utf8');
+            fileTypeCache.set(filePath, ANGULAR_DECORATOR_RE.test(content) ? 'angular-class' : 'logic');
+        } catch {
+            fileTypeCache.set(filePath, 'logic');
+        }
+    }));
+
+    debug("planner", `Level-2 classification complete in ${(performance.now() - t).toFixed(1)}ms — upgraded ${
+        [...fileTypeCache.values()].filter(v => v === 'angular-class').length
+    } files to 'angular-class'`);
 };
 
 /**

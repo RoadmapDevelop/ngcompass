@@ -191,7 +191,7 @@ function buildAnalysisSummary(stats: ResultSummary): string {
 
 function buildPassLine(): string {
     const status = getAnalysisStatus({ totalErrors: 0, totalWarnings: 0 });
-    return `${pc.green('❯')} ${pc.green(pc.bold(status.label))} ${pc.green(pc.bold('Analysis passed'))}`;
+    return `${pc.green('❯')} ${pc.green(pc.bold('No violations found'))} ${pc.dim('·')} ${pc.green(pc.bold(status.label))}`;
 }
 
 function formatStepMessage(message: string): string {

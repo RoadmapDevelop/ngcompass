@@ -147,7 +147,8 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(pnpm --filter @ngcompass/planner build)",
       "Bash(npm list *)",
-      "WebFetch(domain:ngcompass.dev)"
+      "WebFetch(domain:ngcompass.dev)",
+      "PowerShell(& \"C:\\\\Users\\\\30694\\\\Desktop\\\\ngcompass_\\\\scripts\\\\benchmark-ngcompass.ps1\" 2>&1)"
     ]
   }
 }

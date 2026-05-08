@@ -9,6 +9,13 @@ import path from 'node:path';
 import type { FileType } from './types.js';
 
 /**
+ * Matches an Angular class decorator at the start of a decorator expression.
+ * Used for Level-2 content-based classification of plain `.ts` files that do
+ * not follow Angular naming conventions (e.g. library-style `button.ts`).
+ */
+export const ANGULAR_DECORATOR_RE = /\@(Component|Directive|Pipe|Injectable|NgModule)\s*[\(\{]/;
+
+/**
  * Detects file type based on file path and naming conventions.
  *
  * Convention rules:

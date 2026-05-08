@@ -8,6 +8,8 @@ import { strictPreset } from './strict.js';
 import { allPreset } from './all.js';
 import { performancePreset } from './performance.js';
 import { reactivityPreset } from './reactivity.js';
+import { securityPreset } from './security.js';
+import { ssrPreset } from './ssr.js';
 
 /**
  * Registry of built-in presets
@@ -15,9 +17,11 @@ import { reactivityPreset } from './reactivity.js';
 export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map([
     ['recommended', recommendedPreset],
     ['strict', strictPreset],
-    ['all', allPreset],
     ['performance', performancePreset],
     ['reactivity', reactivityPreset],
+    ['security', securityPreset],
+    ['ssr', ssrPreset],
+    ['all', allPreset],
 ]);
 
 /**

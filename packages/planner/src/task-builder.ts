@@ -52,7 +52,7 @@ export const shouldApplyRule = (rule: ResolvedRule, fileType: FileType): boolean
     }
 
     if (dependencyType === "component") {
-        return fileType === "component" || fileType === "directive";
+        return fileType === "component" || fileType === "directive" || fileType === "angular-class";
     }
 
     if (dependencyType === "styles") {

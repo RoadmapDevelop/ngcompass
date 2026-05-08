@@ -44,7 +44,7 @@ function bodyAccessesDom(root: AstNode): boolean {
 export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
     'prefer-after-render-over-after-view-init',
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
+        if (streamNode.decoratorName !== 'Component' && streamNode.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(streamNode.node as unknown as AstNode);
         const LIFECYCLE_HOOKS = ['ngAfterViewInit', 'ngAfterContentInit'];

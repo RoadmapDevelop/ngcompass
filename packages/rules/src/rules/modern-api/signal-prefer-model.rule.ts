@@ -41,7 +41,7 @@ function getMemberName(member: AstNode): string | null {
 export const signalPreferModelRule = createAnyAngularClassRule(
     RULE_NAME,
     (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
+        if (classNodeWrapper.decoratorName !== 'Component' && classNodeWrapper.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(classNodeWrapper.node as AstNode);
         const inputs = new Map<string, AstNode>();

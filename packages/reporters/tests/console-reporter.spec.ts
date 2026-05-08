@@ -53,7 +53,7 @@ describe('ConsoleReporter', () => {
             reporter.report([]);
             const output = stripAnsi(out.lines.join('\n'));
             expect(output).toContain('PASS');
-            expect(output).toContain('Analysis passed');
+            expect(output).toContain('No violations found');
             expect(output).toContain('10 files  no issues');
         });
 
