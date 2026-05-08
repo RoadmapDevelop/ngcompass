@@ -1,4 +1,4 @@
-import pc from 'picocolors';
+﻿import pc from 'picocolors';
 import path from 'node:path';
 import process from 'node:process';
 import type {
@@ -12,22 +12,14 @@ import { processOutput } from '../output.js';
 import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
 import { renderCodeFrame, defaultSourceReader, type SourceReader } from '../code-frame.js';
 import { RuleFailure, RuleResult } from '@ngcompass/common';
+import { getAnalysisStatus } from '../analysis-status.js';
 
 // ---------------------------------------------------------------------------
 // Named constants — no magic numbers or inline literals
 // ---------------------------------------------------------------------------
 
-/** Column width reserved for the "error" label in compact mode (`'error'.length`). */
-const TYPE_WIDTH_ERROR = 5;
-
-/** Column width reserved for the "warning" label in compact mode (`'warning'.length`). */
-const TYPE_WIDTH_WARNING = 7;
-
-/**
- * Number of lines to skip at the start of `Error.stack` to omit the redundant
- * header line, which duplicates `error.message`.
- */
-const STACK_HEADER_LINE_SKIP = 1;
+/** Column width reserved for the "error" / "warn" labels in compact mode. */
+const TYPE_WIDTH_COMPACT = 5;
 
 /**
  * Trailing-period pattern stripped from violation messages before display.
@@ -55,12 +47,23 @@ const TRAILING_PERIOD_RE = /\.$/;
  * @param index - 1-based card index.
  * @param total - Total number of failures across all files.
  */
+function buildViolationsDivider(): string {
+    const visibleLabel = '   Violations   ';
+    const styledLabel = '  ' + pc.bgRed(pc.white(pc.bold(' Violations '))) + '  ';
+    const width = process.stdout.columns ?? 80;
+    const sides = Math.max(0, width - visibleLabel.length);
+    const left = Math.floor(sides / 2);
+    const right = sides - left;
+    return pc.red('·'.repeat(left)) + styledLabel + pc.red('·'.repeat(right));
+}
+
 function buildIndexedSeparator(index: number, total: number): string {
-    const label = `[${index}/${total}]`;
-    const width = Math.min(process.stdout.columns ?? 80, 120);
-    const dotCount = Math.max(1, width - label.length);
-    const content = '·'.repeat(dotCount) + label;
-    return pc.dim(pc.gray(content));
+    const visibleLabel = ` ${index}/${total} `;
+    const styledLabel = '  ' + pc.bgWhite(pc.black(pc.bold(visibleLabel))) + '  ';
+    const visibleWidth = visibleLabel.length + 4;
+    const width = process.stdout.columns ?? 80;
+    const dotCount = Math.max(0, width - visibleWidth);
+    return pc.dim('·'.repeat(dotCount)) + styledLabel;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,11 +128,6 @@ function sortedByPosition(failures: RuleFailure[]): RuleFailure[] {
     return [...failures].sort(compareByPosition);
 }
 
-/** Returns true when any failure in the list is a warning-level severity. */
-function hasAnyWarnings(failures: RuleFailure[]): boolean {
-    return failures.some(failure => !isErrorSeverity(failure.severity));
-}
-
 /**
  * Computes the maximum display width of any `"line:col"` location string
  * in the set, used to left-pad all locations to a consistent column width.
@@ -138,14 +136,97 @@ function computeLocationWidth(failures: RuleFailure[]): number {
     return failures.reduce((max, failure) => Math.max(max, `${failure.line}:${failure.column}`.length), 0);
 }
 
-function buildSummaryLine(errorCount: number, warningCount: number): string {
+function buildSummaryLine(errorCount: number, warningCount: number, stats?: ResultSummary): string {
     const total = errorCount + warningCount;
-    const xColor = errorCount > 0 ? pc.red : pc.yellow;
+    const status = stats ? getAnalysisStatus(stats) : (errorCount > 0 ? { status: 'failed' as const, label: 'FAILED' as const } : { status: 'passed-with-warnings' as const, label: 'WARN' as const });
+    const failed = status.status === 'failed';
+    const hasErrors = errorCount > 0;
+    const statusColor = failed ? pc.red : pc.yellow;
+    const statusIcon = hasErrors || failed ? '×' : '!';
+    const statusLabel = failed
+        ? pc.red(pc.bold(status.label))
+        : pc.yellow(pc.bold(status.label));
+    const errorText = pc.red(`${errorCount} error${errorCount !== 1 ? 's' : ''}`);
+    const warningText = pc.yellow(`${warningCount} warning${warningCount !== 1 ? 's' : ''}`);
+
     return (
-        `${xColor('×')} ${total} problem${total !== 1 ? 's' : ''} ` +
-        `(${errorCount} error${errorCount !== 1 ? 's' : ''}, ` +
-        `${warningCount} warning${warningCount !== 1 ? 's' : ''})`
+        `${statusColor(statusIcon)} ` +
+        `${total} violation${total !== 1 ? 's' : ''} ` +
+        `(${errorText}, ${warningText})  ` +
+        statusLabel
     );
+}
+
+function buildProblemNextAction(): string {
+    return pc.dim('Run `ngcompass analyze --format html` for a full report.');
+}
+
+function formatDuration(ms: number): string {
+    if (ms < 1000) return `${Math.round(ms)}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function buildAnalysisSummary(stats: ResultSummary): string {
+    const files = stats.discoveredFiles ?? stats.scannedFiles ?? stats.totalFiles;
+
+    if (stats.totalTasks === 0 && stats.cachedTasks !== undefined) {
+        return (
+            `${files.toLocaleString()} files · ` +
+            `${pc.dim('fully cached')} · ` +
+            `${formatDuration(stats.duration)}`
+        );
+    }
+
+    const checkLabel = stats.totalTasks === 1 ? 'check' : 'checks';
+    const cached = stats.cachedTasks && stats.cachedTasks > 0
+        ? `, ${stats.cachedTasks.toLocaleString()} cached`
+        : '';
+
+    return (
+        `${files.toLocaleString()} files · ` +
+        `${stats.totalTasks.toLocaleString()} ${checkLabel}${cached} · ` +
+        `${formatDuration(stats.duration)}`
+    );
+}
+
+function buildPassLine(): string {
+    const status = getAnalysisStatus({ totalErrors: 0, totalWarnings: 0 });
+    return `${pc.green('❯')} ${pc.green(pc.bold('No violations found'))} ${pc.dim('·')} ${pc.green(pc.bold(status.label))}`;
+}
+
+function formatStepMessage(message: string): string {
+    if (message.startsWith('❯ ')) {
+        return `${pc.cyan('❯')} ${pc.dim(message.slice(2))}`;
+    }
+
+    return pc.dim(message);
+}
+
+function formatInfoMessage(message: string): string {
+    if (/^[❯✔✓√]\s/.test(message)) {
+        return `${pc.green('❯')} ${pc.dim(message.slice(2))}`;
+    }
+
+    return pc.dim(message);
+}
+function guidanceForError(message: string): string | null {
+    if (/No configuration found/i.test(message)) {
+        return 'Run `ngcompass init` to create a starter configuration.';
+    }
+
+    if (/Configuration validation failed/i.test(message)) {
+        return 'Run `ngcompass config health` for a focused configuration check.';
+    }
+
+    if (/File discovery failed/i.test(message)) {
+        return 'Check your include/exclude globs and tsconfig parser options.';
+    }
+
+    if (/Rule resolution failed/i.test(message)) {
+        return 'Check rule names, presets, and plugin configuration.';
+    }
+
+    return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +240,7 @@ function buildCompactFailureLine(
 ): string {
     const isError = isErrorSeverity(failure.severity);
     const location = `${failure.line}:${failure.column}`;
-    const type = isError ? 'error' : 'warning';
+    const type = isError ? 'error' : 'warn';
     const colorFn = isError ? pc.red : pc.yellow;
     const locationPad = ' '.repeat(locationWidth - location.length);
     const typePad = ' '.repeat(typeWidth - type.length);
@@ -170,6 +251,15 @@ function buildCompactFailureLine(
         `${failure.message.replace(TRAILING_PERIOD_RE, '')}  ` +
         `${pc.gray(failure.ruleName)}`
     );
+}
+
+function buildCompactRecommendationLine(
+    fix: string,
+    locationWidth: number,
+    typeWidth: number,
+): string {
+    const messageIndent = ' '.repeat(locationWidth + 2 + typeWidth + 2);
+    return `${messageIndent}${pc.yellow('→')} ${pc.gray(fix)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -250,10 +340,12 @@ interface FailureCard {
 // ---------------------------------------------------------------------------
 
 export class ConsoleReporter implements Reporter {
-    private readonly verbose: boolean;
     private readonly compact: boolean;
+    private readonly quiet: boolean;
+    private readonly noRecommendation: boolean;
     private readonly sourceReader: SourceReader;
     private readonly cwd: string;
+    private lastSummary?: ResultSummary;
 
     constructor(
         private readonly out: ReporterOutput = processOutput,
@@ -272,8 +364,9 @@ export class ConsoleReporter implements Reporter {
          */
         cwd: string = process.cwd(),
     ) {
-        this.verbose = options?.verbose ?? false;
         this.compact = options?.compact ?? false;
+        this.quiet = options?.quiet ?? false;
+        this.noRecommendation = options?.noRecommendation ?? false;
         this.sourceReader = sourceReader;
         this.cwd = cwd;
     }
@@ -285,38 +378,73 @@ export class ConsoleReporter implements Reporter {
      */
     report(results: ReadonlyArray<RuleResult>): void {
         const allFailures = this.extractAllFailures(results);
+        const scannedFiles = this.lastSummary?.discoveredFiles ?? this.lastSummary?.scannedFiles ?? 0;
 
         if (allFailures.length === 0) {
-            this.out.write(pc.green('✓ No violations found'));
+            if (scannedFiles > 0) {
+                this.out.write(`${pc.green('❯')} ${pc.bold(scannedFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}`);
+            } else {
+                this.out.write(pc.green('❯ No violations found'));
+            }
+            if (this.lastSummary) {
+                this.out.write(buildPassLine());
+            }
             return;
         }
 
         const byFile = groupFailuresByFile(allFailures, this.cwd);
         const sortedFilePaths = Array.from(byFile.keys()).sort();
-
         const { errorCount, warningCount } = countSeverities(allFailures);
 
+        const cleanFiles = scannedFiles - byFile.size;
+        if (cleanFiles > 0) {
+            const violationPart = byFile.size > 0
+                ? `  ${pc.red('✗')} ${pc.red(`${byFile.size.toLocaleString()} files with violations`)}`
+                : '';
+            this.out.write(`${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}`);
+        }
+
         this.out.write('');
+
+        if (this.quiet) {
+            this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount, this.lastSummary)));
+            this.out.write(buildProblemNextAction());
+            return;
+        }
+
+        this.out.write(buildViolationsDivider());
         this.renderFileBlocks(byFile, sortedFilePaths, allFailures.length);
-        this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount)));
+        this.out.write(pc.bold(buildSummaryLine(errorCount, warningCount, this.lastSummary)));
+        this.out.write(buildProblemNextAction());
     }
 
-    summary(_stats: ResultSummary): void {
-        // No-op as requested: "remove that says analyzed blah blah etc"
+    summary(stats: ResultSummary): void {
+        this.lastSummary = stats;
+        this.out.write(formatInfoMessage(`❯ ${buildAnalysisSummary(stats)}`));
     }
 
     error(error: Error): void {
-        if (this.verbose) return; // Do not log base errors when debug logs are streaming
         this.out.error(pc.red('× Analysis failed'));
         this.out.error(error.message);
-        if (error.stack) {
-            const stackWithoutHeader = error.stack.split('\n').slice(STACK_HEADER_LINE_SKIP).join('\n');
-            this.out.error(pc.gray(stackWithoutHeader));
+
+        const guidance = guidanceForError(error.message);
+        if (guidance) {
+            this.out.error(pc.dim(guidance));
         }
+
     }
 
-    step(message: string): void { if (!this.verbose) this.out.write(pc.bold(message)); }
-    info(message: string): void { if (!this.verbose) this.out.write(pc.dim(message)); }
+    step(message: string): void {
+        this.out.write(formatStepMessage(message));
+    }
+
+    info(message: string): void {
+        this.out.write(formatInfoMessage(message));
+    }
+
+    clearLine(): void {
+        // Append-only output keeps the full progress log visible.
+    }
 
     /**
      * No-op: debug logging is not handled by the reporter.
@@ -386,17 +514,13 @@ export class ConsoleReporter implements Reporter {
         const sorted = sortedByPosition(failures);
         const locationWidth = computeLocationWidth(sorted);
 
-        // Use the wider 'warning' column width only when there are actually warnings present;
-        // otherwise alignment would waste horizontal space in error-only files.
-        const typeWidth = hasAnyWarnings(sorted) ? TYPE_WIDTH_WARNING : TYPE_WIDTH_ERROR;
-
         this.out.write(pc.underline(filePath));
 
         for (const failure of sorted) {
-            this.out.write(buildCompactFailureLine(failure, locationWidth, typeWidth));
+            this.out.write(buildCompactFailureLine(failure, locationWidth, TYPE_WIDTH_COMPACT));
 
-            if (this.verbose && failure.fix) {
-                this.out.write(`      ${pc.yellow('→')} ${pc.gray(failure.fix)}`);
+            if (failure.fix && !this.noRecommendation) {
+                this.out.write(buildCompactRecommendationLine(failure.fix, locationWidth, TYPE_WIDTH_COMPACT));
             }
         }
 
@@ -496,7 +620,7 @@ export class ConsoleReporter implements Reporter {
     }
 
     private renderCardRecommendation(failure: RuleFailure): void {
-        if (!failure.fix) return;
+        if (!failure.fix || this.noRecommendation) return;
         this.out.write(`${pc.gray('»')} ${pc.gray(failure.fix)}`);
         this.out.write('');
     }

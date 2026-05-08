@@ -11,7 +11,8 @@ export function registerRulesCommand(program: Command) {
         .option('--preset <name>', 'Filter by preset: recommended, strict, performance, reactivity, or all')
         .action((ruleName: string | undefined, opts: { preset?: string }) => {
             if (opts.preset && !isBuiltinPreset(opts.preset)) {
-                console.error(pc.red(`Unknown preset: "${opts.preset}". Available: recommended, strict, all, performance, reactivity`));
+                console.error(pc.red(`Unknown preset: "${opts.preset}".`));
+                console.error(pc.dim('Available presets: recommended, strict, all, performance, reactivity'));
                 exitWithError();
             }
 
@@ -22,6 +23,7 @@ export function registerRulesCommand(program: Command) {
                 const rule = entries.find(e => e.name === ruleName);
                 if (!rule) {
                     console.error(pc.red(`Rule "${ruleName}" not found.`));
+                    console.error(pc.dim('Run `ngcompass rules` to list available rules.'));
                     exitWithError();
                     return;
                 }

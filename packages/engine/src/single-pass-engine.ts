@@ -202,10 +202,19 @@ export const runSinglePassAnalysis = (
 
     if (context.template && (templateExpressionHandlers.length > 0 || templateAttributeHandlers.length > 0 || templateBlockHandlers.length > 0 || templateHandlers.length > 0)) {
         const templateAnalysis = analyzeTemplate(context.template);
-        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
-        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, context, failuresByRule, ruleTimings, options?.errorCollector);
-        dispatchTemplateHandlers(templateAnalysis.blocks, templateBlockHandlers as any, context, failuresByRule, ruleTimings, options?.errorCollector);
-        dispatchTemplateHandlers([templateAnalysis as any], templateHandlers as any, context, failuresByRule, ruleTimings, options?.errorCollector);
+        const templateContext = context.templateFilePath && context.templateFileContent && context.templateLocator
+            ? {
+                ...context,
+                filePath: context.templateFilePath,
+                fileContent: context.templateFileContent,
+                locator: context.templateLocator,
+            }
+            : context;
+
+        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.blocks, templateBlockHandlers as any, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers([templateAnalysis as any], templateHandlers as any, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
     }
 
     const results: RuleResult[] = [];

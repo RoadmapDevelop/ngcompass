@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { HtmlReporter } from '../src/reporters/html-reporter.js';
@@ -15,6 +15,7 @@ function makeFailure(overrides: Partial<RuleFailure> = {}): RuleFailure {
         column: 3,
         severity: 'error',
         ruleName: 'test-rule',
+        fix: 'Move this value into a safe, typed binding first.',
         ...overrides,
     };
 }
@@ -53,6 +54,8 @@ describe('HtmlReporter', () => {
             totalTasks: 1,
             totalErrors: 1,
             totalWarnings: 0,
+            failOnSeverity: 'error',
+            maxWarnings: 10,
             duration: 42,
             ...summaryOverrides,
         });
@@ -67,15 +70,56 @@ describe('HtmlReporter', () => {
         const { html, out } = await renderHtml([makeResult()]);
 
         expect(html).toContain('class="brand-logo"');
-        expect(html).toContain('data:image/png;base64,');
+        expect(html).toContain('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAfQAAAH0CAYAAADL1t+K');
         expect(html).toContain('Errors');
         expect(html).toContain('Warnings');
         expect(html).toContain('Violations');
+        expect(html).toContain('status-indicator fail');
+        expect(html).toContain('FAILED');
+        expect(html).toContain('Category breakdown');
+        expect(html).toContain('id="categoryFilter"');
+        expect(html).toContain('id="ruleFilter"');
+        expect(html).toContain('id="themeToggle"');
+        expect(html).toContain('theme-icon-moon');
+        expect(html).toContain('theme-icon-sun');
+        expect(html).toContain('data-theme');
+        expect(html).toContain('cat-performance');
         expect(html).toContain('badge badge-error');
         expect(html).toContain('src/app.component.ts');
         expect(html).toContain('test-rule');
         expect(html).toContain('Unsafe &lt;template&gt; &amp; binding');
+        expect(html).toContain('recommendation-label');
+        expect(html).toContain('Move this value into a safe, typed binding first.');
         expect(out.errors[0]).toContain('Report saved:');
+    });
+
+    it('renders inline source context when the source file is available', async () => {
+        const sourceDir = join(tempDir, 'src');
+        const sourcePath = join(sourceDir, 'app.component.ts');
+        await mkdir(sourceDir, { recursive: true });
+        await writeFile(sourcePath, [
+            'import { Component } from "@angular/core";',
+            '',
+            '@Component({',
+            '  selector: "app-root",',
+            '  template: "<button>{{ computeLabel() }}</button>",',
+            '})',
+            'export class AppComponent {}',
+        ].join('\n'));
+
+        const { html } = await renderHtml([
+            makeResult(makeFailure({
+                filePath: sourcePath,
+                line: 5,
+                column: 18,
+                ruleName: 'template-no-call-expression',
+            })),
+        ]);
+
+        expect(html).toContain('Source context');
+        expect(html).toContain('class="code-line is-hit"');
+        expect(html).toContain('&lt;button&gt;{{ computeLabel() }}&lt;/button&gt;');
+        expect(html).toContain('data-category="Performance"');
     });
 
     it('renders parse errors with escaped content', async () => {
@@ -104,7 +148,22 @@ describe('HtmlReporter', () => {
         });
 
         expect(html).toContain('Analysis Passed');
+        expect(html).toContain('status-indicator pass');
+        expect(html).toContain('PASS');
         expect(html).toContain('No violations found');
-        expect(html).toContain('No violations found across 3 scanned files.');
+        expect(html).toContain('No violations found across 3 files.');
+    });
+
+    it('renders pass-with-warnings status when warnings are below the failure threshold', async () => {
+        const { html } = await renderHtml([
+            makeResult(makeFailure({ severity: 'warn' })),
+        ], [], {
+            totalErrors: 0,
+            totalWarnings: 1,
+            maxWarnings: 10,
+        });
+
+        expect(html).toContain('status-indicator warn');
+        expect(html).toContain('WARN');
     });
 });

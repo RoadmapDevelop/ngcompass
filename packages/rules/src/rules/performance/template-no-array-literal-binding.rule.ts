@@ -36,7 +36,7 @@ function createFailure(
     return {
         filePath: context.filePath,
         ruleName: RULE_NAME,
-        message: 'Avoid array literals in template bindings. Move the array to a component field, a signal/computed value, or a pure pipe.',
+        message: 'Array literals in template bindings create a new reference on every change detection cycle.',
         line,
         column,
         severity: 'warn',
@@ -58,4 +58,4 @@ export const templateNoArrayLiteralBindingRule = createTemplateExpressionRule(
     {
         requires: { htmlAst: true },
     },
-);
+);

@@ -6,63 +6,63 @@
  */
 export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'prefer-on-push-component-change-detection':
-        'Enable `ChangeDetectionStrategy.OnPush` to minimize re-renders and rely on explicit input changes or async signals.',
+        'Add `changeDetection: ChangeDetectionStrategy.OnPush` to the component metadata.',
     'template-no-call-expression':
-        'Function calls in templates are executed on every change detection cycle.',
+        'Move the value to a pipe, computed signal, or cached component property.',
     'rxjs-no-subscribe-in-component':
-        'For reactive data streams (state derived from observables), use `toSignal()` or the `async` pipe. For imperative user-triggered actions (save, dialog, navigation), a subscription is acceptable — add `takeUntilDestroyed()` for long-lived streams.',
+        'Use `toSignal()` or the `async` pipe for view state; add `takeUntilDestroyed()` for long-lived imperative subscriptions.',
     'template-trackby-required-for-ngfor':
-        'Add a `trackBy` function to `*ngFor` to help Angular identify which items have changed and avoid unnecessary DOM recreations.',
+        'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
     'template-no-object-literal-binding':
-        'Avoid binding object literals directly in templates as they create new instances on every change detection cycle. Use a signal or state property instead.',
+        'Move the object to a component property, signal, computed value, or pure pipe.',
     'template-no-array-literal-binding':
-        'Avoid binding array literals directly in templates as they create new instances on every change detection cycle. Use a signal or state property instead.',
+        'Move the array to a component property, signal, computed value, or pure pipe.',
     'toSignal-require-initialValue':
-        'Provide an `initialValue` to `toSignal()` to ensure the signal has a valid state before the observable emits and to avoid unnecessary `undefined` types.',
+        'Pass `{ initialValue }` or `{ requireSync: true }` so the signal has a stable type.',
     'rxjs-avoid-subject-as-event-bus':
-        'For component UI state, replace `Subject` with a `signal()`. For complex async pipelines (debounce, switchMap), move the Subject and its pipeline into a dedicated service. `@Input()` setter bridges are intentionally excluded from this rule.',
+        'Use `signal()` for component UI state; move complex async pipelines into a service.',
     'signal-no-side-effects-in-computed':
-        'Computed signals must be pure. Move side effects like HTTP calls or state mutations to an `effect()` or a method.',
+        'Move side effects to an `effect()` or method, and keep `computed()` pure.',
     'signal-no-writes-in-computed':
-        'Avoid writing to other signals (e.g., via .set() or .update()) inside a computed signal to prevent reactive cycles.',
+        'Move `.set()` or `.update()` calls to an `effect()` or event handler.',
     'prefer-inject-over-constructor-di':
-        'Use the `inject()` function instead of constructor parameters for dependency injection to improve compatibility with Signals and functional patterns.',
+        'Replace constructor parameters with field initializers that call `inject()`.',
     'component-no-manual-detect-changes':
-        'Avoid manual change detection calls like `detectChanges()` or `markForCheck()`. Use Signals to drive UI updates automatically and reliably.',
+        'Use signals, `async` pipe, or input-driven state instead of calling `detectChanges()` or `markForCheck()`.',
     'rxjs-require-takeUntilDestroyed':
-        'Add `takeUntilDestroyed()` to long-lived subscriptions (WebSocket streams, polling, event buses) to prevent memory leaks. One-shot HTTP calls that auto-complete are exempt — they carry no leak risk.',
+        'Add `takeUntilDestroyed()` or another teardown operator before `subscribe()`.',
     'template-no-async-pipe-duplication':
-        'Avoid multiple `async` pipe subscriptions to the same observable. Use `@if (obs$ | async; as value)` or a view-model signal to share the subscription.',
+        'Store the async value once with `@if (... | async; as value)` or a view-model signal.',
     'rxjs-prefer-toSignal-for-template-state':
-        'Convert template-only Observables to Signals using `toSignal()` to benefit from cleaner syntax and better performance.',
+        'Convert template-used observables to `toSignal()` and read them as signals in the template.',
     'signal-effect-must-be-destroy-scoped':
-        'Ensure `effect()` is created within an injection context (like a constructor or field initializer) or provided with a `DestroyRef` to ensure proper cleanup.',
+        'Create the effect in an injection context or pass an explicit `{ injector }`.',
     'signal-no-effect-in-constructor':
-        'Move `effect()` from the constructor to a field initializer for better readability and consistent lifecycle behavior.',
+        'Move the `effect()` call to a field initializer.',
     'signal-prefer-computed-over-sync-effect':
-        'Use `computed()` instead of an `effect()` that manually updates another signal. Computed signals are more efficient and prevent reactive cycles.',
+        'Replace the write-producing `effect()` with a `computed()` signal.',
     'signal-avoid-untracked-overuse':
-        'Use `untracked()` sparingly. Overusing it can mask reactive dependencies and lead to subtle bugs in signal derivations.',
+        'Remove `untracked()` unless the dependency must be intentionally ignored.',
     'template-prefer-control-flow':
-        'Replace legacy structural directives (*ngIf, *ngFor, *ngSwitch) with Angular 17+ built-in control flow blocks (@if, @for, @switch) for better performance, type-narrowing, and tree-shaking.',
+        'Replace the legacy directive with the matching `@if`, `@for`, or `@switch` block.',
     'signal-prefer-input-signal':
-        'Replace `@Input()` decorators with the `input()` / `input.required()` signal function (Angular 17.1+) for reactive, type-safe component inputs that integrate seamlessly with the signal graph.',
+        'Replace `@Input()` with `input()` or `input.required()`.',
     'signal-prefer-output-function':
-        'Replace `@Output() EventEmitter` with the `output()` function (Angular 17.3+) to align with the signal-based API and remove the need for `EventEmitter` boilerplate.',
+        'Replace `@Output() EventEmitter` with `output<T>()`.',
     'no-bypass-sanitization':
-        'Avoid `bypassSecurityTrust*` methods. Use Angular\'s built-in sanitization or a trusted server-side pipeline instead. If you must bypass, ensure the value is provably safe and document why.',
+        'Use Angular sanitization or a trusted server-side sanitizer instead of `bypassSecurityTrust*`.',
     'rxjs-no-nested-subscribe':
-        'Replace nested `.subscribe()` calls with a flattening operator: `switchMap` (cancel on new emission), `mergeMap` (concurrent), or `concatMap` (sequential) to compose streams declaratively.',
+        'Flatten the stream with `switchMap`, `mergeMap`, `concatMap`, or `exhaustMap`.',
     'no-document-access':
-        'Inject `DOCUMENT` from `@angular/common` for DOM access, or wrap browser-only code in `afterNextRender()` / `isPlatformBrowser()` / `!isPlatformServer()` to ensure compatibility with Angular SSR.',
+        'Inject `DOCUMENT` or move browser-only DOM work into `afterNextRender()`.',
     'template-no-unsafe-bindings':
-        'Avoid binding unsanitized values to `[innerHTML]`, `[outerHTML]`, or `[srcdoc]`. Use Angular\'s DomSanitizer with a SafeHtml pipe, or restructure the template to avoid raw HTML injection.',
+        'Sanitize the value before binding, or replace the raw HTML binding with structured template content.',
     'signal-prefer-model':
-        'Replace the `@Input() x` + `@Output() xChange` two-way binding pair with the `model()` signal (Angular 17.2+) for concise, type-safe two-way data flow.',
+        'Replace the `@Input()` / `@Output()Change` pair with `model()`.',
     'prefer-after-render-over-after-view-init':
-        'Move DOM access from `ngAfterViewInit` / `ngAfterContentInit` into `afterNextRender()` so the code only runs in the browser and remains safe in Angular SSR environments.',
+        'Move browser-only DOM access into `afterNextRender()`.',
     'spec-no-focused-test':
-        'Remove focused (`fdescribe`, `fit`, `describe.only`, `it.only`) and disabled (`xdescribe`, `xit`) test helpers before committing. Focused tests silently exclude the rest of the suite; disabled tests are easily forgotten.',
+        'Replace focused or disabled test helpers with normal `describe` and `it` calls.',
 };
 
 /**

@@ -131,9 +131,9 @@ function isTrackedCdrReceiver(callNode: AstNode, isCdrAlias: (name: string) => b
 
 function buildFailureMessage(methodName: string, isOnPush: boolean): string {
     if (isOnPush) {
-        return 'Prefer Signals or async pipe over detectChanges() even with OnPush. Manual CD triggers couple your component to imperative rendering.';
+        return 'Manual change detection in an OnPush component couples rendering to imperative calls.';
     }
-    return `Avoid manual change detection (${methodName}). Prefer Signals/async pipe for reactivity.`;
+    return `Manual change detection (${methodName}) can hide state-flow bugs and make rendering harder to predict.`;
 }
 
 function createFailure(
@@ -200,4 +200,4 @@ export const componentNoManualDetectChangesRule = createAnyAngularClassRule(
         const failures = findManualChangeDetectionFailures(classNode, context, isOnPush, isCdrAlias);
         return failures.length > 0 ? failures : null;
     },
-);
+);

@@ -48,12 +48,13 @@ export const preferInjectRule = createAnyAngularClassRule(
         return {
             filePath: context.filePath,
             ruleName: RULE_NAME,
-            message: `Prefer inject() over constructor-based dependency injection.${offenders ? ` Offending params: ${offenders}.` : ''}`,
+            message: `Constructor dependency injection makes class setup less composable than inject().${offenders ? ` Offending params: ${offenders}.` : ''}`,
             line,
             column,
             severity: 'warn',
             fix: RECOMMENDATIONS[RULE_NAME],
             codeExample: CODE_EXAMPLES[RULE_NAME],
         };
-    }
-);
+    },
+    { requires: { typeChecker: true } }
+);

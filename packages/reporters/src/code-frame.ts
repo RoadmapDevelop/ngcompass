@@ -8,6 +8,7 @@ import { codeFrameColumns } from '@babel/code-frame';
 
 /** Lines of source context shown above and below the violation line. */
 const CONTEXT_LINES = 2;
+const FRAME_PADDING = '  ';
 
 // ---------------------------------------------------------------------------
 // Source reader abstraction
@@ -71,6 +72,47 @@ export const defaultSourceReader: SourceReader = {
     readLines: readSourceLines,
 };
 
+function highlightHtml(line: string): string {
+    return pc.green(line);
+}
+
+function renderHtmlCodeFrame(
+    lines: string[],
+    targetLine: number,
+    targetColumn: number,
+): string[] {
+    if (targetLine < 1 || targetLine > lines.length) return [];
+
+    const startLine = Math.max(1, targetLine - CONTEXT_LINES);
+    const endLine = Math.min(lines.length, targetLine + CONTEXT_LINES);
+    const gutterWidth = String(endLine).length;
+    const rendered: string[] = [];
+
+    for (let lineNo = startLine; lineNo <= endLine; lineNo++) {
+        const raw = lines[lineNo - 1] ?? '';
+        const active = lineNo === targetLine;
+        const marker = active ? pc.red('>') : ' ';
+        const gutter = String(lineNo).padStart(gutterWidth, ' ');
+        const pipe = `${pc.blue(gutter)} ${pc.blue('|')}`;
+        const code = highlightHtml(raw);
+
+        rendered.push(`${FRAME_PADDING}${marker} ${pipe} ${code}`);
+
+        if (active) {
+            const trimmed = raw.trimEnd();
+            const firstNonSpace = raw.search(/\S/);
+            const startColumn = firstNonSpace === -1 ? Math.max(1, targetColumn) : firstNonSpace + 1;
+            const endColumn = Math.max(startColumn, trimmed.length + 1);
+            const caretPadding = ' '.repeat(Math.max(0, startColumn - 1));
+            const caretLength = Math.max(1, endColumn - startColumn);
+            const emptyPipe = `${' '.repeat(gutterWidth)} ${pc.blue('|')}`;
+            rendered.push(`${FRAME_PADDING}  ${emptyPipe} ${caretPadding}${pc.red('^'.repeat(caretLength))}`);
+        }
+    }
+
+    return rendered;
+}
+
 // ---------------------------------------------------------------------------
 // Frame renderer — public entry point
 // ---------------------------------------------------------------------------
@@ -93,19 +135,11 @@ export function renderCodeFrame(
     if (lines.length === 0) return [];
 
     const isHtml = filePath?.toLowerCase().endsWith('.html');
-    const rawSource = lines.join('\n');
-    let highlightedSource = rawSource;
-
     if (isHtml) {
-        // Basic HTML highlighting: Tags in cyan, attributes in yellow, values in green
-        // This is a naive regex-based highligher for the code frame.
-        highlightedSource = rawSource
-            .replace(/(&lt;[a-zA-Z0-9-]+)/g, pc.cyan('$1'))
-            .replace(/(&gt;)/g, pc.cyan('$1'))
-            .replace(/([a-zA-Z-]+)=/g, pc.yellow('$1='))
-            .replace(/"([^"]*)"/g, pc.green('"$1"'));
-        // Note: Babel's codeFrameColumns with highlightCode: false preserves these ANSI codes.
+        return renderHtmlCodeFrame(lines, targetLine, _targetColumn);
     }
+
+    const rawSource = lines.join('\n');
 
     const activeLineContent = lines[targetLine - 1] ?? '';
     const trimmed = activeLineContent.trimEnd();
@@ -114,13 +148,13 @@ export function renderCodeFrame(
     const endColumn = Math.max(startColumn, trimmed.length + 1);
 
     const frame = codeFrameColumns(
-        highlightedSource,
+        rawSource,
         {
             start: { line: targetLine, column: startColumn },
             end: { line: targetLine, column: endColumn },
         },
         {
-            highlightCode: !isHtml, // Use Babel's highlighter for non-HTML (JS/TS)
+            highlightCode: true,
             linesAbove: CONTEXT_LINES,
             linesBelow: CONTEXT_LINES,
         },
@@ -158,6 +192,6 @@ export function renderCodeFrame(
         });
 
         // Add 2 spaces of left padding for a "less crowded" look.
-        return '  ' + processed;
+        return FRAME_PADDING + processed;
     });
 }

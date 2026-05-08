@@ -106,7 +106,7 @@ function checkThreshold(actual, threshold, metric) {
     }
     return {
         passed: true,
-        message: `${metric}: ${colorize(actual.toFixed(2) + '%', colors.green)} ≥ ${colorize(threshold + '%', colors.gray)} ${colorize('✓', colors.green)}`,
+        message: `${metric}: ${colorize(actual.toFixed(2) + '%', colors.green)} ≥ ${colorize(threshold + '%', colors.gray)} ${colorize('❯', colors.green)}`,
     };
 }
 

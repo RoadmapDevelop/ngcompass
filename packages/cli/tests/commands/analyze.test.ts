@@ -150,6 +150,61 @@ describe('Analyze Command', () => {
         }));
     });
 
+    it('prints console summary before findings', async () => {
+        setupSuccessfulPipeline();
+
+        registerAnalyzeCommand(program, { flush: vi.fn().mockResolvedValue(undefined) } as any);
+        await program.parseAsync(['node', 'test', 'analyze']);
+
+        expect(mockReporter.summary.mock.invocationCallOrder[0]).toBeLessThan(
+            mockReporter.report.mock.invocationCallOrder[0],
+        );
+    });
+
+    it('prints append-only file progress rows during analysis', async () => {
+        setupSuccessfulPipeline();
+        const filePath = `${process.cwd()}\\src\\app\\app.component.ts`;
+        vi.spyOn(plannerModule, 'buildExecutionPlan').mockResolvedValue({
+            ok: true,
+            data: {
+                tasks: [{ taskId: 'task1', filePath }],
+                skippedTasks: [],
+                precomputedAnalysis: false,
+            }
+        } as any);
+        vi.spyOn(engineModule, 'runAnalysis').mockImplementation(async (_plan: any, options: any) => {
+            options.onFileProgress({
+                filePath,
+                taskCount: 12,
+                issueCount: 3,
+                errorCount: 3,
+                warningCount: 0,
+                duration: 18,
+            });
+            return {
+                ok: true,
+                data: {
+                    results: [],
+                    parseErrors: [],
+                    stats: {
+                        totalFiles: 1,
+                        totalErrors: 3,
+                        totalWarnings: 0,
+                    }
+                }
+            } as any;
+        });
+        const stdoutWrite = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+
+        registerAnalyzeCommand(program, { flush: vi.fn().mockResolvedValue(undefined) } as any);
+        await program.parseAsync(['node', 'test', 'analyze']);
+
+        const output = stdoutWrite.mock.calls.map(call => String(call[0])).join('');
+        expect(output).toContain('app.component.ts');
+        expect(output).toContain('18ms');
+        expect(output).toContain('3 issues');
+    });
+
     it('lets CLI format and output override config defaults', async () => {
         setupSuccessfulPipeline({
             outputFormat: 'html',

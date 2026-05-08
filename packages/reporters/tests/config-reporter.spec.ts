@@ -47,13 +47,15 @@ describe('TextConfigReporter', () => {
             const result: InitResult = { success: true, filePath: 'ngcompass.json' };
             reporter.renderInitResult(result);
             expect(out.lines[0]).toContain('ngcompass.json');
-            expect(out.lines[0]).toContain('OK');
+            expect(out.lines[0]).toContain('Created');
+            expect(out.lines[1]).toContain('ngcompass analyze');
         });
 
         it('outputs exists marker with (exists) when file already exists', () => {
             const result: InitResult = { success: false, filePath: 'ngcompass.json', alreadyExists: true };
             reporter.renderInitResult(result);
-            expect(out.lines[0]).toContain('(exists)');
+            expect(out.lines[0]).toContain('Already exists');
+            expect(out.lines[1]).toContain('--force');
         });
 
         it('outputs error marker for a failed initialization', () => {
@@ -118,7 +120,8 @@ describe('TextConfigReporter', () => {
 
             expect(issueLine.startsWith('13:3')).toBe(true);
             expect(issueLine).toContain('error');
-            expect(suggestionLine.startsWith('               ::')).toBe(true);
+            expect(suggestionLine.startsWith(' '.repeat(15))).toBe(true);
+            expect(suggestionLine.trimStart()).toContain('Create the directory or update outputPath.');
         });
     });
 });
