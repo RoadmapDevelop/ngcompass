@@ -75,6 +75,46 @@ const CRASH_RE = /\[ngcompass\] (Fatal error|Unexpected error|Unhandled promise 
 const INIT_TMP = path.join(os.tmpdir(), `ngcompass-smoke-${process.pid}`);
 fs.mkdirSync(INIT_TMP, { recursive: true });
 
+// Temp dir used for fixture-based content tests (real Angular component + config)
+const FIXTURE_TMP = path.join(os.tmpdir(), `ngcompass-fixture-${process.pid}`);
+
+/**
+ * Creates a minimal Angular project fixture with a known violation so
+ * content-validation tests (--quiet, --no-recommendation, --format html, etc.)
+ * can assert on real output rather than just "no crash".
+ *
+ * Violation: `template-trackby-required-for-ngfor` (error)
+ * — *ngFor without trackBy in an inline template.
+ */
+async function setupFixture() {
+    fs.mkdirSync(path.join(FIXTURE_TMP, 'src'), { recursive: true });
+
+    // Generate a valid config file via the init command
+    await runCli(['init', '--cwd', FIXTURE_TMP, '--force']);
+
+    // Angular component with a known error-severity violation
+    fs.writeFileSync(
+        path.join(FIXTURE_TMP, 'src', 'app.component.ts'),
+        [
+            `import { Component } from '@angular/core';`,
+            `@Component({`,
+            `    selector: 'app-root',`,
+            `    template: '<ul><li *ngFor="let x of items">{{x}}</li></ul>'`,
+            `})`,
+            `export class AppComponent { items = [1, 2, 3]; }`,
+        ].join('\n')
+    );
+
+    // Plain TypeScript file — not an Angular file — used by zero-Angular-files test
+    fs.writeFileSync(
+        path.join(FIXTURE_TMP, 'src', 'utils.ts'),
+        `export function add(a: number, b: number): number { return a + b; }\n`
+    );
+}
+
+// Zero-Angular-files temp dir (only a config + plain TS, no .component.ts)
+const ZERO_ANGULAR_TMP = path.join(os.tmpdir(), `ngcompass-zero-${process.pid}`);
+
 // ── Test suite ────────────────────────────────────────────────────────────────
 /**
  * @typedef {Object} TestCase
@@ -422,6 +462,105 @@ const tests = [
         exitCodes: [0],
         notCombined: [CRASH_RE],
     },
+    {
+        name: 'init (no --force) when config exists → warns "Already exists", exits 0',
+        args: ['init', '--cwd', INIT_TMP],
+        exitCodes: [0],
+        combined: [/already exists/i],
+        notCombined: [CRASH_RE],
+    },
+
+    // ── New presets ──────────────────────────────────────────────────────────
+    {
+        name: 'rules --preset security → lists security rules without crash',
+        args: ['rules', '--preset', 'security'],
+        exitCodes: [0],
+        notCombined: [CRASH_RE],
+        combined: [/no-bypass-sanitization|template-no-unsafe-bindings/i],
+    },
+    {
+        name: 'rules --preset ssr → lists ssr rules without crash',
+        args: ['rules', '--preset', 'ssr'],
+        exitCodes: [0],
+        notCombined: [CRASH_RE],
+        combined: [/no-document-access|prefer-after-render/i],
+    },
+
+    // ── Fixture: content validation ──────────────────────────────────────────
+    {
+        name: 'analyze --quiet → suppresses per-file violation block, keeps summary',
+        args: ['analyze', '--skip-type-check', '--quiet'],
+        exitCodes: [0, 1],
+        notCombined: [CRASH_RE],
+        cwd: FIXTURE_TMP,
+        validate: (r) => {
+            // With violations present (exit 1), the FAIL block must be absent
+            if (r.exitCode !== 1) return null;
+            if (/\bFAIL\b.*\.ts/.test(r.stdout)) return '--quiet still shows per-file FAIL block in stdout';
+            if (!/violation/.test(r.stdout)) return '--quiet output is missing the summary "violation" count';
+            return null;
+        },
+    },
+    {
+        name: 'analyze --no-recommendation → omits » fix suggestions',
+        args: ['analyze', '--skip-type-check', '--no-recommendation'],
+        exitCodes: [0, 1],
+        notCombined: [CRASH_RE],
+        cwd: FIXTURE_TMP,
+        validate: (r) => {
+            if (r.exitCode !== 1) return null;
+            // The » character marks every recommendation line
+            if (/»/.test(r.stdout)) return '--no-recommendation still shows » fix suggestion in stdout';
+            return null;
+        },
+    },
+    {
+        name: 'analyze --format html → writes ngcompass-report.html to cwd',
+        args: ['analyze', '--skip-type-check', '--format', 'html'],
+        exitCodes: [0, 1],
+        notCombined: [CRASH_RE],
+        cwd: FIXTURE_TMP,
+        validate: () => {
+            const htmlFile = path.join(FIXTURE_TMP, 'ngcompass-report.html');
+            if (!fs.existsSync(htmlFile)) return `ngcompass-report.html was not created in ${FIXTURE_TMP}`;
+            const size = fs.statSync(htmlFile).size;
+            if (size < 100) return `ngcompass-report.html exists but is suspiciously small (${size} bytes)`;
+            return null;
+        },
+    },
+    {
+        name: 'analyze --format html --output <custom> → writes to specified path',
+        args: ['analyze', '--skip-type-check', '--format', 'html', '--output', path.join(FIXTURE_TMP, 'custom-report.html')],
+        exitCodes: [0, 1],
+        notCombined: [CRASH_RE],
+        cwd: FIXTURE_TMP,
+        validate: () => {
+            const htmlFile = path.join(FIXTURE_TMP, 'custom-report.html');
+            if (!fs.existsSync(htmlFile)) return `custom-report.html was not created`;
+            return null;
+        },
+    },
+    {
+        name: 'analyze --rule <id> → runs exactly one rule, filters the rest',
+        args: ['analyze', '--skip-type-check', '--rule', 'template-trackby-required'],
+        exitCodes: [0, 1],
+        notCombined: [CRASH_RE],
+        cwd: FIXTURE_TMP,
+        combined: [/1 (check|rule|active)/i],
+    },
+
+    // ── Zero-Angular-files resilience ────────────────────────────────────────
+    {
+        name: 'analyze on dir with zero Angular files → exit 0, no crash',
+        args: ['analyze', '--skip-type-check'],
+        exitCodes: [0],
+        notCombined: [CRASH_RE],
+        cwd: ZERO_ANGULAR_TMP,
+        validate: (r) => {
+            if (CRASH_RE.test(r.combined)) return 'crash detected in zero-Angular-files project';
+            return null;
+        },
+    },
 ];
 
 // ── Runner ────────────────────────────────────────────────────────────────────
@@ -435,6 +574,17 @@ async function runTests() {
         w('');
         process.exit(1);
     }
+
+    // ── Fixture setup ─────────────────────────────────────────────────────────
+    await setupFixture();
+
+    // Zero-Angular-files fixture: config + plain TS only, no .component.ts
+    fs.mkdirSync(path.join(ZERO_ANGULAR_TMP, 'src'), { recursive: true });
+    await runCli(['init', '--cwd', ZERO_ANGULAR_TMP, '--force']);
+    fs.writeFileSync(
+        path.join(ZERO_ANGULAR_TMP, 'src', 'helpers.ts'),
+        `export const add = (a: number, b: number) => a + b;\n`
+    );
 
     w('');
     w(`  ${paint(' SMOKE ', c.bgCyan, c.black, c.bold)}  ${paint(`${tests.length} test cases`, c.bold)}`);
@@ -522,8 +672,10 @@ async function runTests() {
 
     w('');
 
-    // Cleanup temp dir
-    try { fs.rmSync(INIT_TMP, { recursive: true, force: true }); } catch { /* best-effort */ }
+    // Cleanup temp dirs
+    for (const dir of [INIT_TMP, FIXTURE_TMP, ZERO_ANGULAR_TMP]) {
+        try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
+    }
 
     process.exit(failed > 0 ? 1 : 0);
 }
