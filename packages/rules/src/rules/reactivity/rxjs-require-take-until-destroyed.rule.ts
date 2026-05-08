@@ -28,7 +28,11 @@ function hasManualTeardown(filePath: string, fileContent: string): boolean {
 export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
     'rxjs-require-takeUntilDestroyed',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        if (!context.filePath.endsWith('.component.ts')) return null;
+        if (
+            !context.filePath.endsWith('.component.ts') &&
+            !context.filePath.endsWith('.directive.ts') &&
+            !/\@(Component|Directive)\s*[\(\{]/.test(context.fileContent)
+        ) return null;
 
         const astNode = node as unknown as AstNode;
         if (!isSubscribeCall(astNode)) return null;

@@ -75,7 +75,11 @@ function getFailureMessage(node: CallExpression, context: RuleContext): string {
 export const rxjsNoSubscribeInComponentRule = createCallExpressionRule(
     RULE_NAME,
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        if (!context.filePath.endsWith('.component.ts')) return null;
+        if (
+            !context.filePath.endsWith('.component.ts') &&
+            !context.filePath.endsWith('.directive.ts') &&
+            !/\@(Component|Directive)\s*[\(\{]/.test(context.fileContent)
+        ) return null;
 
         const astNode = node as unknown as AstNode;
         if (!isSubscribeCall(astNode) || isFireAndForget(astNode)) return null;

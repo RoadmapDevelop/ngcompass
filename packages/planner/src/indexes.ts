@@ -169,6 +169,7 @@ const createEmptyFilesByTypeIndex = (): Record<FileType, string[]> => {
         module: [],
         guard: [],
         logic: [],
+        'angular-class': [],
         spec: [],
         template: [],
         style: [],

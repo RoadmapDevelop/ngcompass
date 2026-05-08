@@ -114,7 +114,7 @@ function getSubjectsWithPipe(classBody: AstNode[]): Set<string> {
 export const rxjsAvoidSubjectRule = createAnyAngularClassRule(
     RULE_NAME,
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts')) return null;
+        if (streamNode.decoratorName !== 'Component' && streamNode.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(streamNode.node as unknown as AstNode);
         if (classBody.length === 0) return null;

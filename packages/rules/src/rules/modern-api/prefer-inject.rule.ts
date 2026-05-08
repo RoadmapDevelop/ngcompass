@@ -55,5 +55,6 @@ export const preferInjectRule = createAnyAngularClassRule(
             fix: RECOMMENDATIONS[RULE_NAME],
             codeExample: CODE_EXAMPLES[RULE_NAME],
         };
-    }
+    },
+    { requires: { typeChecker: true } }
 );
