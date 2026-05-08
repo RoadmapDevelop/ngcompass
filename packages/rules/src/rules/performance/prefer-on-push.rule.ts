@@ -96,7 +96,7 @@ function getDeclaringModuleContext(classNode: AngularClassNode, context: RuleCon
 
 function buildFailureMessage(componentName: string, moduleContext: DeclaringModuleContext | null): string {
     if (!moduleContext) {
-        return `Component '${componentName}' should use ChangeDetectionStrategy.OnPush.`;
+        return `Component '${componentName}' uses default change detection, which can re-render more often than needed.`;
     }
 
     const { moduleName, siblingComponentCount } = moduleContext;
@@ -104,7 +104,7 @@ function buildFailureMessage(componentName: string, moduleContext: DeclaringModu
         ? ` ${siblingComponentCount} other component${siblingComponentCount === 1 ? '' : 's'} are declared in '${moduleName}'.`
         : '';
 
-    return `Component '${componentName}' (declared in '${moduleName}') should use ChangeDetectionStrategy.OnPush.${siblingNote}`;
+    return `Component '${componentName}' uses default change detection, which can re-render more often than needed.${siblingNote}`;
 }
 
 function createFailure(classNode: AngularClassNode, context: RuleContext): RuleFailure {
@@ -137,4 +137,4 @@ export const preferOnPushRule = createComponentRule(
         return createFailure(classNode, context);
     },
     { requires: { projectContext: true } }
-);
+);

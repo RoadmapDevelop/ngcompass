@@ -85,7 +85,7 @@ export type RulesConfig = Readonly<Record<string, RuleConfig>>;
 /**
  * Dependency types for rules
  */
-export type RuleDependencyType = 'standalone' | 'component' | 'styles' | 'imports';
+export type RuleDependencyType = 'standalone' | 'component' | 'styles' | 'imports' | 'spec';
 
 /**
  * AST requirements for a rule
@@ -166,6 +166,8 @@ export type BuiltinPreset =
     | 'strict'
     | 'performance'
     | 'reactivity'
+    | 'security'
+    | 'ssr'
     | 'all';
 
 /**
@@ -543,6 +545,14 @@ export interface ComponentCrossRef {
     readonly publicMembers?: ReadonlySet<string>;
 
     /**
+     * Public class fields that are known Angular signal-like values.
+     *
+     * These are safe to invoke from templates as `name()` because the call reads
+     * signal state rather than executing arbitrary component work.
+     */
+    readonly signalMembers?: ReadonlySet<string>;
+
+    /**
      * Identifiers from the template that reference the component — property
      * reads, method calls, and event-handler expressions whose implicit
      * receiver is the component instance (`this`).
@@ -579,6 +589,16 @@ export interface RuleContext {
      * Typed as `TemplateAst` (defined above) to avoid a circular dep on `@ngcompass/ast`.
      */
     readonly template?: TemplateAst;
+    /**
+     * External template file details used while dispatching template rules.
+     *
+     * Present only when a component rule batch loaded a separate `.html`
+     * template. Template rule execution may use these values so findings point
+     * at the HTML file instead of the owning `.component.ts` file.
+     */
+    readonly templateFilePath?: string;
+    readonly templateFileContent?: string;
+    readonly templateLocator?: Locator;
     /**
      * Parsed style AST — check `ok` before accessing `code`.
      * Typed as `StyleAst` (defined above) to avoid a circular dep on `@ngcompass/ast`.
@@ -641,6 +661,17 @@ export interface AnalysisResult {
 export interface WorkerTaskError {
     readonly task: { readonly taskId: string };
     readonly error: string;
+}
+
+/** File-level progress event emitted by a worker thread. */
+export interface WorkerFileProgress {
+    readonly kind: 'file-progress';
+    readonly filePath: string;
+    readonly taskCount: number;
+    readonly issueCount: number;
+    readonly errorCount: number;
+    readonly warningCount: number;
+    readonly duration: number;
 }
 
 /** Message posted back from a worker thread to the orchestrator. */

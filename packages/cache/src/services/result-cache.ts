@@ -119,7 +119,14 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
     const pendingWrites = new Map<string, unknown>();
 
     /**
-     * Drain all pending writes to the driver in batches.
+     * Drain all pending writes to the driver.
+     *
+     * Fast path: if the driver supports bulkSet (e.g. PackedFileDriver), all
+     * entries are serialized and written in a SINGLE I/O operation — O(1) writes
+     * regardless of how many results are pending.
+     *
+     * Fallback: batched individual writes for drivers that don't support bulkSet
+     * (e.g. the cacache-backed DiskDriver).
      */
     const drainPendingWrites = async (): Promise<void> => {
         if (pendingWrites.size === 0) return;
@@ -129,21 +136,31 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
 
         const now = Date.now();
 
-        for (let i = 0; i < entries.length; i += WRITE_BATCH_SIZE) {
-            const batch = entries.slice(i, i + WRITE_BATCH_SIZE);
-
-            // Phase 1: write all results in parallel
-            await Promise.all(batch.map(([hash, result]) => driver.set(hash, result)));
-
-            // Phase 2: write all metadata in parallel (skip read-before-write)
-            await Promise.all(batch.map(([hash]) =>
-                driver.set(getMetadataKey(hash), {
+        if (driver.bulkSet) {
+            const all: Array<readonly [string, unknown]> = [];
+            for (const [hash, result] of entries) {
+                all.push([hash, result]);
+                all.push([getMetadataKey(hash), {
                     taskId: hash,
                     timestamp: now,
                     hits: 0,
                     lastAccess: now,
-                } satisfies CacheMetadata)
-            ));
+                } satisfies CacheMetadata]);
+            }
+            await driver.bulkSet(all);
+        } else {
+            for (let i = 0; i < entries.length; i += WRITE_BATCH_SIZE) {
+                const batch = entries.slice(i, i + WRITE_BATCH_SIZE);
+                await Promise.all(batch.map(([hash, result]) => driver.set(hash, result)));
+                await Promise.all(batch.map(([hash]) =>
+                    driver.set(getMetadataKey(hash), {
+                        taskId: hash,
+                        timestamp: now,
+                        hits: 0,
+                        lastAccess: now,
+                    } satisfies CacheMetadata)
+                ));
+            }
         }
 
         debug('cache', `Flushed ${entries.length} buffered results to disk`);

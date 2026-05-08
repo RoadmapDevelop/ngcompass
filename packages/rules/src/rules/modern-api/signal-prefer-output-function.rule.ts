@@ -39,7 +39,7 @@ function isEventEmitter(member: AstNode, context: RuleContext): boolean {
 export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
     RULE_NAME,
     (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
+        if (classNodeWrapper.decoratorName !== 'Component' && classNodeWrapper.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(classNodeWrapper.node as AstNode);
         const failures: RuleFailure[] = [];
@@ -57,7 +57,7 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
                 failures.push({
                     filePath: context.filePath,
                     ruleName: RULE_NAME,
-                    message: `'${name}' uses the legacy @Output() EventEmitter pattern. Prefer the \`output()\` function API (Angular 17.3+) for a more modern, idiomatic output declaration.`,
+                    message: `'${name}' uses @Output() EventEmitter, which adds boilerplate compared with output().`,
                     line,
                     column,
                     severity: 'warn',
@@ -67,5 +67,6 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
             }
         }
         return failures.length > 0 ? failures : null;
-    }
-);
+    },
+    { requires: { typeChecker: true } }
+);

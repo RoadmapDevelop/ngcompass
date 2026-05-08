@@ -20,7 +20,7 @@ function isInputDecorator(node: AstNode): boolean {
 export const signalPreferInputSignalRule = createAnyAngularClassRule(
     RULE_NAME,
     (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
+        if (classNodeWrapper.decoratorName !== 'Component' && classNodeWrapper.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(classNodeWrapper.node as AstNode);
         const failures: RuleFailure[] = [];
@@ -36,8 +36,8 @@ export const signalPreferInputSignalRule = createAnyAngularClassRule(
                 const key = unwrapNode(m.key);
                 const name = (key?.type === 'Identifier' ? key.name : (key?.type === 'Literal' ? String(key.value) : '')) || '(unknown)';
 
-                let msg = `'${name}' uses the legacy @Input() decorator. Prefer the signal-based \`input()\` / \`input.required()\` API (Angular 17.1+).`;
-                if (isStandalone) msg += ' This is a standalone declaration, where signal inputs are the preferred modern API.';
+                let msg = `'${name}' uses @Input(), which keeps this input outside Angular's signal graph.`;
+                if (isStandalone) msg += ' Standalone declarations benefit most from signal inputs.';
 
                 failures.push({
                     filePath: context.filePath,
@@ -54,4 +54,4 @@ export const signalPreferInputSignalRule = createAnyAngularClassRule(
         return failures.length > 0 ? failures : null;
     },
     { requires: { projectContext: true } }
-);
+);

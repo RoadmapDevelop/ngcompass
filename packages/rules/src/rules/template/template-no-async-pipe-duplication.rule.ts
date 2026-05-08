@@ -124,7 +124,7 @@ export const templateNoAsyncPipeDuplicationRule = createTemplateExpressionRule(
             return {
                 filePath: context.filePath,
                 ruleName: 'template-no-async-pipe-duplication',
-                message: `Duplicate async pipe subscription for "${key}". Share it with @if (${key} | async; as v) { ... } or *ngIf="${key} | async as v".`,
+                message: `Duplicate async pipe subscriptions for "${key}" can create repeated work and inconsistent loading states.`,
                 line,
                 column,
                 severity: 'warn',

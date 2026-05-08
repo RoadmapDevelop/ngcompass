@@ -28,7 +28,11 @@ function hasManualTeardown(filePath: string, fileContent: string): boolean {
 export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
     'rxjs-require-takeUntilDestroyed',
     (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        if (!context.filePath.endsWith('.component.ts')) return null;
+        if (
+            !context.filePath.endsWith('.component.ts') &&
+            !context.filePath.endsWith('.directive.ts') &&
+            !/\@(Component|Directive)\s*[\(\{]/.test(context.fileContent)
+        ) return null;
 
         const astNode = node as unknown as AstNode;
         if (!isSubscribeCall(astNode)) return null;
@@ -49,7 +53,7 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
         return {
             filePath: context.filePath,
             ruleName: 'rxjs-require-takeUntilDestroyed',
-            message: 'Subscriptions in components must include a teardown operator in the subscribe chain (takeUntilDestroyed, takeUntil, take, first, takeWhile) to reduce leak risk.',
+            message: 'A component subscription without teardown can keep running after the component is destroyed.',
             line,
             column,
             severity: 'error',

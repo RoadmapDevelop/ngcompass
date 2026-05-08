@@ -1,5 +1,5 @@
 import { parentPort, workerData } from "node:worker_threads";
-import { RuleResult } from "@ngcompass/common";
+import { RuleResult, WorkerFileProgress } from "@ngcompass/common";
 import { Task } from "@ngcompass/planner";
 import { createAnalysisContext, executeBatchedTasks, configureRuleExecutor } from "@ngcompass/engine";
 import { registerAllBuiltinRules } from "./registry/register-all.js";
@@ -48,11 +48,14 @@ const main = async () => {
         tasksByFile.set(task.filePath, fileTasks);
     }
 
-    // Execute batched tasks per file
-    for (const fileTasks of tasksByFile.values()) {
+    // Execute batched tasks per file — evict after each file so ASTs are
+    // released to the GC rather than accumulating for the worker's full chunk.
+    for (const [filePath, fileTasks] of tasksByFile) {
+        const fileStart = performance.now();
         try {
             const batchResults = await executeBatchedTasks(fileTasks, context);
             results.push(...batchResults);
+            parentPort.postMessage(buildFileProgress(filePath, fileTasks.length, batchResults, performance.now() - fileStart));
         } catch (e) {
             for (const task of fileTasks) {
                 errors.push({
@@ -60,6 +63,9 @@ const main = async () => {
                     error: e instanceof Error ? e.message : String(e)
                 });
             }
+            parentPort.postMessage(buildFileProgress(filePath, fileTasks.length, [], performance.now() - fileStart));
+        } finally {
+            context.evict(filePath);
         }
     }
 
@@ -67,3 +73,30 @@ const main = async () => {
 };
 
 void main();
+
+const buildFileProgress = (
+    filePath: string,
+    taskCount: number,
+    results: ReadonlyArray<RuleResult>,
+    duration: number,
+): WorkerFileProgress => {
+    let errorCount = 0;
+    let warningCount = 0;
+
+    for (const result of results) {
+        for (const failure of result.failures) {
+            if (failure.severity === 'error') errorCount++;
+            else if (failure.severity === 'warn') warningCount++;
+        }
+    }
+
+    return {
+        kind: 'file-progress',
+        filePath,
+        taskCount,
+        issueCount: errorCount + warningCount,
+        errorCount,
+        warningCount,
+        duration,
+    };
+};

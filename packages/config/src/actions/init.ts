@@ -15,39 +15,33 @@ export interface InitOptions {
     force?: boolean;
 }
 
-const TEMPLATE = `import type { AnalyzerConfig } from '@ngcompass/common';
+const TEMPLATE = `import { defineConfig } from '@ngcompass/config';
 
-/**
- * Minimal starter configuration for ngcompass.
- * Documentation: https://github.com/SigoudisEftimis/ngcompass_#readme
- */
-const config: AnalyzerConfig = {
-    extends: 'ngcompass:recommended',
+export default defineConfig({
+  extends: 'ngcompass:recommended',
 
-    include: [
-        'src/**/*.ts',
-        'src/**/*.html'
-    ],
+  include: [
+    'src/**/*.ts',
+    'src/**/*.html',
+  ],
 
-    exclude: [
-        'node_modules/**',
-        'dist/**',
-        'build/**',
-        'coverage/**',
-        '**/*.d.ts',
-        '**/*.spec.ts',
-        '**/*.test.ts'
-    ],
+  exclude: [
+    'node_modules/**',
+    'dist/**',
+    'build/**',
+    'coverage/**',
+    '**/*.d.ts',
+    '**/*.spec.ts',
+    '**/*.test.ts',
+  ],
 
-    profiles: {
-        ci: {
-            outputFormat: 'json',
-            maxWarnings: 0
-        }
-    }
-};
-
-export default config;
+  profiles: {
+    ci: {
+      outputFormat: 'json',
+      maxWarnings: 0,
+    },
+  },
+});
 `;
 
 export async function initConfig(options: InitOptions = {}): Promise<InitResult> {

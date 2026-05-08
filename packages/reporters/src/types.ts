@@ -15,9 +15,6 @@ import type { CacheInfo } from '@ngcompass/cache';
 export type ReporterFormat = 'console' | 'json' | 'html' | 'ui' | 'sarif';
 
 export interface ConsoleReporterOptions {
-    /** Enables additional diagnostic output (verbose/fix recommendations). */
-    readonly verbose?: boolean;
-
     /**
      * Uses compact, standard one-line-per-violation layout.
      * Suitable for CI environments and editor integration.
@@ -30,6 +27,18 @@ export interface ConsoleReporterOptions {
      * Only used when `ReporterFormat` is `'html'` or `'ui'`.
      */
     readonly outputPath?: string;
+
+    /**
+     * TTY stream used for in-place phase updates.
+     * Defaults to process.stdout. Override to process.stderr for non-console formats.
+     */
+    readonly phaseStream?: NodeJS.WriteStream;
+
+    /** Suppress violation details — show only the summary counts. */
+    readonly quiet?: boolean;
+
+    /** Suppress fix/recommendation text from violation output. */
+    readonly noRecommendation?: boolean;
 }
 
 /**
@@ -38,11 +47,18 @@ export interface ConsoleReporterOptions {
  * Consumed by `ProgressReporter.summary()`.
  */
 export interface ResultSummary {
+    /** Total number of source files that were scanned (passed to the planner). */
+    readonly scannedFiles: number;
+    /** Total files found by the scanner (all file types, including HTML/SCSS/JSON). */
+    readonly discoveredFiles?: number;
+    /** Files that contained at least one violation. */
     readonly totalFiles: number;
     readonly totalTasks: number;
     readonly cachedTasks?: number;
     readonly totalErrors: number;
     readonly totalWarnings: number;
+    readonly failOnSeverity?: 'warn' | 'error';
+    readonly maxWarnings?: number;
     readonly duration: number;
 }
 
@@ -91,6 +107,8 @@ export interface ProgressReporter {
     info(message: string): void;
     /** Emits a debug message; may be suppressed unless verbose mode is active. */
     debug(message: string): void;
+    /** Erases the current in-place phase line (TTY only). No-op on non-TTY. */
+    clearLine?(): void;
 }
 
 /**

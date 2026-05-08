@@ -89,8 +89,8 @@ function createFailure(violationNode: AstNode, call: AstNode, context: RuleConte
         filePath: context.filePath,
         ruleName: RULE_NAME,
         message: type === 'write'
-            ? 'Avoid writes or state mutations inside computed(). Computed signals must be pure to prevent reactive cycles.'
-            : 'Avoid side effects inside computed(). Computed signals must be pure.',
+            ? 'computed() writes to state, which can create reactive cycles.'
+            : 'computed() contains a side effect, so it is no longer a pure derivation.',
         line,
         column,
         severity: 'error',
@@ -114,4 +114,4 @@ export const signalNoSideEffectsInComputedRule = createCallExpressionRule(
 
         return createFailure(violation.node, call, context, violation.type);
     },
-);
+);

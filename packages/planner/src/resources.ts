@@ -5,13 +5,52 @@
  * using convention-based detection (no parsing).
  */
 
-import { readdir } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import type { TaskInputs, FileInput } from "./types.js";
 import { getBaseName, isComponentFile } from "./file-type.js";
 import { debug } from "@ngcompass/common";
 
 const STYLE_EXTENSIONS = [".css", ".scss", ".sass", ".less"] as const;
+
+const TEMPLATE_URL_RE = /templateUrl\s*:\s*['"`]([^'"`\n]+)['"`]/;
+const STYLE_URL_RE = /\bstyleUrl(?!s)\s*:\s*['"`]([^'"`\n]+)['"`]/;
+const STYLE_URLS_RE = /\bstyleUrls\s*:\s*\[([^\]]+)\]/;
+const STYLE_STR_RE = /['"`]([^'"`\n]+\.(?:css|scss|sass|less))['"`]/g;
+
+const extractTemplateUrlFromContent = async (tsFilePath: string, dir: string): Promise<string | undefined> => {
+    try {
+        const content = await readFile(tsFilePath, 'utf-8');
+        const match = TEMPLATE_URL_RE.exec(content);
+        if (!match) return undefined;
+        return path.resolve(dir, match[1]);
+    } catch {
+        return undefined;
+    }
+};
+
+const extractStyleUrlsFromContent = async (tsFilePath: string, dir: string): Promise<string[]> => {
+    try {
+        const content = await readFile(tsFilePath, 'utf-8');
+        const results: string[] = [];
+
+        const singleMatch = STYLE_URL_RE.exec(content);
+        if (singleMatch) results.push(path.resolve(dir, singleMatch[1]));
+
+        const arrayMatch = STYLE_URLS_RE.exec(content);
+        if (arrayMatch) {
+            STYLE_STR_RE.lastIndex = 0;
+            let m: RegExpExecArray | null;
+            while ((m = STYLE_STR_RE.exec(arrayMatch[1])) !== null) {
+                results.push(path.resolve(dir, m[1]));
+            }
+        }
+
+        return results;
+    } catch {
+        return [];
+    }
+};
 
 /**
  * Discovers all related resources for a TypeScript file.
@@ -39,8 +78,18 @@ export const discoverResources = async (
 
     const typescript: FileInput = buildFileInput(tsFilePath, needsTsAst);
 
-    const template = findTemplateFile(dir, baseName, files, needsHtmlAst);
-    const styles = findStyleFiles(tsFilePath, dir, baseName, files, needsCssAst);
+    let template = findTemplateFile(dir, baseName, files, needsHtmlAst);
+    if (!template) {
+        const extracted = await extractTemplateUrlFromContent(tsFilePath, dir);
+        if (extracted) template = buildFileInput(extracted, needsHtmlAst);
+    }
+
+    let styles = findStyleFiles(tsFilePath, dir, baseName, files, needsCssAst);
+    if (styles.length === 0 && isComponentFile(tsFilePath)) {
+        const extracted = await extractStyleUrlsFromContent(tsFilePath, dir);
+        styles = extracted.map((p) => buildFileInput(p, needsCssAst));
+    }
+
     const spec = findSpecFile(dir, baseName, files, needsSpecAst);
 
     return {

@@ -44,7 +44,7 @@ function bodyAccessesDom(root: AstNode): boolean {
 export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
     'prefer-after-render-over-after-view-init',
     (streamNode: AnyAngularClassNode, context: RuleContext): RuleFailure[] | null => {
-        if (!context.filePath.endsWith('.component.ts') && !context.filePath.endsWith('.directive.ts')) return null;
+        if (streamNode.decoratorName !== 'Component' && streamNode.decoratorName !== 'Directive') return null;
 
         const classBody = getClassBody(streamNode.node as unknown as AstNode);
         const LIFECYCLE_HOOKS = ['ngAfterViewInit', 'ngAfterContentInit'];
@@ -59,7 +59,7 @@ export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
             failures.push({
                 filePath: context.filePath,
                 ruleName: 'prefer-after-render-over-after-view-init',
-                message: `\`${hookName}\` contains DOM access that will fail in SSR. Move browser-only DOM code into \`afterNextRender()\` to make it SSR-safe.`,
+                message: `\`${hookName}\` contains DOM access that can run before browser-only APIs are safe.`,
                 line,
                 column,
                 severity: 'warn',

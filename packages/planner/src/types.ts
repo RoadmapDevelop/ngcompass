@@ -106,6 +106,8 @@ export type FileType =
     | 'module'
     | 'guard'
     | 'logic'
+    | 'angular-class'
+    | 'spec'
     | 'template'
     | 'style'
     | 'config'

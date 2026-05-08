@@ -3,14 +3,14 @@ import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { existsSync } from "node:fs";
-import { Result, AnalysisResult, RuleResult, WorkerTaskError, WorkerMessageResult, createInfrastructureError, Ok, debug } from "@ngcompass/common";
+import { Result, AnalysisResult, RuleResult, WorkerTaskError, WorkerMessageResult, WorkerFileProgress, createInfrastructureError, Ok, debug } from "@ngcompass/common";
 import { MIN_WORKER_COUNT, WORKER_TIMEOUT_MS } from "./constants.js";
 import { createAnalysisContext } from "./analysis-context.js";
 import { calculateStats } from "./analysis-stats.js";
 import { executeBatchedTasks } from "./runner.js";
 import { Task, groupTasksByFile } from "@ngcompass/planner";
 import pLimit from "p-limit";
-import { Spinner } from "./spinner.js";
+import type { AnalysisFileProgress } from "./orchestrator.js";
 
 /**
  * @fileoverview
@@ -25,7 +25,8 @@ export const runAnalysisParallel = async (
     rootDir: string,
     startTime: number,
     maxWorkers?: number,
-    concurrency?: number
+    concurrency?: number,
+    onFileProgress?: (event: AnalysisFileProgress) => void,
 ): Promise<Result<AnalysisResult>> => {
     const { Worker } = await import("node:worker_threads");
 
@@ -34,18 +35,15 @@ export const runAnalysisParallel = async (
 
     if (!workerPath) {
         debug("workers", "Execution worker not found, falling back to local execution.");
-        return runLocalFallback(tasks, rootDir, startTime, concurrency ?? workerCount);
+        return runLocalFallback(tasks, rootDir, startTime, concurrency ?? workerCount, onFileProgress);
     }
 
     const chunks = distributeTasks(tasks, workerCount);
 
-    const spinner = new Spinner();
-    spinner.start(`Analyzing ${tasks.length} tasks across ${workerCount} workers...`);
-
     let completedWorkers = 0;
-    const updateSpinner = () => {
+    const markWorkerComplete = () => {
         completedWorkers++;
-        spinner.update(`Analyzing ${tasks.length} tasks across ${workerCount} workers... (${completedWorkers}/${workerCount} complete)`);
+        debug("workers", `Worker progress: ${completedWorkers}/${workerCount} complete`);
     };
 
     const workers: InstanceType<typeof Worker>[] = [];
@@ -73,12 +71,16 @@ export const runAnalysisParallel = async (
                 if (settled) return;
                 settled = true;
                 settle();
-                updateSpinner();
+                markWorkerComplete();
                 void worker.terminate();
                 reject(new Error(`Worker timed out after ${WORKER_TIMEOUT_MS / 1000}s`));
             }, WORKER_TIMEOUT_MS);
 
             worker.on("message", (msg: WorkerMessageResult) => {
+                if (isWorkerFileProgress(msg)) {
+                    onFileProgress?.(msg);
+                    return;
+                }
                 if (settled) return;
                 settled = true;
                 settle();
@@ -87,7 +89,7 @@ export const runAnalysisParallel = async (
                         debug("workers", `Worker failed task ${e.task.taskId}: ${e.error}`);
                     });
                 }
-                updateSpinner();
+                markWorkerComplete();
                 resolve(msg.results);
             });
 
@@ -95,7 +97,7 @@ export const runAnalysisParallel = async (
                 if (settled) return;
                 settled = true;
                 settle();
-                updateSpinner();
+                markWorkerComplete();
                 reject(err instanceof Error ? err : new Error(String(err)));
             });
 
@@ -118,9 +120,7 @@ export const runAnalysisParallel = async (
     let chunkResults: RuleResult[][];
     try {
         chunkResults = await Promise.all(promises);
-        spinner.stop();
     } catch (e) {
-        spinner.stop();
         // Terminate remaining workers to prevent leaked threads on failure
         await Promise.allSettled(workers.map(w => w.terminate()));
         throw e;
@@ -146,7 +146,8 @@ const runLocalFallback = async (
     tasks: ReadonlyArray<Task>,
     rootDir: string,
     startTime: number,
-    concurrency: number
+    concurrency: number,
+    onFileProgress?: (event: AnalysisFileProgress) => void,
 ): Promise<Result<AnalysisResult>> => {
     const context = createAnalysisContext(rootDir);
     const limit = pLimit(concurrency);
@@ -155,7 +156,16 @@ const runLocalFallback = async (
 
     const results = await Promise.all(
         Array.from(tasksByFile.values()).map(fileTasks =>
-            limit(() => executeBatchedTasks(fileTasks, context))
+            limit(async () => {
+                const filePath = fileTasks[0]?.filePath;
+                const fileStart = performance.now();
+                const batchResults = await executeBatchedTasks(fileTasks, context);
+                if (filePath) context.evict(filePath);
+                if (filePath) {
+                    onFileProgress?.(buildFileProgress(filePath, fileTasks.length, batchResults, performance.now() - fileStart));
+                }
+                return batchResults;
+            })
         )
     );
     const successful = results.flat();
@@ -164,6 +174,38 @@ const runLocalFallback = async (
         parseErrors: [],
         stats: calculateStats(successful, startTime),
     });
+};
+
+const isWorkerFileProgress = (message: unknown): message is WorkerFileProgress => (
+    !!message &&
+    typeof message === 'object' &&
+    (message as { kind?: unknown }).kind === 'file-progress'
+);
+
+const buildFileProgress = (
+    filePath: string,
+    taskCount: number,
+    results: ReadonlyArray<RuleResult>,
+    duration: number,
+): AnalysisFileProgress => {
+    let errorCount = 0;
+    let warningCount = 0;
+
+    for (const result of results) {
+        for (const failure of result.failures) {
+            if (failure.severity === 'error') errorCount++;
+            else if (failure.severity === 'warn') warningCount++;
+        }
+    }
+
+    return {
+        filePath,
+        taskCount,
+        issueCount: errorCount + warningCount,
+        errorCount,
+        warningCount,
+        duration,
+    };
 };
 
 
