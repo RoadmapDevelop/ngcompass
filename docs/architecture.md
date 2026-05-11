@@ -199,7 +199,7 @@ The normalized configuration guarantees stable runtime fields:
 - `outputFormat`, `failOnSeverity`, and `maxWarnings` are resolved.
 - `rules` is always present.
 
-Default cache behavior is enabled, local, and stored at `node_modules/.cache/ngcompass` with a 24-hour TTL. Default worker count is based on host CPU count minus one, with a minimum of one.
+Default cache behavior is enabled, local, and stored at `node_modules/.cache/ngcompass` with a 24-hour TTL. Default worker count is based on host CPU count minus one, capped at four workers by default, with a minimum of one. Users can still opt into more parallelism with `maxWorkers`.
 
 ### 6.3 Plugin Loading
 
@@ -218,13 +218,13 @@ flowchart TD
     TsPatterns["Read tsconfig include/exclude/files"]
     Access["Validate rootDir accessibility"]
     Git{"Is Git repository?"}
-    ScanCache{"File-list cache hit?"}
+    ScanCache{"File-list and stats cache hit?"}
     GitList["executeGitDiscovery"]
     Glob["executeGlob"]
     FilterGlob["filterByGlob"]
     ApplyFilters["applyFilters<br/>gitignore and configured ignores"]
     Stats["calculateStats"]
-    Save["Save file-list cache"]
+    Save["Save file-list and stats cache"]
     Output["ScanResult.files"]
 
     Input --> Normalize --> Expand --> TsConfig
@@ -238,6 +238,10 @@ flowchart TD
     Glob --> ApplyFilters
     ApplyFilters --> Stats --> Save --> Output
 ```
+
+The scanner cache stores the discovered file list plus scan statistics such as
+extension counts and total size. On a cache hit it reuses those statistics
+instead of restatting every file.
 
 The scanner cache key includes:
 
@@ -364,10 +368,10 @@ flowchart TD
     Hasher["initHasher()"]
     Validate["Validate files and rules"]
     Context["Create TaskBuilderContext"]
+    WarmMeta["Warm hash cache from metadata"]
     GlobalHash["calculateGlobalHash(files, rules, version context)"]
     AnalysisCache{"Full analysis cache hit?"}
     PlanCache{"Plan cache hit?"}
-    WarmMeta["Warm hash cache from metadata"]
     ComponentGraph["Build ComponentDependencyGraph"]
     Preclassify["Preclassify logic files by Angular decorators"]
     BuildTasks["Build tasks per file and rule"]
@@ -376,13 +380,19 @@ flowchart TD
     Indexes["Build file and task indexes"]
     Output["ExecutionPlanOutput"]
 
-    Start --> Hasher --> Validate --> Context --> GlobalHash --> AnalysisCache
+    Start --> Hasher --> Validate --> Context --> WarmMeta --> GlobalHash --> AnalysisCache
     AnalysisCache -- yes --> Output
     AnalysisCache -- no --> PlanCache
     PlanCache -- yes --> ResultCache
-    PlanCache -- no --> WarmMeta --> ComponentGraph --> Preclassify --> BuildTasks --> SavePlan --> ResultCache
+    PlanCache -- no --> ComponentGraph --> Preclassify --> BuildTasks --> SavePlan --> ResultCache
     ResultCache --> Indexes --> Output
 ```
+
+Metadata warmup happens before `globalHash` calculation. On warm runs this lets
+the planner rebuild the project hash from file stats plus persisted content
+hashes, only re-reading files whose size or modification time changed. On cold
+runs it also seeds the metadata cache before task construction so later warm
+runs can avoid full-project content reads.
 
 ### 9.3 File Classification
 
@@ -557,7 +567,43 @@ It uses an LRU cache for file content and maps for parsed artifacts. The engine 
 
 It creates a TypeScript `Program` from `parserOptions.project` or the nearest `tsconfig.json`. For large repositories it narrows root names to the files in the current type-aware chunk. This controls memory while preserving TypeScript's transitive import resolution.
 
-Type-aware execution is chunked by file count. The default chunk size is 400 files. Each chunk gets a fresh TypeScript `Program`, which becomes eligible for garbage collection after the chunk completes.
+Project-context import graph construction uses TypeScript's module-resolution
+cache while walking import specifiers, avoiding repeated package/path resolution
+work inside each type-aware chunk.
+
+Type-aware execution is chunked by file count. The default chunk size is 100 files, or 50 files for very large type-aware runs. Each chunk gets a fresh TypeScript `Program`, which becomes eligible for garbage collection after the chunk completes. Type-aware batches run one file batch at a time by default to avoid holding many parsed artifacts beside a TypeScript `Program`.
+
+The adaptive chunk ceiling is computed at runtime from available memory, total
+memory, CPU count, and the V8 heap limit. User-provided chunk size is treated as
+the starting target, then clamped to that machine-derived cap. The cap is
+speed-biased on machines with ample free memory, while low-memory systems keep
+a smaller ceiling. During execution the chunk size steps down on high heap
+pressure and grows only after sustained low pressure, so large machines can use
+bigger Programs while smaller machines stay conservative.
+
+Type-aware chunk ordering supports a dependency pre-pass or a simple path sort.
+The dependency strategy reads TypeScript roots with bounded concurrency and
+falls back to simple ordering if the pre-pass exceeds its time budget. The
+simple strategy skips import inspection entirely, which is useful for very large
+repositories where chunk preparation itself becomes visible.
+
+Type-aware chunk concurrency is configurable and defaults to one. Raising it
+allows multiple type-aware chunks to build separate TypeScript Programs at the
+same time, trading memory for speed. The value is clamped by the effective
+worker count and an absolute safety ceiling.
+
+Type-aware file concurrency is a separate control inside each chunk. It reuses
+the same TypeScript Program while processing multiple file batches at once,
+which can improve throughput without creating additional Programs, but it may
+hold more parsed file/template artifacts in memory.
+
+Chunks that only need the TypeScript `TypeChecker` skip `ProjectContext`
+construction. `ProjectContext` is built only for chunks containing
+project-context rules, because import graphs, component graphs, and NgModule
+maps add meaningful memory pressure on top of the compiler Program. After each
+chunk the analysis context explicitly clears file, AST, template, style,
+`Program`, `TypeChecker`, and `ProjectContext` references before the next chunk
+starts.
 
 ### 10.4 Rule Context Factory
 
@@ -661,7 +707,7 @@ The engine records:
 
 - Total traversal time.
 - Nodes visited.
-- Per-rule timing and invocation count.
+- Per-rule timing and invocation count when debug/profiling is enabled.
 - Component analyzer cache hits and misses.
 - Performance budget violations.
 
@@ -747,7 +793,7 @@ flowchart TB
 | Cache Service | Key | Value | Main Consumer |
 |---|---|---|---|
 | Config cache | Config hash | `ConfigValidationResult` | Config loader |
-| File cache | Scan key | Discovered file list | Scanner |
+| File cache | Scan key | Discovered file list and scan statistics | Scanner |
 | Plan cache | Global hash | Serialized full execution plan | Planner |
 | Result cache | Task ID | `RuleResult` | Planner and engine |
 | Analysis cache | Global hash | Full `AnalysisResult` | Planner and engine |
@@ -956,7 +1002,7 @@ The performance model is based on reducing repeated work at every layer.
 | Incremental | `taskId` result-cache filtering |
 | Engine | Single-pass AST traversal and batched rule execution |
 | Workers | Parallel syntax-only execution by file group |
-| Type-aware | Chunked TypeScript Programs for memory control |
+| Type-aware | Small chunked TypeScript Programs and capped type-aware concurrency for memory control |
 | Cache I/O | Packed result cache and write-behind flush |
 | Context | LRU file content, memoized ASTs, explicit eviction |
 

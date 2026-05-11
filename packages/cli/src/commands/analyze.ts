@@ -26,6 +26,10 @@ interface AnalyzeOptions {
     output?: string;
     maxWorkers?: string;
     typeAwareChunkSize?: string;
+    typeAwareIsolation?: 'auto' | 'process' | 'off';
+    typeAwareChunkStrategy?: 'dependency' | 'simple';
+    typeAwareConcurrency?: string;
+    typeAwareFileConcurrency?: string;
     skipTypeCheck?: boolean;
 }
 
@@ -159,7 +163,11 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--output <path>', 'Output path for UI reports (default: ngcompass-report.html)')
         .option('--rule <id>', 'Run only one rule (useful for debugging or focused checks)')
         .option('--max-workers <n>', 'Cap the number of worker threads (lower = less memory, e.g. --max-workers 2)')
-        .option('--type-aware-chunk-size <n>', 'Files per type-aware chunk (default 400; lower = less peak memory)')
+        .option('--type-aware-chunk-size <n>', 'Files per type-aware chunk (default 100; lower = less peak memory)')
+        .option('--type-aware-concurrency <n>', 'Run multiple type-aware chunks at once (default 1; higher = faster but more memory)')
+        .option('--type-aware-file-concurrency <n>', 'Run multiple files concurrently inside each type-aware chunk (default 1)')
+        .option('--type-aware-isolation <mode>', 'Type-aware execution isolation: auto | process | off (default auto)')
+        .option('--type-aware-chunk-strategy <mode>', 'Type-aware chunk ordering: dependency | simple (default dependency)')
         .option('--skip-type-check', 'Skip rules that require the TypeScript type checker (fastest, lowest memory)')
         .action(async (options: AnalyzeOptions) => {
             const startTime = performance.now();
@@ -422,6 +430,8 @@ async function runAnalysisStep(
 
     const cliMaxWorkers = options.maxWorkers ? parseInt(options.maxWorkers, 10) : undefined;
     const cliChunkSize = options.typeAwareChunkSize ? parseInt(options.typeAwareChunkSize, 10) : undefined;
+    const cliTypeAwareConcurrency = options.typeAwareConcurrency ? parseInt(options.typeAwareConcurrency, 10) : undefined;
+    const cliTypeAwareFileConcurrency = options.typeAwareFileConcurrency ? parseInt(options.typeAwareFileConcurrency, 10) : undefined;
     const result = await runAnalysis(plan, {
         rootDir: process.cwd(),
         cache,
@@ -429,6 +439,10 @@ async function runAnalysisStep(
         files,
         maxWorkers: cliMaxWorkers ?? config?.maxWorkers,
         typeAwareChunkSize: cliChunkSize,
+        typeAwareConcurrency: cliTypeAwareConcurrency,
+        typeAwareFileConcurrency: cliTypeAwareFileConcurrency,
+        typeAwareIsolation: options.typeAwareIsolation,
+        typeAwareChunkStrategy: options.typeAwareChunkStrategy,
         skipTypeCheck: options.skipTypeCheck,
         parserOptions: config?.parserOptions,
         onProgress,

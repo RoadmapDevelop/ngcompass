@@ -11,7 +11,7 @@ import { CacheKeyContext, computeHash, MetaCache } from "@ngcompass/cache";
 
 import type { TaskInputs } from "./types.js";
 
-
+const GLOBAL_HASH_BATCH_SIZE = 500;
 
 
 /**
@@ -284,9 +284,15 @@ export const calculateGlobalHash = async (
     hashCache: Map<string, string>,
     ctx?: CacheKeyContext
 ): Promise<string> => {
-    const fileEntries = await Promise.all(
-        files.map(async (f) => `${f}:${hashCache.get(f) ?? (await hashFile(f, hashCache))}`)
-    );
+    const fileEntries: string[] = [];
+
+    for (let i = 0; i < files.length; i += GLOBAL_HASH_BATCH_SIZE) {
+        const batch = files.slice(i, i + GLOBAL_HASH_BATCH_SIZE);
+        const batchEntries = await Promise.all(
+            batch.map(async (f) => `${f}:${hashCache.get(f) ?? (await hashFile(f, hashCache))}`)
+        );
+        fileEntries.push(...batchEntries);
+    }
 
     fileEntries.sort();
 

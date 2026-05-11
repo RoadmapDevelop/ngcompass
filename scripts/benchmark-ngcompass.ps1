@@ -22,6 +22,16 @@ function Clear-NgcompassCache {
     }
 }
 
+function Convert-BytesToMegabytes {
+    param([Nullable[long]]$Bytes)
+
+    if ($null -eq $Bytes -or $Bytes -le 0) {
+        return $null
+    }
+
+    return [math]::Round($Bytes / 1MB, 1)
+}
+
 function Invoke-NgcompassAnalysis {
     param(
         [string]$ProjectName,
@@ -43,6 +53,9 @@ function Invoke-NgcompassAnalysis {
         -Wait `
         -PassThru
     $exitCode = $process.ExitCode
+    $peakWorkingSetMb = Convert-BytesToMegabytes -Bytes $process.PeakWorkingSet64
+    $peakPagedMemoryMb = Convert-BytesToMegabytes -Bytes $process.PeakPagedMemorySize64
+    $peakVirtualMemoryMb = Convert-BytesToMegabytes -Bytes $process.PeakVirtualMemorySize64
     $wallClock.Stop()
 
     $stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw } else { "" }
@@ -68,6 +81,9 @@ function Invoke-NgcompassAnalysis {
         run = $RunKind
         exitCode = $exitCode
         wallClockMs = [math]::Round($wallClock.Elapsed.TotalMilliseconds, 1)
+        peakWorkingSetMb = $peakWorkingSetMb
+        peakPagedMemoryMb = $peakPagedMemoryMb
+        peakVirtualMemoryMb = $peakVirtualMemoryMb
         reporterDurationMs = if ($summary) { [math]::Round([double]$summary.duration, 1) } else { $null }
         discoveredFiles = if ($summary) { $summary.discoveredFiles } else { $null }
         scannedFiles = if ($summary) { $summary.scannedFiles } else { $null }

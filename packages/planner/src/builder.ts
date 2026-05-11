@@ -30,6 +30,8 @@ import { warmupHashCache, calculateGlobalHash, calculateFileHash } from "./hashi
 import { groupTasksByFile } from "./utils.js";
 import { ComponentDependencyGraph } from "./component-graph.js";
 
+const PRECLASSIFY_BATCH_SIZE = 256;
+
 /**
  * Builds complete execution plan with indexes and optional caching.
  *
@@ -57,9 +59,8 @@ export const buildExecutionPlan = async (
         const fileTypeCache = new Map<string, FileType>();
 
         const errorCollector = new InfrastructureErrorCollector();
-        const cachedPlan = await tryLoadPlanFromCache(options, context, errorCollector);
 
-        if (!cachedPlan && options.cache) {
+        if (options.cache) {
             debug("planner", "Warming up hash cache from metadata index...");
             const start = performance.now();
             await warmupHashCache(
@@ -69,6 +70,8 @@ export const buildExecutionPlan = async (
             );
             debug("planner", `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
         }
+
+        const cachedPlan = await tryLoadPlanFromCache(options, context, errorCollector);
 
         // Build the component dependency graph once (O(N)) so task-builder can
         // resolve template/styles/spec paths in O(1) instead of per-file dir scans.
@@ -467,14 +470,17 @@ const preclassifyLogicFiles = async (
     debug("planner", `Level-2 classification: scanning ${candidates.length} unclassified .ts files for Angular decorators`);
     const t = performance.now();
 
-    await Promise.all(candidates.map(async (filePath) => {
-        try {
-            const content = await readFile(filePath, 'utf8');
-            fileTypeCache.set(filePath, ANGULAR_DECORATOR_RE.test(content) ? 'angular-class' : 'logic');
-        } catch {
-            fileTypeCache.set(filePath, 'logic');
-        }
-    }));
+    for (let i = 0; i < candidates.length; i += PRECLASSIFY_BATCH_SIZE) {
+        const batch = candidates.slice(i, i + PRECLASSIFY_BATCH_SIZE);
+        await Promise.all(batch.map(async (filePath) => {
+            try {
+                const content = await readFile(filePath, 'utf8');
+                fileTypeCache.set(filePath, ANGULAR_DECORATOR_RE.test(content) ? 'angular-class' : 'logic');
+            } catch {
+                fileTypeCache.set(filePath, 'logic');
+            }
+        }));
+    }
 
     debug("planner", `Level-2 classification complete in ${(performance.now() - t).toFixed(1)}ms — upgraded ${
         [...fileTypeCache.values()].filter(v => v === 'angular-class').length

@@ -34,6 +34,16 @@ export interface TypeAwareAnalysisContext extends AnalysisContext {
      * Performs an explicit initialization phase for type-aware resources.
      */
     readonly warmup: () => Promise<void>;
+    /**
+     * Releases references to the TypeScript Program, TypeChecker, ProjectContext,
+     * and baseline parsed artifacts after a type-aware chunk finishes.
+     */
+    readonly dispose: () => void;
+}
+
+export interface TypeAwareAnalysisContextOptions {
+    readonly buildProjectContext?: boolean;
+    readonly programRootFiles?: ReadonlyArray<string>;
 }
 
 /**
@@ -47,6 +57,7 @@ export const createTypeAwareAnalysisContext = (
     rootDir: string,
     files: ReadonlyArray<string> = [],
     parserOptions?: ParserOptions,
+    contextOptions: TypeAwareAnalysisContextOptions = {},
 ): TypeAwareAnalysisContext => {
     const baseContext = createAnalysisContext(rootDir);
 
@@ -75,7 +86,8 @@ export const createTypeAwareAnalysisContext = (
         // (test, demo, tool packages) whose ASTs we never need — loading them
         // all blows the heap.  TypeScript still resolves every import
         // transitively, so type accuracy is unaffected.
-        const tsFileRoots = files.filter(
+        const candidateRootFiles = contextOptions.programRootFiles ?? files;
+        const tsFileRoots = candidateRootFiles.filter(
             f => (f.endsWith('.ts') || f.endsWith('.tsx')) && !f.endsWith('.d.ts')
         );
         const programRoots = tsFileRoots.length > 0 ? tsFileRoots : parsedCommandLine.fileNames;
@@ -94,16 +106,18 @@ export const createTypeAwareAnalysisContext = (
         debug('engine', 'Could not find tsconfig.json; TypeChecker and ProjectContext will be unavailable.');
     }
 
-    const typeChecker = program?.getTypeChecker();
+    let typeChecker = program?.getTypeChecker();
 
     let projectContext: ProjectContext | undefined;
-    if (program) {
+    if (program && contextOptions.buildProjectContext !== false) {
         try {
             projectContext = buildProjectContext(program, files, rootDir);
         } catch (err) {
             const msg = err instanceof Error ? err.message : String(err);
             debug('engine', `ProjectContext build failed (non-fatal): ${msg}`);
         }
+    } else if (program) {
+        debug('engine', 'Skipping ProjectContext build for type-checker-only chunk');
     }
 
     return {
@@ -121,6 +135,12 @@ export const createTypeAwareAnalysisContext = (
 
         warmup: async (): Promise<void> => {
             debug('engine', `Type-aware context ready: ${program ? `ts.Program with ${program.getSourceFiles().length} source files` : 'no tsconfig found, TypeChecker unavailable'}`);
+        },
+        dispose: (): void => {
+            projectContext = undefined;
+            typeChecker = undefined;
+            program = undefined;
+            baseContext.dispose();
         },
     };
 };
