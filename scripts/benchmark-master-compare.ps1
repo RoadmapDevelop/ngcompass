@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectPath,
 
-    [int]$Iterations = 10,
+    [int]$Iterations = 5,
 
     [string]$PublishedPackage = "ngcompass",
 
@@ -10,18 +10,11 @@ param(
 
     [string[]]$AnalyzeArgs = @("--quiet", "--format", "json"),
 
-    [string[]]$LocalSpeedArgs = @(
-        "--max-workers", "4",
-        "--type-aware-concurrency", "2",
-        "--type-aware-file-concurrency", "4",
-        "--type-aware-chunk-size", "500",
-        "--type-aware-isolation", "off",
-        "--type-aware-chunk-strategy", "simple"
-    ),
-
     [switch]$ClearCacheBeforeEachRun,
 
-    [string]$OutputDirectory = (Join-Path (Get-Location) "benchmark-compare")
+    [string]$RequiredBranch = "master",
+
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot "benchmark-compare")
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +24,26 @@ function Resolve-ProjectPath {
 
     $resolved = Resolve-Path -LiteralPath $Path -ErrorAction Stop
     return $resolved.ProviderPath
+}
+
+function Assert-RequiredBranch {
+    param([string]$Branch)
+
+    if ([string]::IsNullOrWhiteSpace($Branch)) {
+        return
+    }
+
+    $repoRoot = Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..") -ErrorAction Stop
+    $repoRootPath = $repoRoot.ProviderPath
+    $currentBranch = (& git -C $repoRootPath branch --show-current 2>$null).Trim()
+
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($currentBranch)) {
+        throw "Unable to determine the current Git branch for $repoRootPath."
+    }
+
+    if ($currentBranch -ne $Branch) {
+        throw "This benchmark must be run from branch '$Branch'. Current branch is '$currentBranch'."
+    }
 }
 
 function Clear-NgcompassCache {
@@ -120,8 +133,8 @@ function Invoke-AnalyzeRun {
         [string]$WorkingDirectory
     )
 
-    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-compare-" + [Guid]::NewGuid().ToString("N") + ".out")
-    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-compare-" + [Guid]::NewGuid().ToString("N") + ".err")
+    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-master-compare-" + [Guid]::NewGuid().ToString("N") + ".out")
+    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-master-compare-" + [Guid]::NewGuid().ToString("N") + ".err")
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
 
     $process = Start-Process `
@@ -179,31 +192,34 @@ if ($Iterations -lt 1) {
     throw "Iterations must be >= 1."
 }
 
+Assert-RequiredBranch -Branch $RequiredBranch
+
 $project = Resolve-ProjectPath -Path $ProjectPath
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$jsonPath = Join-Path $OutputDirectory "ngcompass-version-compare-$timestamp.json"
-$csvPath = Join-Path $OutputDirectory "ngcompass-version-compare-$timestamp.csv"
+$jsonPath = Join-Path $OutputDirectory "ngcompass-master-compare-$timestamp.json"
+$csvPath = Join-Path $OutputDirectory "ngcompass-master-compare-$timestamp.csv"
 
-$baseAnalyzeArgs = @("analyze") + $AnalyzeArgs + "--force"
+$analyzeCommandArgs = @("analyze") + $AnalyzeArgs + "--force"
 
 $publishedCommand = Resolve-CommandPath -Command "npx"
 $localCommandPath = Resolve-CommandPath -Command $LocalCommand
-$publishedArgs = @("--yes", $PublishedPackage) + $baseAnalyzeArgs
-$localArgs = $baseAnalyzeArgs + $LocalSpeedArgs
+$publishedArgs = @("--yes", $PublishedPackage) + $analyzeCommandArgs
+$localArgs = $analyzeCommandArgs
 
 $results = New-Object System.Collections.Generic.List[object]
 
 Write-Host "Project: $project"
 Write-Host "Iterations: $Iterations"
+Write-Host "Required branch: $RequiredBranch"
 Write-Host "Published: $publishedCommand $($publishedArgs -join ' ')"
-Write-Host "Local: $localCommandPath $($localArgs -join ' ')"
-Write-Host "Execution: sequential, published then local for each iteration"
+Write-Host "Local master: $localCommandPath $($localArgs -join ' ')"
+Write-Host "Execution: sequential, published then local master for each iteration"
 Write-Host ""
 
 for ($i = 1; $i -le $Iterations; $i++) {
-    foreach ($target in @("published", "local")) {
+    foreach ($target in @("published", "local-master")) {
         if ($ClearCacheBeforeEachRun) {
             Clear-NgcompassCache -Path $project
         }
@@ -212,8 +228,8 @@ for ($i = 1; $i -le $Iterations; $i++) {
             Write-Host "[$i/$Iterations] published..."
             $results.Add((Invoke-AnalyzeRun -Version "published" -Iteration $i -FilePath $publishedCommand -ArgumentList $publishedArgs -WorkingDirectory $project))
         } else {
-            Write-Host "[$i/$Iterations] local..."
-            $results.Add((Invoke-AnalyzeRun -Version "local" -Iteration $i -FilePath $localCommandPath -ArgumentList $localArgs -WorkingDirectory $project))
+            Write-Host "[$i/$Iterations] local master..."
+            $results.Add((Invoke-AnalyzeRun -Version "local-master" -Iteration $i -FilePath $localCommandPath -ArgumentList $localArgs -WorkingDirectory $project))
         }
 
         $last = $results[$results.Count - 1]
@@ -223,19 +239,19 @@ for ($i = 1; $i -le $Iterations; $i++) {
 
 $summary = @(
     Get-Stats -Rows $results.ToArray() -Version "published"
-    Get-Stats -Rows $results.ToArray() -Version "local"
+    Get-Stats -Rows $results.ToArray() -Version "local-master"
 )
 
 $payload = [pscustomobject]@{
     measuredAt = (Get-Date).ToString("o")
     projectPath = $project
     iterations = $Iterations
+    requiredBranch = $RequiredBranch
     forceRerun = $true
     clearCacheBeforeEachRun = [bool]$ClearCacheBeforeEachRun
     publishedPackage = $PublishedPackage
     localCommand = $LocalCommand
     analyzeArgs = $AnalyzeArgs
-    localSpeedArgs = $LocalSpeedArgs
     summary = $summary
     results = $results
 }

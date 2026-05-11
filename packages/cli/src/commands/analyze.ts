@@ -1,4 +1,4 @@
-﻿import { Command } from 'commander';
+﻿import { Command, Option } from 'commander';
 import path from 'node:path';
 import pc from 'picocolors';
 import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult, type ParseError, type ParserOptions } from '@ngcompass/common';
@@ -14,6 +14,50 @@ import { ExecutionPlanOutput, buildExecutionPlan } from '@ngcompass/planner';
 import { scan } from '@ngcompass/scanner';
 import { resolveRules, getEnabledRules } from '@ngcompass/rules';
 import { resolveConfig } from '@ngcompass/config';
+type PerformanceMode = 'eco' | 'balanced' | 'turbo';
+type TypeAwareIsolation = 'auto' | 'process' | 'off';
+type TypeAwareChunkStrategy = 'dependency' | 'simple';
+
+interface PerformanceModeOptions {
+    typeAwareChunkSize: number;
+    typeAwareIsolation: TypeAwareIsolation;
+    typeAwareChunkStrategy: TypeAwareChunkStrategy;
+    typeAwareConcurrency: number;
+    typeAwareFileConcurrency: number;
+}
+
+interface EffectivePerformanceOptions extends PerformanceModeOptions {
+    maxWorkers: number;
+}
+
+const PERFORMANCE_MODE_PRESETS: Record<PerformanceMode, PerformanceModeOptions> = {
+    eco: {
+        typeAwareConcurrency: 1,
+        typeAwareFileConcurrency: 1,
+        typeAwareChunkSize: 100,
+        typeAwareIsolation: 'auto',
+        typeAwareChunkStrategy: 'dependency',
+    },
+    balanced: {
+        typeAwareConcurrency: 2,
+        typeAwareFileConcurrency: 2,
+        typeAwareChunkSize: 300,
+        typeAwareIsolation: 'auto',
+        typeAwareChunkStrategy: 'simple',
+    },
+    turbo: {
+        typeAwareConcurrency: 2,
+        typeAwareFileConcurrency: 4,
+        typeAwareChunkSize: 500,
+        typeAwareIsolation: 'off',
+        typeAwareChunkStrategy: 'simple',
+    },
+};
+
+const PERFORMANCE_MODES = Object.keys(PERFORMANCE_MODE_PRESETS) as PerformanceMode[];
+const TYPE_AWARE_ISOLATION_MODES: TypeAwareIsolation[] = ['auto', 'process', 'off'];
+const TYPE_AWARE_CHUNK_STRATEGIES: TypeAwareChunkStrategy[] = ['dependency', 'simple'];
+
 interface AnalyzeOptions {
     profile?: string;
     force?: boolean;
@@ -24,13 +68,81 @@ interface AnalyzeOptions {
     recommendation?: boolean;
     rule?: string;
     output?: string;
+    mode?: string;
     maxWorkers?: string;
     typeAwareChunkSize?: string;
-    typeAwareIsolation?: 'auto' | 'process' | 'off';
-    typeAwareChunkStrategy?: 'dependency' | 'simple';
+    typeAwareIsolation?: string;
+    typeAwareChunkStrategy?: string;
     typeAwareConcurrency?: string;
     typeAwareFileConcurrency?: string;
     skipTypeCheck?: boolean;
+}
+
+function parsePositiveIntegerOption(value: string | undefined, optionName: string): number | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    const parsed = Number(value);
+    if (!Number.isInteger(parsed) || parsed < 1) {
+        throw new Error(`${optionName} must be a positive integer.`);
+    }
+
+    return parsed;
+}
+
+function parsePerformanceMode(value: string | undefined): PerformanceMode {
+    const mode = value ?? 'balanced';
+    if (!PERFORMANCE_MODES.includes(mode as PerformanceMode)) {
+        throw new Error(`Invalid performance mode "${mode}". Expected one of: ${PERFORMANCE_MODES.join(', ')}.`);
+    }
+
+    return mode as PerformanceMode;
+}
+
+function parseTypeAwareIsolation(value: string | undefined): TypeAwareIsolation | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (!TYPE_AWARE_ISOLATION_MODES.includes(value as TypeAwareIsolation)) {
+        throw new Error(`Invalid --type-aware-isolation "${value}". Expected one of: ${TYPE_AWARE_ISOLATION_MODES.join(', ')}.`);
+    }
+
+    return value as TypeAwareIsolation;
+}
+
+function parseTypeAwareChunkStrategy(value: string | undefined): TypeAwareChunkStrategy | undefined {
+    if (value === undefined) {
+        return undefined;
+    }
+
+    if (!TYPE_AWARE_CHUNK_STRATEGIES.includes(value as TypeAwareChunkStrategy)) {
+        throw new Error(`Invalid --type-aware-chunk-strategy "${value}". Expected one of: ${TYPE_AWARE_CHUNK_STRATEGIES.join(', ')}.`);
+    }
+
+    return value as TypeAwareChunkStrategy;
+}
+
+function resolvePerformanceOptions(
+    options: AnalyzeOptions,
+    config: Pick<NormalizedAnalyzerConfig, 'maxWorkers'>,
+): EffectivePerformanceOptions {
+    const mode = parsePerformanceMode(options.mode);
+    const preset = PERFORMANCE_MODE_PRESETS[mode];
+    const cliMaxWorkers = parsePositiveIntegerOption(options.maxWorkers, '--max-workers');
+    const cliChunkSize = parsePositiveIntegerOption(options.typeAwareChunkSize, '--type-aware-chunk-size');
+    const cliTypeAwareConcurrency = parsePositiveIntegerOption(options.typeAwareConcurrency, '--type-aware-concurrency');
+    const cliTypeAwareFileConcurrency = parsePositiveIntegerOption(options.typeAwareFileConcurrency, '--type-aware-file-concurrency');
+
+    return {
+        maxWorkers: cliMaxWorkers ?? config.maxWorkers,
+        typeAwareChunkSize: cliChunkSize ?? preset.typeAwareChunkSize,
+        typeAwareConcurrency: cliTypeAwareConcurrency ?? preset.typeAwareConcurrency,
+        typeAwareFileConcurrency: cliTypeAwareFileConcurrency ?? preset.typeAwareFileConcurrency,
+        typeAwareIsolation: parseTypeAwareIsolation(options.typeAwareIsolation) ?? preset.typeAwareIsolation,
+        typeAwareChunkStrategy: parseTypeAwareChunkStrategy(options.typeAwareChunkStrategy) ?? preset.typeAwareChunkStrategy,
+    };
 }
 
 function normalizeReporterFormat(format: ReporterFormat | undefined): ReporterFormat {
@@ -103,6 +215,14 @@ function pluralise(count: number, singular: string): string {
     return `${count.toLocaleString()} ${singular}${count === 1 ? '' : 's'}`;
 }
 
+function getAnalyzeMode(options: AnalyzeOptions): string {
+    return options.mode ?? 'balanced';
+}
+
+function formatAnalysisProgressMessage(mode: string, completed: number, total: number): string {
+    return `Running analysis in ${mode} mode: ${completed.toLocaleString()}/${total.toLocaleString()} checks complete...`;
+}
+
 function createFileProgressLogger(plan: ExecutionPlanOutput, writeLine: (line: string) => void, cwd: string) {
     const expectedTasksByFile = new Map<string, number>();
     const executableTaskFiles = plan.tasks
@@ -162,12 +282,13 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
         .option('--no-recommendation', 'Suppress fix recommendations from output')
         .option('--output <path>', 'Output path for UI reports (default: ngcompass-report.html)')
         .option('--rule <id>', 'Run only one rule (useful for debugging or focused checks)')
+        .option('--mode <mode>', 'Performance mode: eco | balanced | turbo (default: balanced)', 'balanced')
         .option('--max-workers <n>', 'Cap the number of worker threads (lower = less memory, e.g. --max-workers 2)')
-        .option('--type-aware-chunk-size <n>', 'Files per type-aware chunk (default 100; lower = less peak memory)')
-        .option('--type-aware-concurrency <n>', 'Run multiple type-aware chunks at once (default 1; higher = faster but more memory)')
-        .option('--type-aware-file-concurrency <n>', 'Run multiple files concurrently inside each type-aware chunk (default 1)')
-        .option('--type-aware-isolation <mode>', 'Type-aware execution isolation: auto | process | off (default auto)')
-        .option('--type-aware-chunk-strategy <mode>', 'Type-aware chunk ordering: dependency | simple (default dependency)')
+        .addOption(new Option('--type-aware-chunk-size <n>', 'Files per type-aware chunk').hideHelp())
+        .addOption(new Option('--type-aware-concurrency <n>', 'Concurrent type-aware chunks').hideHelp())
+        .addOption(new Option('--type-aware-file-concurrency <n>', 'Concurrent files per type-aware chunk').hideHelp())
+        .addOption(new Option('--type-aware-isolation <mode>', 'Type-aware isolation: auto | process | off').hideHelp())
+        .addOption(new Option('--type-aware-chunk-strategy <mode>', 'Type-aware chunk ordering: dependency | simple').hideHelp())
         .option('--skip-type-check', 'Skip rules that require the TypeScript type checker (fastest, lowest memory)')
         .action(async (options: AnalyzeOptions) => {
             const startTime = performance.now();
@@ -187,6 +308,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!configResult) { exitCode = 1; return; }
 
                 const { config } = configResult;
+                const performanceOptions = resolvePerformanceOptions(options, config);
                 activeCache = createRuntimeCache(config, process.cwd());
                 const reporterFormat = resolveReporterFormat(options.format, config.outputFormat);
                 reporter = getReporter(reporterFormat, {
@@ -205,15 +327,20 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!enabledRules) { exitCode = 1; return; }
 
                 // 4. Build Execution Plan
-                const plan = await buildPlanStep(files, enabledRules, activeCache, options, reporter, config);
+                const plan = await buildPlanStep(files, enabledRules, activeCache, options, reporter, config, performanceOptions.maxWorkers);
                 if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
                 const progressStream = (reporterFormat === 'console' ? process.stdout : process.stderr) as NodeJS.WriteStream;
                 const spinner = new Spinner(progressStream);
-                spinner.start('Running analysis...');
+                const totalChecks = plan.tasks.length + (plan.skippedTasks?.length ?? 0);
+                const mode = getAnalyzeMode(options);
+                spinner.start(formatAnalysisProgressMessage(mode, 0, totalChecks));
                 const logFileProgress = createFileProgressLogger(plan, line => spinner.writeLine(line), process.cwd());
-                const analysis = await runAnalysisStep(plan, activeCache, options, reporter, files, config, undefined, config.maxWorkers, logFileProgress);
+                const updateAnalysisProgress = (completed: number, total: number) => {
+                    spinner.update(formatAnalysisProgressMessage(mode, completed, total));
+                };
+                const analysis = await runAnalysisStep(plan, activeCache, performanceOptions, options, reporter, files, config, updateAnalysisProgress, logFileProgress);
                 spinner.stop();
                 if (!analysis) { exitCode = 1; return; }
 
@@ -381,7 +508,8 @@ async function buildPlanStep(
     cache: CacheContext | undefined,
     options: AnalyzeOptions,
     reporter: Reporter,
-    config: NormalizedAnalyzerConfig
+    config: NormalizedAnalyzerConfig,
+    maxWorkers: number
 ): Promise<ExecutionPlanOutput | null> {
     const tStart = performance.now();
     reporter.step('❯ Planning analysis...');
@@ -393,7 +521,7 @@ async function buildPlanStep(
         cache,
         debug: options.debug,
         incremental: options.force ? { forceRerun: true } : undefined,
-        workerCount: config.maxWorkers,
+        workerCount: maxWorkers,
         overrides: config.overrides,
     });
 
@@ -415,12 +543,12 @@ async function buildPlanStep(
 async function runAnalysisStep(
     plan: ExecutionPlanOutput,
     cache: CacheContext | undefined,
+    performanceOptions: EffectivePerformanceOptions,
     options: AnalyzeOptions,
     reporter: Reporter,
     files?: ReadonlyArray<string>,
     config?: NormalizedAnalyzerConfig,
     onProgress?: (completed: number, total: number) => void,
-    _workerCountForCompatibility?: number,
     onFileProgress?: (event: AnalysisFileProgress) => void,
 ): Promise<AnalysisResult | null> {
     const tStart = performance.now();
@@ -428,21 +556,17 @@ async function runAnalysisStep(
 
     configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
-    const cliMaxWorkers = options.maxWorkers ? parseInt(options.maxWorkers, 10) : undefined;
-    const cliChunkSize = options.typeAwareChunkSize ? parseInt(options.typeAwareChunkSize, 10) : undefined;
-    const cliTypeAwareConcurrency = options.typeAwareConcurrency ? parseInt(options.typeAwareConcurrency, 10) : undefined;
-    const cliTypeAwareFileConcurrency = options.typeAwareFileConcurrency ? parseInt(options.typeAwareFileConcurrency, 10) : undefined;
     const result = await runAnalysis(plan, {
         rootDir: process.cwd(),
         cache,
         debug: options.debug,
         files,
-        maxWorkers: cliMaxWorkers ?? config?.maxWorkers,
-        typeAwareChunkSize: cliChunkSize,
-        typeAwareConcurrency: cliTypeAwareConcurrency,
-        typeAwareFileConcurrency: cliTypeAwareFileConcurrency,
-        typeAwareIsolation: options.typeAwareIsolation,
-        typeAwareChunkStrategy: options.typeAwareChunkStrategy,
+        maxWorkers: performanceOptions.maxWorkers,
+        typeAwareChunkSize: performanceOptions.typeAwareChunkSize,
+        typeAwareConcurrency: performanceOptions.typeAwareConcurrency,
+        typeAwareFileConcurrency: performanceOptions.typeAwareFileConcurrency,
+        typeAwareIsolation: performanceOptions.typeAwareIsolation,
+        typeAwareChunkStrategy: performanceOptions.typeAwareChunkStrategy,
         skipTypeCheck: options.skipTypeCheck,
         parserOptions: config?.parserOptions,
         onProgress,

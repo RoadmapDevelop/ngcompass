@@ -37,9 +37,9 @@ const LARGE_TYPE_AWARE_FILE_COUNT = 1000;
 const LARGE_TYPE_AWARE_CHUNK_SIZE = 50;
 const MAX_FULL_ANALYSIS_CACHE_RESULTS = 20_000;
 const MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE = 10;
-const ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE = 1200;
-const HIGH_HEAP_PRESSURE_RATIO = 0.80;
-const CRITICAL_HEAP_PRESSURE_RATIO = 0.90;
+const ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE = 2000;
+const HIGH_HEAP_PRESSURE_RATIO = 0.88;
+const CRITICAL_HEAP_PRESSURE_RATIO = 0.94;
 const LOW_HEAP_PRESSURE_RATIO = 0.35;
 const ADAPTIVE_GROWTH_STREAK = 3;
 const ISOLATED_TYPE_AWARE_FILE_COUNT = 500;
@@ -568,23 +568,23 @@ const getAdaptiveTypeAwareChunkCap = (): number => {
     const cpuCount = os.cpus().length;
 
     let cap: number;
-    if (freeGb < 2 || totalGb < 4) {
-        cap = 75;
-    } else if (freeGb < 4 || totalGb < 8) {
-        cap = 150;
-    } else if (freeGb < 8 || totalGb < 16) {
-        cap = 350;
-    } else if (freeGb < 16 || totalGb < 32) {
+    if (freeGb < 1.5 || totalGb < 4) {
+        cap = 100;
+    } else if (freeGb < 3 || totalGb < 8) {
+        cap = 300;
+    } else if (freeGb < 6 || totalGb < 16) {
         cap = 650;
-    } else {
+    } else if (freeGb < 12 || totalGb < 32) {
         cap = 1000;
+    } else {
+        cap = 1500;
     }
 
-    if (cpuCount <= 4) cap = Math.min(cap, 250);
+    if (cpuCount <= 4) cap = Math.min(cap, 500);
     else if (cpuCount >= 12) cap = Math.min(ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, Math.round(cap * 1.2));
 
-    if (heapLimitGb < 2) cap = Math.min(cap, 100);
-    else if (heapLimitGb < 4) cap = Math.min(cap, 350);
+    if (heapLimitGb < 2) cap = Math.min(cap, 250);
+    else if (heapLimitGb < 4) cap = Math.min(cap, 650);
 
     cap = Math.max(MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, Math.min(ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, cap));
     debug(
@@ -611,7 +611,7 @@ const getNextAdaptiveChunkSize = (
     }
 
     if (pressure >= HIGH_HEAP_PRESSURE_RATIO && current > MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE) {
-        const next = Math.max(MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, current - 10);
+        const next = Math.max(MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, Math.floor(current * 0.8));
         debug("engine", `High heap pressure after type-aware chunk (${Math.round(pressure * 100)}% of V8 heap limit); reducing chunk size to ${next}`);
         return { chunkSize: next, lowHeapStreak: 0 };
     }
@@ -622,7 +622,7 @@ const getNextAdaptiveChunkSize = (
             return { chunkSize: current, lowHeapStreak: nextLowHeapStreak };
         }
 
-        const next = Math.min(maxChunkSize, current + 10);
+        const next = Math.min(maxChunkSize, current + Math.max(10, Math.floor(current * 0.1)));
         debug("engine", `Sustained low heap pressure after type-aware chunk (${Math.round(pressure * 100)}% of V8 heap limit); increasing chunk size to ${next}`);
         return { chunkSize: next, lowHeapStreak: 0 };
     }

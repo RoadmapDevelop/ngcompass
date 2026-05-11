@@ -2,26 +2,17 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$ProjectPath,
 
-    [int]$Iterations = 10,
+    [int]$Iterations = 5,
 
-    [string]$PublishedPackage = "ngcompass",
+    [string]$Command = "ngcompass",
 
-    [string]$LocalCommand = "ngcompass",
+    [string[]]$Modes = @("eco", "balanced", "turbo"),
 
     [string[]]$AnalyzeArgs = @("--quiet", "--format", "json"),
 
-    [string[]]$LocalSpeedArgs = @(
-        "--max-workers", "4",
-        "--type-aware-concurrency", "2",
-        "--type-aware-file-concurrency", "4",
-        "--type-aware-chunk-size", "500",
-        "--type-aware-isolation", "off",
-        "--type-aware-chunk-strategy", "simple"
-    ),
-
     [switch]$ClearCacheBeforeEachRun,
 
-    [string]$OutputDirectory = (Join-Path (Get-Location) "benchmark-compare")
+    [string]$OutputDirectory = (Join-Path $PSScriptRoot "benchmark-compare")
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,60 +59,73 @@ function Resolve-CommandPath {
     return $path
 }
 
+function Get-Median {
+    param([double[]]$Values)
+
+    $sorted = @($Values | Sort-Object)
+    if ($sorted.Count -eq 0) {
+        return $null
+    }
+
+    if ($sorted.Count % 2 -eq 1) {
+        return $sorted[[math]::Floor($sorted.Count / 2)]
+    }
+
+    return ($sorted[$sorted.Count / 2 - 1] + $sorted[$sorted.Count / 2]) / 2
+}
+
 function Get-Stats {
     param(
         [object[]]$Rows,
-        [string]$Version
+        [string]$Mode
     )
 
-    $items = @($Rows | Where-Object { $_.version -eq $Version })
+    $items = @($Rows | Where-Object { $_.mode -eq $Mode })
     $successful = @($items | Where-Object { $_.exitCode -eq 0 -or $_.summaryParsed })
-    $times = @($successful | ForEach-Object { [double]$_.wallClockMs } | Sort-Object)
+    $times = @($successful | ForEach-Object { [double]$_.wallClockMs })
+    $reporterTimes = @($successful | Where-Object { $null -ne $_.reporterDurationMs } | ForEach-Object { [double]$_.reporterDurationMs })
+    $memoryValues = @($successful | Where-Object { $null -ne $_.peakWorkingSetMb } | ForEach-Object { [double]$_.peakWorkingSetMb })
 
     if ($times.Count -eq 0) {
         return [pscustomobject]@{
-            version = $Version
+            mode = $Mode
             runs = $items.Count
             successfulRuns = 0
             averageMs = $null
             medianMs = $null
             minMs = $null
             maxMs = $null
+            averageReporterMs = $null
+            medianReporterMs = $null
             averagePeakWorkingSetMb = $null
         }
     }
 
-    $median = if ($times.Count % 2 -eq 1) {
-        $times[[math]::Floor($times.Count / 2)]
-    } else {
-        ($times[$times.Count / 2 - 1] + $times[$times.Count / 2]) / 2
-    }
-
-    $memoryValues = @($successful | Where-Object { $null -ne $_.peakWorkingSetMb } | ForEach-Object { [double]$_.peakWorkingSetMb })
-
     return [pscustomobject]@{
-        version = $Version
+        mode = $Mode
         runs = $items.Count
         successfulRuns = $successful.Count
         averageMs = [math]::Round(($times | Measure-Object -Average).Average, 1)
-        medianMs = [math]::Round($median, 1)
+        medianMs = [math]::Round((Get-Median -Values $times), 1)
         minMs = [math]::Round(($times | Measure-Object -Minimum).Minimum, 1)
         maxMs = [math]::Round(($times | Measure-Object -Maximum).Maximum, 1)
+        averageReporterMs = if ($reporterTimes.Count -gt 0) { [math]::Round(($reporterTimes | Measure-Object -Average).Average, 1) } else { $null }
+        medianReporterMs = if ($reporterTimes.Count -gt 0) { [math]::Round((Get-Median -Values $reporterTimes), 1) } else { $null }
         averagePeakWorkingSetMb = if ($memoryValues.Count -gt 0) { [math]::Round(($memoryValues | Measure-Object -Average).Average, 1) } else { $null }
     }
 }
 
 function Invoke-AnalyzeRun {
     param(
-        [string]$Version,
+        [string]$Mode,
         [int]$Iteration,
         [string]$FilePath,
         [string[]]$ArgumentList,
         [string]$WorkingDirectory
     )
 
-    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-compare-" + [Guid]::NewGuid().ToString("N") + ".out")
-    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-compare-" + [Guid]::NewGuid().ToString("N") + ".err")
+    $stdoutPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-mode-compare-" + [Guid]::NewGuid().ToString("N") + ".out")
+    $stderrPath = Join-Path ([System.IO.Path]::GetTempPath()) ("ngcompass-mode-compare-" + [Guid]::NewGuid().ToString("N") + ".err")
     $timer = [System.Diagnostics.Stopwatch]::StartNew()
 
     $process = Start-Process `
@@ -154,7 +158,7 @@ function Invoke-AnalyzeRun {
     }
 
     [pscustomobject]@{
-        version = $Version
+        mode = $Mode
         iteration = $Iteration
         command = $FilePath
         arguments = ($ArgumentList -join " ")
@@ -179,52 +183,57 @@ if ($Iterations -lt 1) {
     throw "Iterations must be >= 1."
 }
 
+$validModes = @("eco", "balanced", "turbo")
+foreach ($mode in $Modes) {
+    if ($validModes -notcontains $mode) {
+        throw "Invalid mode '$mode'. Expected one of: $($validModes -join ', ')."
+    }
+}
+
 $project = Resolve-ProjectPath -Path $ProjectPath
+$commandPath = Resolve-CommandPath -Command $Command
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-$jsonPath = Join-Path $OutputDirectory "ngcompass-version-compare-$timestamp.json"
-$csvPath = Join-Path $OutputDirectory "ngcompass-version-compare-$timestamp.csv"
+$jsonPath = Join-Path $OutputDirectory "ngcompass-mode-compare-$timestamp.json"
+$csvPath = Join-Path $OutputDirectory "ngcompass-mode-compare-$timestamp.csv"
 
 $baseAnalyzeArgs = @("analyze") + $AnalyzeArgs + "--force"
-
-$publishedCommand = Resolve-CommandPath -Command "npx"
-$localCommandPath = Resolve-CommandPath -Command $LocalCommand
-$publishedArgs = @("--yes", $PublishedPackage) + $baseAnalyzeArgs
-$localArgs = $baseAnalyzeArgs + $LocalSpeedArgs
-
 $results = New-Object System.Collections.Generic.List[object]
 
 Write-Host "Project: $project"
 Write-Host "Iterations: $Iterations"
-Write-Host "Published: $publishedCommand $($publishedArgs -join ' ')"
-Write-Host "Local: $localCommandPath $($localArgs -join ' ')"
-Write-Host "Execution: sequential, published then local for each iteration"
+Write-Host "Command: $commandPath"
+Write-Host "Modes: $($Modes -join ', ')"
+Write-Host "Base args: $($baseAnalyzeArgs -join ' ')"
+Write-Host "Execution: sequential, eco then balanced then turbo for each iteration"
 Write-Host ""
 
 for ($i = 1; $i -le $Iterations; $i++) {
-    foreach ($target in @("published", "local")) {
+    foreach ($mode in $Modes) {
         if ($ClearCacheBeforeEachRun) {
             Clear-NgcompassCache -Path $project
         }
 
-        if ($target -eq "published") {
-            Write-Host "[$i/$Iterations] published..."
-            $results.Add((Invoke-AnalyzeRun -Version "published" -Iteration $i -FilePath $publishedCommand -ArgumentList $publishedArgs -WorkingDirectory $project))
-        } else {
-            Write-Host "[$i/$Iterations] local..."
-            $results.Add((Invoke-AnalyzeRun -Version "local" -Iteration $i -FilePath $localCommandPath -ArgumentList $localArgs -WorkingDirectory $project))
-        }
+        $argsForMode = $baseAnalyzeArgs + @("--mode", $mode)
+        Write-Host "[$i/$Iterations] $mode..."
+        $results.Add((Invoke-AnalyzeRun -Mode $mode -Iteration $i -FilePath $commandPath -ArgumentList $argsForMode -WorkingDirectory $project))
 
         $last = $results[$results.Count - 1]
-        Write-Host ("  {0}: {1}ms exit={2}" -f $last.version, $last.wallClockMs, $last.exitCode)
+        Write-Host ("  {0}: {1}ms reporter={2}ms exit={3}" -f $last.mode, $last.wallClockMs, $last.reporterDurationMs, $last.exitCode)
     }
 }
 
-$summary = @(
-    Get-Stats -Rows $results.ToArray() -Version "published"
-    Get-Stats -Rows $results.ToArray() -Version "local"
-)
+$summary = @($Modes | ForEach-Object { Get-Stats -Rows $results.ToArray() -Mode $_ })
+$baseline = $summary | Where-Object { $_.mode -eq "eco" } | Select-Object -First 1
+if ($null -ne $baseline -and $null -ne $baseline.medianMs -and $baseline.medianMs -gt 0) {
+    $summary = @($summary | ForEach-Object {
+        $deltaMs = if ($null -ne $_.medianMs) { [math]::Round($_.medianMs - $baseline.medianMs, 1) } else { $null }
+        $speedupPct = if ($null -ne $_.medianMs) { [math]::Round((($baseline.medianMs - $_.medianMs) / $baseline.medianMs) * 100, 1) } else { $null }
+        $_ | Add-Member -NotePropertyName medianDeltaVsEcoMs -NotePropertyValue $deltaMs -PassThru |
+            Add-Member -NotePropertyName medianSpeedupVsEcoPct -NotePropertyValue $speedupPct -PassThru
+    })
+}
 
 $payload = [pscustomobject]@{
     measuredAt = (Get-Date).ToString("o")
@@ -232,10 +241,10 @@ $payload = [pscustomobject]@{
     iterations = $Iterations
     forceRerun = $true
     clearCacheBeforeEachRun = [bool]$ClearCacheBeforeEachRun
-    publishedPackage = $PublishedPackage
-    localCommand = $LocalCommand
+    command = $Command
+    resolvedCommand = $commandPath
+    modes = $Modes
     analyzeArgs = $AnalyzeArgs
-    localSpeedArgs = $LocalSpeedArgs
     summary = $summary
     results = $results
 }

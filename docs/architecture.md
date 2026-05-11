@@ -649,7 +649,48 @@ The factory also builds component/template cross references when project context
 - Signal-like members.
 - Template references.
 
-## 11. Single-Pass Analysis Engine
+## 11. Performance Modes
+
+The `analyze` command exposes a single `--mode` flag that selects a named performance preset. Individual type-aware tuning flags still exist for power users but are hidden from `--help` to keep the interface simple. When an individual flag is passed it takes precedence over the active mode.
+
+### 11.1 Mode Presets
+
+| Setting | `eco` | `balanced` (default) | `turbo` |
+|---|---|---|---|
+| `typeAwareConcurrency` | 1 | 2 | 2 |
+| `typeAwareFileConcurrency` | 1 | 2 | 4 |
+| `typeAwareChunkSize` | 100 | 300 | 500 |
+| `typeAwareIsolation` | auto | auto | off |
+| `typeAwareChunkStrategy` | dependency | simple | simple |
+
+**eco** minimizes memory by processing one type-aware chunk at a time with the safest chunk ordering strategy. It is the right choice for CI environments with limited RAM or for machines running many parallel jobs.
+
+**balanced** is the default. It doubles chunk and file concurrency and switches to the simpler chunk strategy, which skips the import-graph pre-pass and produces meaningfully faster cold runs without significant memory overhead on typical developer machines.
+
+**turbo** maximizes throughput by using larger chunks, more in-process file concurrency, and disabling process isolation entirely. It is suited for fast developer machines where memory is not a concern.
+
+### 11.2 Priority Chain
+
+```
+explicit type-aware flag  >  --mode preset  >  engine default
+```
+
+This means `--mode turbo --type-aware-file-concurrency 8` uses the turbo preset for every setting except `typeAwareFileConcurrency`, which is overridden to 8.
+
+`maxWorkers` keeps the existing configuration precedence: explicit `--max-workers` wins over the normalized config value.
+
+### 11.3 Usage
+
+```sh
+ngcompass analyze                    # balanced (default)
+ngcompass analyze --mode eco         # low memory, CI-friendly
+ngcompass analyze --mode turbo       # maximum speed on capable machines
+
+# Power-user override: turbo preset with a custom chunk size
+ngcompass analyze --mode turbo --type-aware-chunk-size 800
+```
+
+## 12. Single-Pass Analysis Engine
 
 The single-pass engine is the high-throughput path for rule execution. It appears in `packages/engine/src/single-pass-engine.ts`.
 
@@ -713,7 +754,7 @@ The engine records:
 
 Budgets differ depending on whether a type checker is present.
 
-## 12. Worker Architecture
+## 13. Worker Architecture
 
 Worker execution is used for large sets of syntax-only tasks. Type-aware tasks remain on the main thread because they need a shared TypeScript `Program` and project context.
 
@@ -746,7 +787,7 @@ Workers are resolved from the `@ngcompass/rules/execution-worker` package path w
 
 The worker distribution algorithm keeps all tasks for the same file together. This prevents duplicate parsing and makes progress reporting file-oriented.
 
-## 13. AST and Parsing Architecture
+## 14. AST and Parsing Architecture
 
 `@ngcompass/ast` provides parsing, node streams, template analysis, and traversal helpers.
 
@@ -760,7 +801,7 @@ The worker distribution algorithm keeps all tasks for the same file together. Th
 
 The Angular HTML parser is configured with Angular block tokenization enabled. Template ASTs preserve `templateStartOffset`, so inline-template diagnostics can be mapped back to the correct line and column in the TypeScript file.
 
-## 14. Cache Architecture
+## 15. Cache Architecture
 
 The cache package provides multiple services over memory and disk drivers. Runtime cache is created from normalized config through `createRuntimeCache`.
 
@@ -833,7 +874,7 @@ If the full analysis cache is unavailable but per-task result cache entries exis
 
 The result cache buffers writes in memory during analysis. `setMany` records pending results, and `flush` drains them to disk. When the underlying driver supports bulk writes, all buffered results and metadata can be written in one batch. This reduces I/O overhead on large projects.
 
-## 15. Reporting Architecture
+## 16. Reporting Architecture
 
 Reporters are selected by CLI option or config output format.
 
@@ -878,7 +919,7 @@ The CLI decides the final exit code using:
 - `failOnSeverity: "warn"` with warnings.
 - Warning count greater than `maxWarnings`.
 
-## 16. Data Model Overview
+## 17. Data Model Overview
 
 ```mermaid
 erDiagram
@@ -909,7 +950,7 @@ erDiagram
 | `AnalysisResult` | common | Final aggregate output |
 | `ProjectContext` | common | Cross-file metadata for project-aware rules |
 
-## 17. Project Context and Cross-File Analysis
+## 18. Project Context and Cross-File Analysis
 
 Project context is constructed only for type-aware or project-context rules. It contains:
 
@@ -955,7 +996,7 @@ flowchart TB
 
 This enables rules to reason about architectural relationships without doing their own project-wide scanning.
 
-## 18. Error Handling and Resilience
+## 19. Error Handling and Resilience
 
 ngcompass uses explicit result objects and infrastructure error collection where possible.
 
@@ -990,7 +1031,7 @@ flowchart TD
     Recover --> Report
 ```
 
-## 19. Performance Model
+## 20. Performance Model
 
 The performance model is based on reducing repeated work at every layer.
 
@@ -1031,7 +1072,7 @@ On a warm run, ngcompass can short-circuit at multiple levels:
 
 The warm path can therefore avoid AST parsing and rule execution entirely when no relevant inputs changed.
 
-## 20. Extensibility Model
+## 21. Extensibility Model
 
 ### 20.1 Adding a Rule
 
@@ -1080,7 +1121,7 @@ The reporter is then added to `getReporter(format)`.
 
 The cache system is driver-oriented. A new storage backend should implement the async driver contract and then be wired into `createCacheContext`. Services such as `ResultCache`, `PlanCache`, and `FileCache` should remain stable and consume the driver abstraction.
 
-## 21. Deployment and Runtime Layout
+## 22. Deployment and Runtime Layout
 
 The CLI is built from `packages/cli/src/bin/ngcompass.ts` into `packages/cli/dist/cli.js` and `cli.cjs`. The package build uses `tsup`. At runtime, the CLI loads other workspace packages from their built `dist` outputs according to package exports and Node module resolution.
 
@@ -1102,7 +1143,7 @@ plans/
 results/
 ```
 
-## 22. Complete Analysis Pipeline Diagram
+## 23. Complete Analysis Pipeline Diagram
 
 ```mermaid
 flowchart TD
@@ -1147,7 +1188,7 @@ flowchart TD
     U --> V --> W --> X --> Y
 ```
 
-## 23. Summary
+## 24. Summary
 
 ngcompass is structured as a layered analysis platform. The CLI coordinates execution, but the architecture keeps discovery, configuration, planning, execution, caching, rules, AST parsing, and reporting independently testable. The most important internal abstraction is the task: a content-addressed rule execution unit that connects file/resource hashing, incremental caching, planner indexes, worker execution, and final reporting.
 

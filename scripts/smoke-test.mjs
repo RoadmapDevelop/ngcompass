@@ -151,7 +151,7 @@ const tests = [
         name: 'analyze --help → documents every flag',
         args: ['analyze', '--help'],
         exitCodes: [0],
-        stdout: [/--format/, /--compact/, /--quiet/, /--force/, /--skip-type-check/, /--max-workers/],
+        stdout: [/--format/, /--compact/, /--quiet/, /--force/, /--skip-type-check/, /--max-workers/, /--mode/],
     },
     {
         name: 'rules --help → shows --preset flag',
