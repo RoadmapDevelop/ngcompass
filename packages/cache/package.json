@@ -1,6 +1,6 @@
 ﻿{
     "name":  "@ngcompass/cache",
-    "version":  "0.1.3-beta",
+    "version":  "0.1.4-beta",
     "description":  "Caching layer for ngcompass",
     "sideEffects":  false,
     "main":  "./dist/index.cjs",
