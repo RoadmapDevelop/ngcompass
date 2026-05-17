@@ -138,6 +138,11 @@ function buildImportGraphs(
     externalDeps: Map<string, Set<string>>;
 } {
     const compilerOptions   = program.getCompilerOptions();
+    const moduleResolutionCache = ts.createModuleResolutionCache(
+        program.getCurrentDirectory(),
+        ts.sys.useCaseSensitiveFileNames ? (fileName) => fileName : (fileName) => fileName.toLowerCase(),
+        compilerOptions,
+    );
     const importGraph        = new Map<string, Set<string>>();
     const reverseImportGraph = new Map<string, Set<string>>();
     const externalDeps       = new Map<string, Set<string>>();
@@ -165,6 +170,7 @@ function buildImportGraphs(
                 fromFile,
                 compilerOptions,
                 ts.sys,
+                moduleResolutionCache,
             );
 
             const toFile = resolved.resolvedModule?.resolvedFileName;
