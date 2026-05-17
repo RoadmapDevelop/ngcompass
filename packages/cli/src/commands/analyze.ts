@@ -223,50 +223,106 @@ function formatAnalysisProgressMessage(mode: string, completed: number, total: n
     return `Running analysis in ${mode} mode: ${completed.toLocaleString()}/${total.toLocaleString()} checks complete...`;
 }
 
-function createFileProgressLogger(plan: ExecutionPlanOutput, writeLine: (line: string) => void, cwd: string) {
-    const expectedTasksByFile = new Map<string, number>();
-    const executableTaskFiles = plan.tasks
-        .map(task => task.filePath)
-        .filter((filePath): filePath is string => typeof filePath === 'string' && filePath.length > 0);
+interface FilePhaseAccumulator {
+    taskCount: number;
+    issueCount: number;
+    errorCount: number;
+    warningCount: number;
+    duration: number;
+}
 
-    for (const filePath of executableTaskFiles) {
-        expectedTasksByFile.set(filePath, (expectedTasksByFile.get(filePath) ?? 0) + 1);
+function createFileProgressLogger(plan: ExecutionPlanOutput, writeLine: (line: string) => void, cwd: string) {
+    const syntaxExpected = new Map<string, number>();
+    const typeAwareExpected = new Map<string, number>();
+
+    for (const task of plan.tasks) {
+        const fp = task.filePath;
+        if (typeof fp !== 'string' || fp.length === 0) continue;
+        if (task.needsTypeChecker || task.needsProjectContext) {
+            typeAwareExpected.set(fp, (typeAwareExpected.get(fp) ?? 0) + 1);
+        } else {
+            syntaxExpected.set(fp, (syntaxExpected.get(fp) ?? 0) + 1);
+        }
     }
 
-    const completedByFile = new Map<string, AnalysisFileProgress>();
-    const printedFiles = new Set<string>();
+    const syntaxDone = new Map<string, FilePhaseAccumulator>();
+    const typeAwareDone = new Map<string, FilePhaseAccumulator>();
+    const syntaxLinePrinted = new Set<string>();
+    const finalLinePrinted = new Set<string>();
+
+    const accumulate = (map: Map<string, FilePhaseAccumulator>, event: AnalysisFileProgress): FilePhaseAccumulator => {
+        const prev = map.get(event.filePath);
+        const next: FilePhaseAccumulator = prev
+            ? {
+                taskCount: prev.taskCount + event.taskCount,
+                issueCount: prev.issueCount + event.issueCount,
+                errorCount: prev.errorCount + event.errorCount,
+                warningCount: prev.warningCount + event.warningCount,
+                duration: prev.duration + event.duration,
+            }
+            : { taskCount: event.taskCount, issueCount: event.issueCount, errorCount: event.errorCount, warningCount: event.warningCount, duration: event.duration };
+        map.set(event.filePath, next);
+        return next;
+    };
+
+    const printFinalLine = (filePath: string, acc: FilePhaseAccumulator) => {
+        if (finalLinePrinted.has(filePath)) return;
+        finalLinePrinted.add(filePath);
+        const relativePath = path.relative(cwd, filePath) || filePath;
+        const hasIssues = acc.issueCount > 0;
+        const status = hasIssues ? pc.red('❯') : pc.green('❯');
+        const dur = hasIssues ? pc.red(formatDuration(acc.duration)) : pc.green(formatDuration(acc.duration));
+        writeLine(hasIssues
+            ? `${status} ${pc.red(relativePath)}  ${dur}   ${pc.red(pluralise(acc.issueCount, 'issue'))}`
+            : `${status} ${pc.dim(relativePath)}  ${dur}`);
+    };
+
+    const printSyntaxLine = (filePath: string, acc: FilePhaseAccumulator) => {
+        if (syntaxLinePrinted.has(filePath) || finalLinePrinted.has(filePath)) return;
+        syntaxLinePrinted.add(filePath);
+        const relativePath = path.relative(cwd, filePath) || filePath;
+        const hasIssues = acc.issueCount > 0;
+        const status = hasIssues ? pc.red('❯') : pc.green('❯');
+        const dur = hasIssues ? pc.red(formatDuration(acc.duration)) : pc.green(formatDuration(acc.duration));
+        writeLine(hasIssues
+            ? `${status} ${pc.red(relativePath)}  ${dur}   ${pc.red(pluralise(acc.issueCount, 'issue'))}`
+            : `${status} ${pc.dim(relativePath)}  ${dur}`);
+    };
 
     return (event: AnalysisFileProgress) => {
-        if (printedFiles.has(event.filePath)) return;
+        const fp = event.filePath;
+        if (finalLinePrinted.has(fp)) return;
 
-        const accumulated = completedByFile.get(event.filePath);
-        const next: AnalysisFileProgress = accumulated
-            ? {
-                filePath: event.filePath,
-                taskCount: accumulated.taskCount + event.taskCount,
-                issueCount: accumulated.issueCount + event.issueCount,
-                errorCount: accumulated.errorCount + event.errorCount,
-                warningCount: accumulated.warningCount + event.warningCount,
-                duration: accumulated.duration + event.duration,
+        if (event.typeAware === false) {
+            const acc = accumulate(syntaxDone, event);
+            const expected = syntaxExpected.get(fp) ?? acc.taskCount;
+            if (acc.taskCount < expected) return;
+            if (typeAwareExpected.has(fp)) {
+                printSyntaxLine(fp, acc);
+            } else {
+                printFinalLine(fp, acc);
             }
-            : event;
-        completedByFile.set(event.filePath, next);
-
-        const expectedTasks = expectedTasksByFile.get(event.filePath) ?? next.taskCount;
-        if (next.taskCount < expectedTasks) return;
-        printedFiles.add(event.filePath);
-
-        const relativePath = path.relative(cwd, event.filePath) || event.filePath;
-        const hasIssues = next.issueCount > 0;
-        const status = hasIssues ? pc.red('❯') : pc.green('❯');
-        const duration = hasIssues
-            ? pc.red(formatDuration(next.duration))
-            : pc.green(formatDuration(next.duration));
-        const fileLine = hasIssues
-            ? `${status} ${pc.red(relativePath)}  ${duration}   ${pc.red(pluralise(next.issueCount, 'issue'))}`
-            : `${status} ${pc.dim(relativePath)}  ${duration}`;
-
-        writeLine(fileLine);
+        } else if (event.typeAware === true) {
+            const acc = accumulate(typeAwareDone, event);
+            const expected = typeAwareExpected.get(fp) ?? acc.taskCount;
+            if (acc.taskCount < expected) return;
+            const syntaxAcc = syntaxDone.get(fp);
+            const combined: FilePhaseAccumulator = syntaxAcc
+                ? {
+                    taskCount: syntaxAcc.taskCount + acc.taskCount,
+                    issueCount: syntaxAcc.issueCount + acc.issueCount,
+                    errorCount: syntaxAcc.errorCount + acc.errorCount,
+                    warningCount: syntaxAcc.warningCount + acc.warningCount,
+                    duration: syntaxAcc.duration + acc.duration,
+                }
+                : acc;
+            printFinalLine(fp, combined);
+        } else {
+            const totalExpected = (syntaxExpected.get(fp) ?? 0) + (typeAwareExpected.get(fp) ?? 0);
+            const acc = accumulate(syntaxDone, event);
+            if (acc.taskCount < (totalExpected || acc.taskCount)) return;
+            printFinalLine(fp, acc);
+        }
     };
 }
 

@@ -55,6 +55,7 @@ export interface AnalysisFileProgress {
     readonly warningCount: number;
     readonly duration: number;
     readonly cached?: boolean;
+    readonly typeAware?: boolean;
 }
 
 interface TypeAwareChunkWork {
@@ -398,7 +399,7 @@ const executeTasksLocally = async (
                     context.evict(filePath);
                     onDelta?.(fileTasks.length);
                     if (filePath) {
-                        onFileProgress?.(buildFileProgress(filePath, fileTasks.length, batchResults, performance.now() - fileStart));
+                        onFileProgress?.(buildFileProgress(filePath, fileTasks.length, batchResults, performance.now() - fileStart, useTypeAwareContext));
                     }
                     return batchResults;
                 } catch (e) {
@@ -406,7 +407,7 @@ const executeTasksLocally = async (
                     context.evict(filePath);
                     onDelta?.(fileTasks.length);
                     if (filePath) {
-                        onFileProgress?.(buildFileProgress(filePath, fileTasks.length, [], performance.now() - fileStart));
+                        onFileProgress?.(buildFileProgress(filePath, fileTasks.length, [], performance.now() - fileStart, useTypeAwareContext));
                     }
                     errorCollector?.record(createInfrastructureError('IOError', {
                         filePath,
@@ -863,6 +864,7 @@ const buildFileProgress = (
     taskCount: number,
     results: ReadonlyArray<RuleResult>,
     duration: number,
+    typeAware?: boolean,
 ): AnalysisFileProgress => {
     let errorCount = 0;
     let warningCount = 0;
@@ -881,6 +883,7 @@ const buildFileProgress = (
         errorCount,
         warningCount,
         duration,
+        typeAware,
     };
 };
 

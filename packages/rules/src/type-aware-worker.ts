@@ -108,5 +108,6 @@ const buildFileProgress = (
         errorCount,
         warningCount,
         duration,
+        typeAware: true,
     };
 };

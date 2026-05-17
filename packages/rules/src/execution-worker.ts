@@ -94,6 +94,7 @@ const buildFileProgress = (
         kind: 'file-progress',
         filePath,
         taskCount,
+        typeAware: false,
         issueCount: errorCount + warningCount,
         errorCount,
         warningCount,
