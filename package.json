@@ -1,6 +1,6 @@
 {
   "name": "ngcompass",
-  "version": "0.1.3-beta",
+  "version": "0.1.4-beta",
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
 
