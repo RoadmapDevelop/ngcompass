@@ -27,6 +27,14 @@ export class Spinner {
         this.timer = setInterval(() => this.render(), INTERVAL_MS);
     }
 
+    update(message: string): void {
+        this.message = message;
+
+        if (this.isTTY && this.timer) {
+            this.render();
+        }
+    }
+
     /**
      * Write a line of output while the spinner is active.
      * In TTY mode: clears the spinner line, prints the line, reprints the spinner.
@@ -57,6 +65,6 @@ export class Spinner {
     private render(): void {
         const frame = pc.cyan(FRAMES[this.frameIndex % FRAMES.length]);
         this.frameIndex++;
-        this.stream.write(`\r${frame} ${pc.dim(this.message)}`);
+        this.stream.write(`\r\x1B[K${frame} ${pc.dim(this.message)}`);
     }
 }

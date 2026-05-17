@@ -672,6 +672,7 @@ export interface WorkerFileProgress {
     readonly errorCount: number;
     readonly warningCount: number;
     readonly duration: number;
+    readonly typeAware: boolean;
 }
 
 /** Message posted back from a worker thread to the orchestrator. */

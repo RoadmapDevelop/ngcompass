@@ -51,6 +51,10 @@ export interface AnalysisContext {
      * @param filePath The path of the file to evict from internal caches.
      */
     readonly evict: (filePath: string) => void;
+    /**
+     * Clears every cached artifact owned by this context.
+     */
+    readonly dispose: () => void;
 }
 
 /**
@@ -129,7 +133,14 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
         styleCache.delete(filePath);
     };
 
-    return { rootDir, readFile: readFileCached, getProgram, getTemplate, getStyle, evict };
+    const dispose = (): void => {
+        fileCache.clear();
+        programCache.clear();
+        templateCache.clear();
+        styleCache.clear();
+    };
+
+    return { rootDir, readFile: readFileCached, getProgram, getTemplate, getStyle, evict, dispose };
 };
 
 /**

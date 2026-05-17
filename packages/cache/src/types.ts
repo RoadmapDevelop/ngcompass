@@ -7,6 +7,7 @@ import { PlanCache } from './services/plan-cache.js';
 import { FileCache } from './services/file-cache.js';
 
 export type { SourceCache, AstCache, ResultCache, ConfigCache, MetaCache, PlanCache, FileCache };
+export type { FileCacheEntry } from './services/file-cache.js';
 export type { FileMeta } from './services/meta-cache.js';
 
 export interface CacheInfo {

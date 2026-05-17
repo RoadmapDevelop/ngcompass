@@ -199,7 +199,7 @@ The normalized configuration guarantees stable runtime fields:
 - `outputFormat`, `failOnSeverity`, and `maxWarnings` are resolved.
 - `rules` is always present.
 
-Default cache behavior is enabled, local, and stored at `node_modules/.cache/ngcompass` with a 24-hour TTL. Default worker count is based on host CPU count minus one, with a minimum of one.
+Default cache behavior is enabled, local, and stored at `node_modules/.cache/ngcompass` with a 24-hour TTL. Default worker count is based on host CPU count minus one, capped at four workers by default, with a minimum of one. Users can still opt into more parallelism with `maxWorkers`.
 
 ### 6.3 Plugin Loading
 
@@ -218,13 +218,13 @@ flowchart TD
     TsPatterns["Read tsconfig include/exclude/files"]
     Access["Validate rootDir accessibility"]
     Git{"Is Git repository?"}
-    ScanCache{"File-list cache hit?"}
+    ScanCache{"File-list and stats cache hit?"}
     GitList["executeGitDiscovery"]
     Glob["executeGlob"]
     FilterGlob["filterByGlob"]
     ApplyFilters["applyFilters<br/>gitignore and configured ignores"]
     Stats["calculateStats"]
-    Save["Save file-list cache"]
+    Save["Save file-list and stats cache"]
     Output["ScanResult.files"]
 
     Input --> Normalize --> Expand --> TsConfig
@@ -238,6 +238,10 @@ flowchart TD
     Glob --> ApplyFilters
     ApplyFilters --> Stats --> Save --> Output
 ```
+
+The scanner cache stores the discovered file list plus scan statistics such as
+extension counts and total size. On a cache hit it reuses those statistics
+instead of restatting every file.
 
 The scanner cache key includes:
 
@@ -364,10 +368,10 @@ flowchart TD
     Hasher["initHasher()"]
     Validate["Validate files and rules"]
     Context["Create TaskBuilderContext"]
+    WarmMeta["Warm hash cache from metadata"]
     GlobalHash["calculateGlobalHash(files, rules, version context)"]
     AnalysisCache{"Full analysis cache hit?"}
     PlanCache{"Plan cache hit?"}
-    WarmMeta["Warm hash cache from metadata"]
     ComponentGraph["Build ComponentDependencyGraph"]
     Preclassify["Preclassify logic files by Angular decorators"]
     BuildTasks["Build tasks per file and rule"]
@@ -376,13 +380,19 @@ flowchart TD
     Indexes["Build file and task indexes"]
     Output["ExecutionPlanOutput"]
 
-    Start --> Hasher --> Validate --> Context --> GlobalHash --> AnalysisCache
+    Start --> Hasher --> Validate --> Context --> WarmMeta --> GlobalHash --> AnalysisCache
     AnalysisCache -- yes --> Output
     AnalysisCache -- no --> PlanCache
     PlanCache -- yes --> ResultCache
-    PlanCache -- no --> WarmMeta --> ComponentGraph --> Preclassify --> BuildTasks --> SavePlan --> ResultCache
+    PlanCache -- no --> ComponentGraph --> Preclassify --> BuildTasks --> SavePlan --> ResultCache
     ResultCache --> Indexes --> Output
 ```
+
+Metadata warmup happens before `globalHash` calculation. On warm runs this lets
+the planner rebuild the project hash from file stats plus persisted content
+hashes, only re-reading files whose size or modification time changed. On cold
+runs it also seeds the metadata cache before task construction so later warm
+runs can avoid full-project content reads.
 
 ### 9.3 File Classification
 
@@ -557,7 +567,43 @@ It uses an LRU cache for file content and maps for parsed artifacts. The engine 
 
 It creates a TypeScript `Program` from `parserOptions.project` or the nearest `tsconfig.json`. For large repositories it narrows root names to the files in the current type-aware chunk. This controls memory while preserving TypeScript's transitive import resolution.
 
-Type-aware execution is chunked by file count. The default chunk size is 400 files. Each chunk gets a fresh TypeScript `Program`, which becomes eligible for garbage collection after the chunk completes.
+Project-context import graph construction uses TypeScript's module-resolution
+cache while walking import specifiers, avoiding repeated package/path resolution
+work inside each type-aware chunk.
+
+Type-aware execution is chunked by file count. The default chunk size is 100 files, or 50 files for very large type-aware runs. Each chunk gets a fresh TypeScript `Program`, which becomes eligible for garbage collection after the chunk completes. Type-aware batches run one file batch at a time by default to avoid holding many parsed artifacts beside a TypeScript `Program`.
+
+The adaptive chunk ceiling is computed at runtime from available memory, total
+memory, CPU count, and the V8 heap limit. User-provided chunk size is treated as
+the starting target, then clamped to that machine-derived cap. The cap is
+speed-biased on machines with ample free memory, while low-memory systems keep
+a smaller ceiling. During execution the chunk size steps down on high heap
+pressure and grows only after sustained low pressure, so large machines can use
+bigger Programs while smaller machines stay conservative.
+
+Type-aware chunk ordering supports a dependency pre-pass or a simple path sort.
+The dependency strategy reads TypeScript roots with bounded concurrency and
+falls back to simple ordering if the pre-pass exceeds its time budget. The
+simple strategy skips import inspection entirely, which is useful for very large
+repositories where chunk preparation itself becomes visible.
+
+Type-aware chunk concurrency is configurable and defaults to one. Raising it
+allows multiple type-aware chunks to build separate TypeScript Programs at the
+same time, trading memory for speed. The value is clamped by the effective
+worker count and an absolute safety ceiling.
+
+Type-aware file concurrency is a separate control inside each chunk. It reuses
+the same TypeScript Program while processing multiple file batches at once,
+which can improve throughput without creating additional Programs, but it may
+hold more parsed file/template artifacts in memory.
+
+Chunks that only need the TypeScript `TypeChecker` skip `ProjectContext`
+construction. `ProjectContext` is built only for chunks containing
+project-context rules, because import graphs, component graphs, and NgModule
+maps add meaningful memory pressure on top of the compiler Program. After each
+chunk the analysis context explicitly clears file, AST, template, style,
+`Program`, `TypeChecker`, and `ProjectContext` references before the next chunk
+starts.
 
 ### 10.4 Rule Context Factory
 
@@ -603,7 +649,48 @@ The factory also builds component/template cross references when project context
 - Signal-like members.
 - Template references.
 
-## 11. Single-Pass Analysis Engine
+## 11. Performance Modes
+
+The `analyze` command exposes a single `--mode` flag that selects a named performance preset. Individual type-aware tuning flags still exist for power users but are hidden from `--help` to keep the interface simple. When an individual flag is passed it takes precedence over the active mode.
+
+### 11.1 Mode Presets
+
+| Setting | `eco` | `balanced` (default) | `turbo` |
+|---|---|---|---|
+| `typeAwareConcurrency` | 1 | 2 | 2 |
+| `typeAwareFileConcurrency` | 1 | 2 | 4 |
+| `typeAwareChunkSize` | 100 | 300 | 500 |
+| `typeAwareIsolation` | auto | auto | off |
+| `typeAwareChunkStrategy` | dependency | simple | simple |
+
+**eco** minimizes memory by processing one type-aware chunk at a time with the safest chunk ordering strategy. It is the right choice for CI environments with limited RAM or for machines running many parallel jobs.
+
+**balanced** is the default. It doubles chunk and file concurrency and switches to the simpler chunk strategy, which skips the import-graph pre-pass and produces meaningfully faster cold runs without significant memory overhead on typical developer machines.
+
+**turbo** maximizes throughput by using larger chunks, more in-process file concurrency, and disabling process isolation entirely. It is suited for fast developer machines where memory is not a concern.
+
+### 11.2 Priority Chain
+
+```
+explicit type-aware flag  >  --mode preset  >  engine default
+```
+
+This means `--mode turbo --type-aware-file-concurrency 8` uses the turbo preset for every setting except `typeAwareFileConcurrency`, which is overridden to 8.
+
+`maxWorkers` keeps the existing configuration precedence: explicit `--max-workers` wins over the normalized config value.
+
+### 11.3 Usage
+
+```sh
+ngcompass analyze                    # balanced (default)
+ngcompass analyze --mode eco         # low memory, CI-friendly
+ngcompass analyze --mode turbo       # maximum speed on capable machines
+
+# Power-user override: turbo preset with a custom chunk size
+ngcompass analyze --mode turbo --type-aware-chunk-size 800
+```
+
+## 12. Single-Pass Analysis Engine
 
 The single-pass engine is the high-throughput path for rule execution. It appears in `packages/engine/src/single-pass-engine.ts`.
 
@@ -661,13 +748,13 @@ The engine records:
 
 - Total traversal time.
 - Nodes visited.
-- Per-rule timing and invocation count.
+- Per-rule timing and invocation count when debug/profiling is enabled.
 - Component analyzer cache hits and misses.
 - Performance budget violations.
 
 Budgets differ depending on whether a type checker is present.
 
-## 12. Worker Architecture
+## 13. Worker Architecture
 
 Worker execution is used for large sets of syntax-only tasks. Type-aware tasks remain on the main thread because they need a shared TypeScript `Program` and project context.
 
@@ -700,7 +787,7 @@ Workers are resolved from the `@ngcompass/rules/execution-worker` package path w
 
 The worker distribution algorithm keeps all tasks for the same file together. This prevents duplicate parsing and makes progress reporting file-oriented.
 
-## 13. AST and Parsing Architecture
+## 14. AST and Parsing Architecture
 
 `@ngcompass/ast` provides parsing, node streams, template analysis, and traversal helpers.
 
@@ -714,7 +801,7 @@ The worker distribution algorithm keeps all tasks for the same file together. Th
 
 The Angular HTML parser is configured with Angular block tokenization enabled. Template ASTs preserve `templateStartOffset`, so inline-template diagnostics can be mapped back to the correct line and column in the TypeScript file.
 
-## 14. Cache Architecture
+## 15. Cache Architecture
 
 The cache package provides multiple services over memory and disk drivers. Runtime cache is created from normalized config through `createRuntimeCache`.
 
@@ -747,7 +834,7 @@ flowchart TB
 | Cache Service | Key | Value | Main Consumer |
 |---|---|---|---|
 | Config cache | Config hash | `ConfigValidationResult` | Config loader |
-| File cache | Scan key | Discovered file list | Scanner |
+| File cache | Scan key | Discovered file list and scan statistics | Scanner |
 | Plan cache | Global hash | Serialized full execution plan | Planner |
 | Result cache | Task ID | `RuleResult` | Planner and engine |
 | Analysis cache | Global hash | Full `AnalysisResult` | Planner and engine |
@@ -787,7 +874,7 @@ If the full analysis cache is unavailable but per-task result cache entries exis
 
 The result cache buffers writes in memory during analysis. `setMany` records pending results, and `flush` drains them to disk. When the underlying driver supports bulk writes, all buffered results and metadata can be written in one batch. This reduces I/O overhead on large projects.
 
-## 15. Reporting Architecture
+## 16. Reporting Architecture
 
 Reporters are selected by CLI option or config output format.
 
@@ -832,7 +919,7 @@ The CLI decides the final exit code using:
 - `failOnSeverity: "warn"` with warnings.
 - Warning count greater than `maxWarnings`.
 
-## 16. Data Model Overview
+## 17. Data Model Overview
 
 ```mermaid
 erDiagram
@@ -863,7 +950,7 @@ erDiagram
 | `AnalysisResult` | common | Final aggregate output |
 | `ProjectContext` | common | Cross-file metadata for project-aware rules |
 
-## 17. Project Context and Cross-File Analysis
+## 18. Project Context and Cross-File Analysis
 
 Project context is constructed only for type-aware or project-context rules. It contains:
 
@@ -909,7 +996,7 @@ flowchart TB
 
 This enables rules to reason about architectural relationships without doing their own project-wide scanning.
 
-## 18. Error Handling and Resilience
+## 19. Error Handling and Resilience
 
 ngcompass uses explicit result objects and infrastructure error collection where possible.
 
@@ -944,7 +1031,7 @@ flowchart TD
     Recover --> Report
 ```
 
-## 19. Performance Model
+## 20. Performance Model
 
 The performance model is based on reducing repeated work at every layer.
 
@@ -956,7 +1043,7 @@ The performance model is based on reducing repeated work at every layer.
 | Incremental | `taskId` result-cache filtering |
 | Engine | Single-pass AST traversal and batched rule execution |
 | Workers | Parallel syntax-only execution by file group |
-| Type-aware | Chunked TypeScript Programs for memory control |
+| Type-aware | Small chunked TypeScript Programs and capped type-aware concurrency for memory control |
 | Cache I/O | Packed result cache and write-behind flush |
 | Context | LRU file content, memoized ASTs, explicit eviction |
 
@@ -985,7 +1072,7 @@ On a warm run, ngcompass can short-circuit at multiple levels:
 
 The warm path can therefore avoid AST parsing and rule execution entirely when no relevant inputs changed.
 
-## 20. Extensibility Model
+## 21. Extensibility Model
 
 ### 20.1 Adding a Rule
 
@@ -1034,7 +1121,7 @@ The reporter is then added to `getReporter(format)`.
 
 The cache system is driver-oriented. A new storage backend should implement the async driver contract and then be wired into `createCacheContext`. Services such as `ResultCache`, `PlanCache`, and `FileCache` should remain stable and consume the driver abstraction.
 
-## 21. Deployment and Runtime Layout
+## 22. Deployment and Runtime Layout
 
 The CLI is built from `packages/cli/src/bin/ngcompass.ts` into `packages/cli/dist/cli.js` and `cli.cjs`. The package build uses `tsup`. At runtime, the CLI loads other workspace packages from their built `dist` outputs according to package exports and Node module resolution.
 
@@ -1056,7 +1143,7 @@ plans/
 results/
 ```
 
-## 22. Complete Analysis Pipeline Diagram
+## 23. Complete Analysis Pipeline Diagram
 
 ```mermaid
 flowchart TD
@@ -1101,7 +1188,7 @@ flowchart TD
     U --> V --> W --> X --> Y
 ```
 
-## 23. Summary
+## 24. Summary
 
 ngcompass is structured as a layered analysis platform. The CLI coordinates execution, but the architecture keeps discovery, configuration, planning, execution, caching, rules, AST parsing, and reporting independently testable. The most important internal abstraction is the task: a content-addressed rule execution unit that connects file/resource hashing, incremental caching, planner indexes, worker execution, and final reporting.
 
