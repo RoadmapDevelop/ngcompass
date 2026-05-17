@@ -19,7 +19,7 @@ import type { TemplateExpressionNode, TemplateAttributeNode, TemplateBlockNode }
 import { resetComponentCacheStats, getComponentCacheStats } from '@ngcompass/ast';
 import { analyzeTemplate } from '@ngcompass/ast';
 import { buildVisitorMap } from './visitor-registry.js';
-import { InfrastructureErrorCollector, createInfrastructureError } from '@ngcompass/common';
+import { InfrastructureErrorCollector, createInfrastructureError, isDebugEnabled } from '@ngcompass/common';
 import { BUDGET_MS_PER_FILE_WITHOUT_TYPES, BUDGET_MS_PER_FILE_WITH_TYPES } from './constants.js';
 
 // ============================================
@@ -62,13 +62,14 @@ const dispatchTemplateHandlers = (
     context: RuleContext,
     failuresByRule: Map<string, RuleFailure[]>,
     ruleTimings: Map<string, RuleTiming>,
+    collectRuleTimings: boolean,
     errorCollector?: InfrastructureErrorCollector
 ): void => {
     if (handlers.length === 0) return;
     for (const templateNode of nodes) {
         for (let i = 0; i < handlers.length; i++) {
             const handler = handlers[i];
-            const ruleStart = performance.now();
+            const ruleStart = collectRuleTimings ? performance.now() : 0;
             try {
                 const failure = handler.handle(templateNode, context);
                 if (failure) {
@@ -88,11 +89,13 @@ const dispatchTemplateHandlers = (
                     details: { ruleName: handler.name, errorName: e instanceof Error ? e.name : undefined }
                 }));
             }
-            const elapsed = performance.now() - ruleStart;
-            const timing = ruleTimings.get(handler.name)!;
-            if (timing) {
-                timing.totalMs += elapsed;
-                timing.invocations++;
+            if (collectRuleTimings) {
+                const elapsed = performance.now() - ruleStart;
+                const timing = ruleTimings.get(handler.name)!;
+                if (timing) {
+                    timing.totalMs += elapsed;
+                    timing.invocations++;
+                }
             }
         }
     }
@@ -113,7 +116,7 @@ const dispatchTemplateHandlers = (
 export const runSinglePassAnalysis = (
     rules: ReadonlyArray<RuleHandler<any>>,
     context: RuleContext,
-    options?: { errorCollector?: InfrastructureErrorCollector }
+    options?: { errorCollector?: InfrastructureErrorCollector; collectRuleTimings?: boolean }
 ): { results: RuleResult[]; performance: PerformanceReport } => {
     const { program } = context;
 
@@ -148,6 +151,7 @@ export const runSinglePassAnalysis = (
 
     const failuresByRule = new Map<string, RuleFailure[]>();
     const ruleTimings = new Map<string, RuleTiming>();
+    const collectRuleTimings = options?.collectRuleTimings ?? isDebugEnabled();
     let nodesVisited = 0;
 
     for (const rule of rules) {
@@ -165,7 +169,7 @@ export const runSinglePassAnalysis = (
         if (visitors) {
             for (let i = 0; i < visitors.length; i++) {
                 const entry = visitors[i];
-                const ruleStart = performance.now();
+                const ruleStart = collectRuleTimings ? performance.now() : 0;
 
                 try {
                     const streamNode = entry.filter(node);
@@ -190,11 +194,13 @@ export const runSinglePassAnalysis = (
                     }));
                 }
 
-                const elapsed = performance.now() - ruleStart;
-                const timing = ruleTimings.get(entry.ruleName)!;
-                if (timing) {
-                    timing.totalMs += elapsed;
-                    timing.invocations++;
+                if (collectRuleTimings) {
+                    const elapsed = performance.now() - ruleStart;
+                    const timing = ruleTimings.get(entry.ruleName)!;
+                    if (timing) {
+                        timing.totalMs += elapsed;
+                        timing.invocations++;
+                    }
                 }
             }
         }
@@ -211,10 +217,10 @@ export const runSinglePassAnalysis = (
             }
             : context;
 
-        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
-        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
-        dispatchTemplateHandlers(templateAnalysis.blocks, templateBlockHandlers as any, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
-        dispatchTemplateHandlers([templateAnalysis as any], templateHandlers as any, templateContext, failuresByRule, ruleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.expressions, templateExpressionHandlers, templateContext, failuresByRule, ruleTimings, collectRuleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.attributes, templateAttributeHandlers, templateContext, failuresByRule, ruleTimings, collectRuleTimings, options?.errorCollector);
+        dispatchTemplateHandlers(templateAnalysis.blocks, templateBlockHandlers as any, templateContext, failuresByRule, ruleTimings, collectRuleTimings, options?.errorCollector);
+        dispatchTemplateHandlers([templateAnalysis as any], templateHandlers as any, templateContext, failuresByRule, ruleTimings, collectRuleTimings, options?.errorCollector);
     }
 
     const results: RuleResult[] = [];
@@ -236,13 +242,15 @@ export const runSinglePassAnalysis = (
         );
     }
 
-    for (const timing of ruleTimings.values()) {
-        if (timing.invocations === 0) continue;
-        const avgMs = timing.totalMs / timing.invocations;
-        if (avgMs > 1) {
-            budgetViolations.push(
-                `Rule ${timing.ruleName} averages ${avgMs.toFixed(2)}ms per invocation (threshold: 1ms)`
-            );
+    if (collectRuleTimings) {
+        for (const timing of ruleTimings.values()) {
+            if (timing.invocations === 0) continue;
+            const avgMs = timing.totalMs / timing.invocations;
+            if (avgMs > 1) {
+                budgetViolations.push(
+                    `Rule ${timing.ruleName} averages ${avgMs.toFixed(2)}ms per invocation (threshold: 1ms)`
+                );
+            }
         }
     }
 

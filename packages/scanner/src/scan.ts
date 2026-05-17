@@ -9,7 +9,8 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { debug, time, timeEnd } from '@ngcompass/common';
-import type { ScanOptions, ScanResult, Result, ScanTimings, NormalizedOptions, ExpandedPatterns, OnProgressCallback } from './types.js';
+import type { ScanOptions, ScanResult, Result, ScanTimings, ScanStatistics, NormalizedOptions, ExpandedPatterns, OnProgressCallback } from './types.js';
+import type { FileCacheEntry } from '@ngcompass/cache';
 import { Ok, Err } from './types.js';
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
@@ -61,8 +62,8 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     const cacheResult = await tryLoadFromCache(normalized, patterns, isGit, options);
     if (cacheResult) {
-        progress('complete', cacheResult.length);
-        return await buildCachedResult(cacheResult, startTime);
+        progress('complete', cacheResult.files.length);
+        return buildCachedResult(cacheResult, startTime);
     }
 
     progress('discovering', 0);
@@ -92,9 +93,9 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
     logFiltering(finalFiles.length, filterResult.data.filtered);
     progress('calculating-stats', finalFiles.length);
 
-    await saveToCache(normalized, patterns, finalFiles, isGit, options);
-
     const stats = await calculateStats(finalFiles, startTime, false);
+    await saveToCache(normalized, patterns, finalFiles, serializeScanStats(stats), isGit, options);
+
     const totalTime = timeEnd('file-scan');
 
     logScanEnd(stats, totalTime);
@@ -206,21 +207,21 @@ async function getCacheKey(
  * @param patterns - The expanded pattern collection.
  * @param isGit - Indicates if the repository is Git-managed.
  * @param options - The full scan configuration options.
- * @returns A promise resolving to the cached file paths, or null on a cache miss.
+ * @returns A promise resolving to the cached file entry, or null on a cache miss.
  */
 async function tryLoadFromCache(
     normalized: NormalizedOptions,
     patterns: ExpandedPatterns,
     isGit: boolean,
     options: ScanOptions
-): Promise<ReadonlyArray<string> | null> {
+): Promise<FileCacheEntry | null> {
     const key = await getCacheKey(normalized, patterns, isGit, options);
     if (!key || !options.cache) return null;
 
     const cached = await options.cache.files.get(key);
     if (cached) {
         debug('scanner', `Cache HIT. Loaded ${cached.files.length} files.`);
-        return cached.files;
+        return cached;
     }
 
     return null;
@@ -239,6 +240,7 @@ async function saveToCache(
     normalized: NormalizedOptions,
     patterns: ExpandedPatterns,
     files: string[],
+    stats: unknown,
     isGit: boolean,
     options: ScanOptions
 ): Promise<void> {
@@ -246,24 +248,98 @@ async function saveToCache(
 
     const key = await getCacheKey(normalized, patterns, isGit, options);
     if (key) {
-        await options.cache.files.set(key, files);
+        await options.cache.files.set(key, files, stats);
         debug('scanner', 'File list cached.');
     }
 }
 
-async function buildCachedResult(
-    files: ReadonlyArray<string>,
+function buildCachedResult(
+    cached: FileCacheEntry,
     startTime: number
-): Promise<Result<ScanResult>> {
-    const stats = await calculateStats(files, startTime, true);
+): Result<ScanResult> {
     const totalTime = performance.now() - startTime;
+    const cachedStats = normalizeCachedStats(cached.stats);
+    const stats = cachedStats
+        ? { ...cachedStats, scanTime: totalTime, cacheHit: true }
+        : {
+            totalFiles: cached.files.length,
+            byExtension: groupCachedFilesByExtension(cached.files),
+            totalSize: 0,
+            scanTime: totalTime,
+            cacheHit: true,
+        };
 
     return Ok({
-        files,
+        files: cached.files,
         stats,
         timestamp: Date.now(),
         timings: { normalization: 0, discovery: totalTime, filtering: 0, total: totalTime }
     });
+}
+
+interface CachedScanStatistics {
+    readonly totalFiles: number;
+    readonly byExtension: ReadonlyArray<readonly [string, number]>;
+    readonly totalSize: number;
+    readonly scanTime: number;
+    readonly cacheHit: boolean;
+}
+
+function serializeScanStats(stats: ScanStatistics): CachedScanStatistics {
+    return {
+        totalFiles: stats.totalFiles,
+        byExtension: Array.from(stats.byExtension.entries()),
+        totalSize: stats.totalSize,
+        scanTime: stats.scanTime,
+        cacheHit: stats.cacheHit,
+    };
+}
+
+function groupCachedFilesByExtension(files: ReadonlyArray<string>): ReadonlyMap<string, number> {
+    const byExtension = new Map<string, number>();
+    for (const file of files) {
+        const ext = path.extname(file) || '.no-extension';
+        byExtension.set(ext, (byExtension.get(ext) ?? 0) + 1);
+    }
+    return byExtension;
+}
+
+function normalizeCachedStats(value: unknown): ScanStatistics | null {
+    if (!value || typeof value !== 'object') return null;
+    const stats = value as Partial<CachedScanStatistics>;
+    if (
+        typeof stats.totalFiles !== 'number' ||
+        typeof stats.totalSize !== 'number' ||
+        typeof stats.scanTime !== 'number' ||
+        typeof stats.cacheHit !== 'boolean'
+    ) {
+        return null;
+    }
+
+    const byExtension = normalizeExtensionCounts(stats.byExtension);
+    if (!byExtension) return null;
+
+    return {
+        totalFiles: stats.totalFiles,
+        byExtension,
+        totalSize: stats.totalSize,
+        scanTime: stats.scanTime,
+        cacheHit: stats.cacheHit,
+    };
+}
+
+function normalizeExtensionCounts(value: unknown): ReadonlyMap<string, number> | null {
+    if (value instanceof Map) return value;
+    if (!Array.isArray(value)) return null;
+
+    const byExtension = new Map<string, number>();
+    for (const entry of value) {
+        if (!Array.isArray(entry) || entry.length !== 2) return null;
+        const [extension, count] = entry;
+        if (typeof extension !== 'string' || typeof count !== 'number') return null;
+        byExtension.set(extension, count);
+    }
+    return byExtension;
 }
 
 function logScanStart(options: ScanOptions): void {

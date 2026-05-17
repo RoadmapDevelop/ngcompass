@@ -12,13 +12,14 @@ const TIME = {
 /**
  * Calculates the recommended default number of worker threads based on 
  * the host's hardware. It reserves at least one core for the main 
- * process to ensure system responsiveness during heavy analysis.
+ * process and caps the default for system responsiveness during heavy
+ * analysis. Users can still opt into more parallelism with `maxWorkers`.
  *
  * @returns {number} The suggested number of CPU cores to utilize.
  */
 export const getDefaultMaxWorkers = (): number => {
     const cpuCount = os.cpus().length;
-    return Math.max(1, cpuCount - 1);
+    return Math.max(1, Math.min(4, cpuCount - 1));
 };
 
 /**
