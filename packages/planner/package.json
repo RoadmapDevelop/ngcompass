@@ -1,6 +1,6 @@
 ﻿{
     "name":  "@ngcompass/planner",
-    "version":  "0.1.2-beta",
+    "version":  "0.1.3-beta",
     "description":  "Execution planning and incremental analysis for ngcompass",
     "sideEffects":  false,
     "main":  "./dist/index.cjs",

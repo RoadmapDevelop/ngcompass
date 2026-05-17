@@ -1,4 +1,7 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { initHasher } from '@ngcompass/cache';
 import {
     hashFile,
@@ -7,6 +10,7 @@ import {
     calculateFileHash,
     calculateTaskId,
     calculateGlobalHash,
+    warmupHashCache,
 } from '../src/hashing.js';
 import type { TaskInputs } from '../src/types.js';
 import type { ResolvedRule } from '@ngcompass/common';
@@ -233,5 +237,35 @@ describe('calculateGlobalHash', () => {
         const h1 = await calculateGlobalHash(files, rules, cache, ctx1);
         const h2 = await calculateGlobalHash(files, rules, cache, ctx2);
         expect(h1).not.toBe(h2);
+    });
+});
+
+describe('warmupHashCache', () => {
+    it('hydrates the in-memory hash cache from metadata when size and mtime match', async () => {
+        const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'ngcompass-hash-'));
+        try {
+            const filePath = path.join(dir, 'app.component.ts');
+            await fs.writeFile(filePath, 'actual file content');
+            const stats = await fs.stat(filePath);
+
+            const meta = new Map<string, { mtime: number; size: number; hash: string }>([
+                [filePath, { mtime: stats.mtimeMs, size: stats.size, hash: 'cached-hash' }],
+            ]);
+            const metaCache = {
+                get: vi.fn(async (key: string) => meta.get(key)),
+                set: vi.fn(async (key: string, value: { mtime: number; size: number; hash: string }) => {
+                    meta.set(key, value);
+                }),
+                flush: vi.fn(async () => {}),
+            };
+            const hashCache = new Map<string, string>();
+
+            await warmupHashCache([filePath], metaCache as any, hashCache);
+
+            expect(hashCache.get(filePath)).toBe('cached-hash');
+            expect(metaCache.set).not.toHaveBeenCalled();
+        } finally {
+            await fs.rm(dir, { recursive: true, force: true });
+        }
     });
 });

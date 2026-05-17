@@ -1,6 +1,6 @@
 ﻿{
     "name":  "@ngcompass/rules",
-    "version":  "0.1.2-beta",
+    "version":  "0.1.3-beta",
     "description":  "Rules collection for ngcompass",
     "sideEffects":  false,
     "main":  "./dist/index.cjs",
@@ -19,6 +19,10 @@
                     "./execution-worker":  {
                                                "import":  "./dist/execution-worker.js",
                                                "require":  "./dist/execution-worker.cjs"
+                                           },
+                    "./type-aware-worker":  {
+                                               "import":  "./dist/type-aware-worker.js",
+                                               "require":  "./dist/type-aware-worker.cjs"
                                            }
                 },
     "files":  [
