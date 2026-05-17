@@ -1,6 +1,6 @@
 ﻿{
     "name":  "@ngcompass/common",
-    "version":  "0.1.3-beta",
+    "version":  "0.1.4-beta",
     "description":  "Common types and utilities for Angular Analyzer",
     "sideEffects":  false,
     "main":  "./dist/index.cjs",
