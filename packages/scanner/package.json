@@ -1,6 +1,6 @@
 ﻿{
     "name":  "@ngcompass/scanner",
-    "version":  "0.1.4-beta",
+    "version":  "0.1.5-beta",
     "description":  "File system scanning (glob, git, gitignore) for ngcompass",
     "sideEffects":  false,
     "main":  "./dist/index.cjs",
@@ -49,7 +49,7 @@
                      "ngcompass"
                  ],
     "author":  "ngcompass",
-    "license":  "MIT",
+    "license":  "UNLICENSED",
     "publishConfig":  {
                           "access":  "public"
                       }
