@@ -1,6 +1,6 @@
 {
   "name": "ngcompass",
-  "version": "0.1.4-beta",
+  "version": "0.1.5-beta",
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
 
@@ -45,7 +45,7 @@
     "ssr"
   ],
   "author": "ngcompass",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
     "pnpm": ">=8.0.0"

@@ -1,5 +1,7 @@
 # ngcompass Architecture
 
+> Version: v0.1.4-beta
+
 ## 1. Purpose and Scope
 
 ngcompass is a static analysis platform for Angular projects. It analyzes TypeScript classes, Angular templates, styles, RxJS usage, Signals patterns, SSR safety, security risks, and project-level architectural relationships. The product is implemented as a TypeScript monorepo with a CLI front end, a configuration and rule-resolution layer, a scanner, a task-centric execution planner, a high-performance analysis engine, a cache subsystem, and multiple reporters.
@@ -128,9 +130,9 @@ The lifecycle is implemented in `packages/cli/src/commands/analyze.ts` as these 
 The binary entry point is `packages/cli/src/bin/ngcompass.ts`. Startup performs the following:
 
 1. Creates a Commander program named `ngcompass`.
-2. Registers global options, including `--debug`.
-3. Creates an initial cache context.
-4. Registers signal and exception handlers.
+2. Registers global options: `-V, --version` and `--debug`.
+3. Creates an initial cache context via `createCacheContext()`.
+4. Registers signal and exception handlers (SIGINT, SIGTERM, uncaughtException, unhandledRejection).
 5. Registers built-in rules into the global rule registry.
 6. Registers CLI commands.
 7. Parses the command line.
@@ -153,6 +155,54 @@ flowchart TD
 ```
 
 The CLI separates presentation from execution. It instantiates reporters early, but the analysis pipeline produces domain objects such as `ExecutionPlanOutput`, `AnalysisResult`, `RuleResult`, and `ParseError`. Reporters receive those objects after execution and transform them into the selected output format.
+
+### 5.1 Command Flag Reference
+
+**`analyze`** — run static analysis.
+
+| Flag | Description |
+|---|---|
+| `-p, --profile <name>` | Configuration profile to run |
+| `--force` | Ignore cached results and re-run all checks |
+| `--format <fmt>` | Reporter format: `console` \| `json` \| `sarif` \| `html` \| `ui` |
+| `--compact` | Use compact, ESLint-style output (console format only) |
+| `-q, --quiet` | Show summary counts only, suppress violation details |
+| `--no-recommendation` | Suppress fix recommendations from output |
+| `--output <path>` | Output path for HTML reports (default: `ngcompass-report.html`) |
+| `--rule <id>` | Run only one rule — useful for debugging or focused checks |
+| `--mode <mode>` | Performance mode: `eco` \| `balanced` \| `turbo` (default: `balanced`) |
+| `--max-workers <n>` | Cap the number of worker threads (lower = less memory, e.g. `--max-workers 2`) |
+| `--skip-type-check` | Skip rules that require the TypeScript type checker (fastest, lowest memory) |
+
+Hidden power-user flags (not shown in `--help`): `--type-aware-chunk-size`, `--type-aware-concurrency`, `--type-aware-file-concurrency`, `--type-aware-isolation`, `--type-aware-chunk-strategy`. See Section 11 for semantics.
+
+**`init`** — create a starter configuration.
+
+| Flag | Description |
+|---|---|
+| `-f, --force` | Overwrite an existing configuration file |
+| `--cwd <path>` | Project directory where the configuration will be created (default: `process.cwd()`) |
+
+**`config health`** — validate the active configuration.
+
+| Flag | Description |
+|---|---|
+| `-p, --profile <name>` | Configuration profile to validate |
+
+**`cache clear`** — clear cached data.
+
+| Flag | Description |
+|---|---|
+| `-p, --profile <name>` | Configuration profile used to resolve cache settings |
+| `--type <type>` | Cache type to clear: `ast` \| `config` \| `results` \| `all` (default: `all`) |
+
+**`cache info`** and **`cache path`** both accept `-p, --profile <name>` to resolve profile-specific cache settings.
+
+**`rules [ruleName]`** — browse or inspect rules.
+
+| Flag | Description |
+|---|---|
+| `--preset <name>` | Filter by preset: `recommended` \| `strict` \| `performance` \| `reactivity` \| `all` |
 
 ## 6. Configuration Architecture
 
@@ -682,9 +732,11 @@ This means `--mode turbo --type-aware-file-concurrency 8` uses the turbo preset 
 ### 11.3 Usage
 
 ```sh
-ngcompass analyze                    # balanced (default)
-ngcompass analyze --mode eco         # low memory, CI-friendly
-ngcompass analyze --mode turbo       # maximum speed on capable machines
+ngcompass analyze                         # balanced (default)
+ngcompass analyze --mode eco              # low memory, CI-friendly
+ngcompass analyze --mode turbo            # maximum speed on capable machines
+ngcompass analyze -p strict               # run with a named profile
+ngcompass analyze --skip-type-check       # syntax-only, fastest path
 
 # Power-user override: turbo preset with a custom chunk size
 ngcompass analyze --mode turbo --type-aware-chunk-size 800

@@ -1,6 +1,6 @@
 {
     "name": "ngcompass",
-    "version": "0.1.4-beta",
+    "version": "0.1.5-beta",
     "description": "Command line interface for ngcompass",
     "sideEffects": false,
     "bin": {
@@ -55,7 +55,7 @@
         "cli"
     ],
     "author": "ngcompass",
-    "license": "MIT",
+    "license": "UNLICENSED",
     "publishConfig": {
         "access": "public"
     },
