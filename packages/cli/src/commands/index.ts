@@ -1,3 +1,11 @@
+/**
+ * @fileoverview
+ * Aggregates every CLI command registration into a single entry point.
+ *
+ * `registerCommands()` is called once from the binary; each per-command file
+ * owns its own option parsing, action handler, and exit semantics.
+ */
+
 import { Command } from 'commander';
 import { registerInitCommand } from './init.js';
 import { registerAnalyzeCommand } from './analyze.js';

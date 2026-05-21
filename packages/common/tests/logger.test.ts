@@ -1,3 +1,12 @@
+/**
+ * @fileoverview
+ * Runtime tests for the package-level debug logger.
+ *
+ * Verifies namespace filtering, timer behavior, and disabled-mode no-op
+ * semantics so shared logging remains safe for analyzer hot paths and
+ * machine-readable reporter output.
+ */
+
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
     enableDebug,

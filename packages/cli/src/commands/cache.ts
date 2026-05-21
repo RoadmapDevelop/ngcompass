@@ -1,10 +1,31 @@
+/**
+ * @fileoverview
+ * `ngcompass cache` command group.
+ *
+ * Subcommands operate on the user's persistent analysis cache:
+ *  - `clear` removes one cache type or all cache types
+ *  - `info`  prints cache directory size and status
+ *  - `path`  prints the resolved cache directory location
+ *
+ * Cache resolution respects the active profile so commands invoked with
+ * `--profile ci` operate on the same cache the CI run would.
+ */
+
 import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { Command } from 'commander';
 import { getCacheReporter } from '@ngcompass/reporters';
 import { resolveConfig } from '@ngcompass/config';
 import pc from 'picocolors';
 import process from 'node:process';
-import { exitWithError } from './exit.js';
+import { exitWithError, printError } from './exit.js';
+
+type CacheClearType = 'ast' | 'config' | 'results' | 'all';
+const CACHE_CLEAR_TYPES: readonly CacheClearType[] = ['ast', 'config', 'results', 'all'];
+
+const isCacheClearType = (value: string): value is CacheClearType => {
+    return (CACHE_CLEAR_TYPES as readonly string[]).includes(value);
+};
+
 export function registerCacheCommand(program: Command, cache: CacheContext) {
     const cacheCmd = program
         .command('cache')
@@ -16,16 +37,14 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
         .option('-p, --profile <name>', 'Configuration profile used to resolve cache settings')
         .option('--type <type>', 'Cache type to clear: ast | config | results | all', 'all')
         .action(async (options: { type: string; profile?: string }) => {
-            const reporter = getCacheReporter();
-            process.stdout.write(pc.dim('  › Clearing cache...\n'));
-
-            const type = options.type as 'ast' | 'config' | 'results' | 'all';
-
-            const validTypes = ['ast', 'config', 'results', 'all'];
-            if (!validTypes.includes(type)) {
-                console.error(pc.red(`Invalid cache type: ${type}. Must be one of: ${validTypes.join(', ')}`));
+            if (!isCacheClearType(options.type)) {
+                printError(`Invalid cache type: ${options.type}. Must be one of: ${CACHE_CLEAR_TYPES.join(', ')}`);
                 exitWithError();
             }
+            const type = options.type as CacheClearType;
+
+            const reporter = getCacheReporter();
+            process.stdout.write(pc.dim('  › Clearing cache...\n'));
 
             try {
                 const activeCache = await resolveRuntimeCache(cache, {
@@ -40,7 +59,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
                 }
                 reporter.renderClearResult(type);
             } catch (err) {
-                console.error(pc.red('Error clearing cache:'), err);
+                printError('Error clearing cache', err);
                 exitWithError();
             }
         });
@@ -59,7 +78,7 @@ export function registerCacheCommand(program: Command, cache: CacheContext) {
                 const info = await activeCache.getInfo();
                 reporter.renderCacheInfo(info);
             } catch (err) {
-                console.error(pc.red('Error getting cache info:'), err);
+                printError('Error getting cache info', err);
                 exitWithError();
             }
         });

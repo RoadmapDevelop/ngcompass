@@ -1,8 +1,17 @@
+/**
+ * @fileoverview
+ * `ngcompass config` command group.
+ *
+ * Currently exposes `config health`, which runs semantic validation against
+ * the active configuration (and optional profile) and renders the result via
+ * the dedicated config reporter.
+ */
+
 import { Command } from 'commander';
 import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
 import { validateConfig } from '@ngcompass/config';
-import { exitWithError } from './exit.js';
+import { exitWithError, printError } from './exit.js';
 
 export function registerConfigCommand(program: Command, cache: CacheContext) {
     const configGroup = program
@@ -27,8 +36,7 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
                     exitWithError();
                 }
             } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error(`Error: ${errorMessage}`);
+                printError('Error', error);
                 exitWithError();
             }
         });

@@ -1,12 +1,13 @@
 /**
- * @ngcompass/common — runtime and type-level tests
+ * @fileoverview
+ * Runtime and type-level contract tests for `@ngcompass/common`.
  *
  * Covers runtime behaviour of the common package's exported values:
- *  - Ok / Err / Result — construction and type-narrowing
- *  - RuleCategory enum — all expected variants present
- *  - Error hierarchy — name, code, message, instanceof chain
- *  - createInfrastructureError — factory stamps timestamp and freezes object
- *  - InfrastructureErrorCollector — record, errors, hasFatalErrors, hasAnyErrors, forPhase
+ *  - Ok / Err / Result - construction and type-narrowing
+ *  - RuleCategory enum - all expected variants present
+ *  - Error hierarchy - name, code, message, instanceof chain
+ *  - createInfrastructureError - factory stamps timestamp and freezes object
+ *  - InfrastructureErrorCollector - record, errors, hasFatalErrors, hasAnyErrors, forPhase
  */
 import { describe, it, expect } from 'vitest';
 import {
@@ -21,6 +22,7 @@ import {
     createInfrastructureError,
     InfrastructureErrorCollector,
 } from '../src/index.js';
+import type { InfrastructureError } from '../src/index.js';
 
 // ---------------------------------------------------------------------------
 // Ok / Err / Result
@@ -63,8 +65,7 @@ describe('Err', () => {
 
 describe('Result narrowing', () => {
     it('ok branch gives access to data', () => {
-        const r: ReturnType<typeof Ok<number>> | ReturnType<typeof Err<string>> =
-            Ok(100) as any;
+        const r: ReturnType<typeof Ok<number>> | ReturnType<typeof Err<string>> = Ok(100);
         if (r.ok) {
             expect(r.data).toBe(100);
         } else {
@@ -73,8 +74,7 @@ describe('Result narrowing', () => {
     });
 
     it('err branch gives access to error', () => {
-        const r: ReturnType<typeof Ok<number>> | ReturnType<typeof Err<string>> =
-            Err('failed') as any;
+        const r: ReturnType<typeof Ok<number>> | ReturnType<typeof Err<string>> = Err('failed');
         if (!r.ok) {
             expect(r.error).toBe('failed');
         } else {
@@ -318,13 +318,13 @@ describe('InfrastructureErrorCollector', () => {
         expect(col.forPhase('config')).toHaveLength(0);
     });
 
-    it('errors is a read-only view — mutations are not possible', () => {
+    it('errors is a read-only view - mutations are not possible', () => {
         const col = new InfrastructureErrorCollector();
         col.record(makeError(true));
         // TypeScript would catch this at compile time; at runtime the array is returned
         // as a ReadonlyArray so attempting to push would require casting.
         expect(() => {
-            (col.errors as any[]).push(makeError(false));
+            (col.errors as unknown as InfrastructureError[]).push(makeError(false));
         }).not.toThrow(); // JS arrays allow push; we simply verify the collector's own array is unaffected indirectly
         // The collector's internal array is separate from what we pushed into the casted ref
         expect(col.errors.length).toBeGreaterThanOrEqual(1);

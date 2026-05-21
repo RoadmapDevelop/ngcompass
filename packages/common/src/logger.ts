@@ -1,13 +1,28 @@
 /**
- * Global Logger Module
+ * @fileoverview
+ * Namespaced debug logger shared by every package.
  *
- * Provides debug and performance logging capabilities with namespace filtering.
- * Follows industry standards (ESLint, TypeScript debug patterns).
+ * Provides leveled (`debug`/`info`/`warn`/`error`) logging gated by the
+ * `DEBUG` environment variable using ESLint/TypeScript-style namespace
+ * filtering (`DEBUG=ngcompass:scanner,ngcompass:planner`), plus a
+ * `time`/`timeEnd` timer registry for ad-hoc performance measurement.
+ *
+ * The module exports a singleton plus convenience function wrappers so
+ * call sites can `import { debug } from '@ngcompass/common'` instead of
+ * threading a logger instance through every layer.
  */
 
 import pc from 'picocolors';
 
+/** Log levels accepted by the shared debug logger. */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/**
+ * Debug namespace names that map to analyzer subsystems.
+ *
+ * Namespace filtering lets users inspect one pipeline layer without turning
+ * every package into a noisy stderr stream.
+ */
 export type Namespace =
     | 'discovery'
     | 'loader'
@@ -66,6 +81,12 @@ const COLORS = [
     pc.blueBright
 ];
 
+/**
+ * Picks a stable color for a namespace using a small deterministic hash.
+ *
+ * @param namespace - Debug namespace being rendered.
+ * @returns A picocolors formatter function.
+ */
 function getNamespaceColor(namespace: string) {
     let hash = 0;
     for (let i = 0; i < namespace.length; i++) {
@@ -74,6 +95,12 @@ function getNamespaceColor(namespace: string) {
     return COLORS[Math.abs(hash) % COLORS.length];
 }
 
+/**
+ * Mutable debug logger used behind the module-level convenience exports.
+ *
+ * The class is intentionally private to keep the public API small and avoid
+ * downstream packages depending on logger internals.
+ */
 class Logger {
     private config: LoggerConfig;
     private timers: Map<string, number>;
@@ -86,13 +113,13 @@ class Logger {
     private initializeFromEnv(): LoggerConfig {
         const debugEnv = process.env.DEBUG || '';
 
-        // Parse namespaces first — enabled is derived from the result, not from a
+        // Parse namespaces first; enabled is derived from the result, not from a
         // fragile string-includes check that would silently enable everything on a typo.
         const namespaces = this.parseNamespaces(debugEnv);
 
         // Logger is active only when at least one namespace matched or 'all' was requested.
         // An empty set means the user wrote e.g. DEBUG=ngcompass:typo and no namespace
-        // was recognised — we stay silent rather than flooding with unintended output.
+        // was recognized, so we stay silent rather than flooding unintended output.
         const enabled = namespaces === 'all' || namespaces.size > 0;
 
         return {
@@ -104,41 +131,50 @@ class Logger {
         };
     }
 
+    /** Enables debug output for all namespaces or a selected namespace list. */
     public enable(level: LogLevel = 'debug', namespaces: Namespace[] | 'all' = 'all') {
         this.config.enabled = true;
         this.config.level = level;
         this.config.namespaces = namespaces === 'all' ? 'all' : new Set(namespaces);
     }
 
+    /** Disables debug output and leaves existing timer state untouched. */
     public disable() {
         this.config.enabled = false;
     }
 
+    /** Returns whether any namespace is currently enabled for logging. */
     public isEnabled(): boolean {
         return this.config.enabled;
     }
 
+    /** Writes a debug-level message to stderr when its namespace is enabled. */
     public debug(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('debug', namespace, message, ...args);
     }
 
+    /** Writes an info-level message to stderr when its namespace is enabled. */
     public info(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('info', namespace, message, ...args);
     }
 
+    /** Writes a warning-level message to stderr when its namespace is enabled. */
     public warn(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('warn', namespace, message, ...args);
     }
 
+    /** Writes an error-level message to stderr when its namespace is enabled. */
     public error(namespace: Namespace, message: string, ...args: unknown[]) {
         this.log('error', namespace, message, ...args);
     }
 
+    /** Starts or resets a named timer when debug output is enabled. */
     public time(label: string) {
         if (!this.config.enabled) return;
         this.timers.set(label, performance.now());
     }
 
+    /** Ends a named timer and returns its elapsed milliseconds. */
     public timeEnd(label: string): number {
         if (!this.config.enabled) return 0;
 
@@ -150,6 +186,7 @@ class Logger {
         return duration;
     }
 
+    /** Ends a named timer and logs the elapsed duration with a message. */
     public timeLog(label: string, namespace: Namespace, message?: string): number {
         const duration = this.timeEnd(label);
         if (duration > 0 && message) {
@@ -172,7 +209,7 @@ class Logger {
     }
 
     private parseNamespaces(debugEnv: string): Set<Namespace> | 'all' {
-        // Wildcard or bare tool name → enable every namespace.
+        // Wildcard or bare tool name enables every namespace.
         if (debugEnv === '*' || debugEnv === 'ngcompass' || debugEnv === 'ngcompass:*') {
             return 'all';
         }
@@ -188,7 +225,7 @@ class Logger {
             if (KNOWN_NAMESPACES.has(ns)) {
                 namespaces.add(ns as Namespace);
             } else if (ns.length > 0) {
-                // Warn once per unrecognised token so the user can fix the typo.
+                // Warn once per unrecognized token so the user can fix the typo.
                 // Uses console.warn directly (not the logger itself) to avoid recursion.
                 console.warn(
                     `[ngcompass] Unknown debug namespace: "${ns}". ` +
@@ -197,44 +234,54 @@ class Logger {
             }
         }
 
-        // Always return the set — never fall back to 'all' for an empty/unmatched result.
+        // Always return the set; never fall back to 'all' for an empty/unmatched result.
         // An empty set here means nothing matched; initializeFromEnv will set enabled=false.
         return namespaces;
     }
 }
 
-// Singleton instance
+// Singleton instance shared across module-level wrapper exports.
 const logger = new Logger();
 
-// Convenience exports
+/** Logs a debug-level message for an enabled namespace. */
 export const debug = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.debug(namespace, message, ...args);
 
+/** Logs an info-level message for an enabled namespace. */
 export const info = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.info(namespace, message, ...args);
 
+/** Logs a warning-level message for an enabled namespace. */
 export const warn = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.warn(namespace, message, ...args);
 
+/** Logs an error-level message for an enabled namespace. */
 export const error = (namespace: Namespace, message: string, ...args: unknown[]) =>
     logger.error(namespace, message, ...args);
 
+/** Starts or resets a named timer when debug output is enabled. */
 export const time = (label: string) =>
     logger.time(label);
 
+/** Ends a named timer and returns elapsed milliseconds, or `0` if inactive. */
 export const timeEnd = (label: string) =>
     logger.timeEnd(label);
 
+/** Ends a named timer and logs the elapsed duration under a namespace. */
 export const timeLog = (label: string, namespace: Namespace, message?: string) =>
     logger.timeLog(label, namespace, message);
 
+/** Enables debug output for all namespaces or a selected namespace list. */
 export const enableDebug = (level?: LogLevel, namespaces?: Namespace[] | 'all') =>
     logger.enable(level, namespaces);
 
+/** Disables debug output. */
 export const disableDebug = () =>
     logger.disable();
 
+/** Returns whether debug output is currently enabled. */
 export const isDebugEnabled = () =>
     logger.isEnabled();
 
+/** Shared logger singleton for callers that need the object API. */
 export default logger;

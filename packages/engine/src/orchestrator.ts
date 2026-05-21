@@ -457,18 +457,26 @@ const executeTypeAwareTasks = async (
     const allResults: RuleResult[] = [];
     const limit = pLimit(concurrency);
 
+    // Use the full scanner-discovered file list for ProjectContext construction
+    // when available. `chunk.files` is only the .ts files this chunk runs tasks
+    // for — passing that as projectFileSet causes buildComponentGraph to miss
+    // .html siblings, which silently disables template rules on external
+    // (templateUrl) templates. The TS Program still uses chunk.programRootFiles.
+    const projectFiles = options.files && options.files.length > 0 ? options.files : undefined;
+
     for (const wave of buildTypeAwareChunkWaves(fileEntries, chunkSize, adaptiveChunkCap, concurrency)) {
         const waveResults = await Promise.all(wave.map(chunk => limit(async () => {
             debug("engine", `Type-aware chunk ${chunk.index}: ${chunk.files.length} files, ${chunk.programRootFiles.length} TS roots, ${chunk.tasks.length} tasks`);
+            const filesForContext = projectFiles ?? chunk.files;
             const results = useProcessIsolation
-                ? await executeTypeAwareChunkInChildProcess(chunk.tasks, rootDir, chunk.files, chunk.programRootFiles, chunk.buildProjectContext, fileConcurrency, options, onFileProgress)
+                ? await executeTypeAwareChunkInChildProcess(chunk.tasks, rootDir, filesForContext, chunk.programRootFiles, chunk.buildProjectContext, fileConcurrency, options, onFileProgress)
                 : await executeTasksLocally(
                     chunk.tasks,
                     rootDir,
                     fileConcurrency,
                     true,
                     options.errorCollector,
-                    chunk.files,
+                    filesForContext,
                     options.parserOptions,
                     chunk.buildProjectContext,
                     chunk.programRootFiles,

@@ -1,8 +1,17 @@
+/**
+ * @fileoverview
+ * `ngcompass init` command.
+ *
+ * Scaffolds a starter `ngcompass.config.ts` in the current directory. The
+ * existence check is intentionally scoped to the target directory only — see
+ * `initConfig()` in `@ngcompass/config` for why ancestor lookups are wrong here.
+ */
+
 import { Command } from 'commander';
 import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
 import { initConfig } from '@ngcompass/config';
-import { exitWithError } from './exit.js';
+import { exitWithError, printError } from './exit.js';
 
 export function registerInitCommand(program: Command, _cache: CacheContext) {
     program
@@ -24,7 +33,7 @@ export function registerInitCommand(program: Command, _cache: CacheContext) {
                     exitWithError();
                 }
             } catch (error: unknown) {
-                console.error(error instanceof Error ? error.message : String(error));
+                printError('Error initializing configuration', error);
                 exitWithError();
             }
         });

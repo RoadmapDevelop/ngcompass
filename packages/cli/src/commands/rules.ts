@@ -1,8 +1,17 @@
+/**
+ * @fileoverview
+ * `ngcompass rules` command.
+ *
+ * With no argument, prints the full catalog of built-in rules (optionally
+ * filtered to a single preset). With a rule name, prints the detailed entry
+ * for that rule. Catalog rendering is delegated to the rules reporter.
+ */
+
 import { Command } from 'commander';
 import { getRulesReporter } from '@ngcompass/reporters';
 import { getRuleListEntries, isBuiltinPreset } from '@ngcompass/rules';
 import pc from 'picocolors';
-import { exitWithError } from './exit.js';
+import { exitWithError, printError } from './exit.js';
 
 export function registerRulesCommand(program: Command) {
     program
@@ -11,19 +20,19 @@ export function registerRulesCommand(program: Command) {
         .option('--preset <name>', 'Filter by preset: recommended, strict, performance, reactivity, or all')
         .action((ruleName: string | undefined, opts: { preset?: string }) => {
             if (opts.preset && !isBuiltinPreset(opts.preset)) {
-                console.error(pc.red(`Unknown preset: "${opts.preset}".`));
-                console.error(pc.dim('Available presets: recommended, strict, all, performance, reactivity'));
+                printError(`Unknown preset: "${opts.preset}".`);
+                process.stderr.write(pc.dim('Available presets: recommended, strict, all, performance, reactivity\n'));
                 exitWithError();
             }
 
             const entries = getRuleListEntries();
             const reporter = getRulesReporter({ preset: opts.preset });
-            
+
             if (ruleName) {
                 const rule = entries.find(e => e.name === ruleName);
                 if (!rule) {
-                    console.error(pc.red(`Rule "${ruleName}" not found.`));
-                    console.error(pc.dim('Run `ngcompass rules` to list available rules.'));
+                    printError(`Rule "${ruleName}" not found.`);
+                    process.stderr.write(pc.dim('Run `ngcompass rules` to list available rules.\n'));
                     exitWithError();
                     return;
                 }
