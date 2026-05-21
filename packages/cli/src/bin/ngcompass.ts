@@ -1,75 +1,60 @@
+/**
+ * @fileoverview
+ * Command-line entry point for the `ngcompass` binary.
+ *
+ * Bootstraps commander, registers every command, wires global signal handlers,
+ * initialises the shared cache context, and prints the run banner before each
+ * command action. This file owns the process lifecycle (signals, uncaught
+ * rejections, graceful shutdown); all per-command logic lives under
+ * `./commands/`.
+ */
+
 import { Command } from 'commander';
 import { registerCommands } from '../commands/index.js';
 import { enableDebug, PACKAGE_VERSION } from '@ngcompass/common';
 import { createCacheContext, CacheContext } from '@ngcompass/cache';
 import { registerAllBuiltinRules } from '@ngcompass/rules';
-
-const restoreCursor = () => {
-  if (!process.stdout.isTTY) return;
-  process.stdout.write('\x1B[?25h');
-};
+import { restoreCursor, printError } from '../commands/exit.js';
 
 const FLUSH_TIMEOUT_MS = 10_000;
+// POSIX signal exit-code convention: 128 + signal number.
+const SIGINT_EXIT_CODE = 130;   // 128 + 2  (SIGINT)
+const SIGTERM_EXIT_CODE = 143;  // 128 + 15 (SIGTERM)
 
 let shutdownInProgress = false;
 const gracefulShutdown = async (
-  cache: CacheContext | null,
-  exitCode: number
+    cache: CacheContext | null,
+    exitCode: number
 ): Promise<void> => {
-  if (shutdownInProgress) return;
-  shutdownInProgress = true;
+    if (shutdownInProgress) return;
+    shutdownInProgress = true;
 
-  restoreCursor();
+    restoreCursor();
 
-  if (cache) {
-    try {
-      const flushTimeout = new Promise<void>((resolve) =>
-        setTimeout(resolve, FLUSH_TIMEOUT_MS).unref()
-      );
-      await Promise.race([cache.flush(), flushTimeout]);
-    } catch {
-      // Best-effort flush — do not block shutdown on failure.
+    if (cache) {
+        try {
+            const flushTimeout = new Promise<void>((resolve) =>
+                setTimeout(resolve, FLUSH_TIMEOUT_MS).unref()
+            );
+            await Promise.race([cache.flush(), flushTimeout]);
+        } catch {
+            // Best-effort flush — do not block shutdown on failure.
+        }
     }
-  }
 
-  process.exit(exitCode);
+    process.exit(exitCode);
 };
 
-export async function run() {
-  const program = new Command();
+const handleFatalAsyncFailure = (cache: CacheContext, label: string, reason: unknown): void => {
+    printError(`[ngcompass] ${label}`, reason);
+    void gracefulShutdown(cache, 1);
+};
 
-  program
-    .name('ngcompass')
-    .description(
-      'Static analysis and architecture insights for Angular codebases.'
-    )
-    .version(PACKAGE_VERSION, '-V, --version', 'Display ngcompass version')
-    .option('--debug', 'Enable detailed debug logs across all modules')
-    .addHelpText(
-      'after',
-      '\nExamples:\n  $ ngcompass init\n  $ ngcompass analyze --profile strict\n  $ ngcompass cache info\n'
-    )
-    .hook('preAction', async (thisCommand, actionCommand) => {
-      const opts = thisCommand.opts();
-      if (opts.debug) {
-        enableDebug('debug', 'all');
-      }
-
-      const actionOpts = actionCommand.opts();
-      if (
-        actionOpts.format !== 'json' &&
-        actionOpts.format !== 'sarif' &&
-        actionOpts.format !== 'html' &&
-        actionOpts.format !== 'ui'
-      ) {
-        const { default: pc } = await import('picocolors');
-        const parent = actionCommand.parent;
-        const commandName = (parent && parent.name() !== 'ngcompass')
-          ? parent.name()
-          : actionCommand.name();
-        const cwd = process.cwd();
-        process.stdout.write(
-          [
+const printRunBanner = async (commandName: string): Promise<void> => {
+    const { default: pc } = await import('picocolors');
+    const cwd = process.cwd();
+    process.stdout.write(
+        [
             ``,
             `${pc.dim('>')} ${pc.dim(`ngcompass@${PACKAGE_VERSION}`)} ${pc.dim(commandName)} ${pc.dim(cwd)}`,
             `${pc.dim('>')} ${pc.dim('ngcompass')} ${pc.dim('run')}`,
@@ -77,55 +62,80 @@ export async function run() {
             ` ${pc.bgCyan(pc.white(pc.bold(` ${commandName.toUpperCase()} `)))}  ${pc.cyan(PACKAGE_VERSION)}  ${pc.dim(cwd)}`,
             ``,
             ``,
-          ].join('\n')
-        );
-      }
+        ].join('\n')
+    );
+};
+
+const isBannerSuppressedFormat = (format: unknown): boolean => {
+    return format === 'json' || format === 'sarif' || format === 'html' || format === 'ui';
+};
+
+export async function run() {
+    const program = new Command();
+
+    program
+        .name('ngcompass')
+        .description(
+            'Static analysis and architecture insights for Angular codebases.'
+        )
+        .version(PACKAGE_VERSION, '-V, --version', 'Display ngcompass version')
+        .option('--debug', 'Enable detailed debug logs across all modules')
+        .addHelpText(
+            'after',
+            '\nExamples:\n  $ ngcompass init\n  $ ngcompass analyze --profile strict\n  $ ngcompass cache info\n'
+        )
+        .hook('preAction', async (thisCommand, actionCommand) => {
+            const opts = thisCommand.opts();
+            if (opts.debug) {
+                enableDebug('debug', 'all');
+            }
+
+            const actionOpts = actionCommand.opts();
+            if (!isBannerSuppressedFormat(actionOpts.format)) {
+                const parent = actionCommand.parent;
+                const commandName = (parent && parent.name() !== 'ngcompass')
+                    ? parent.name()
+                    : actionCommand.name();
+                await printRunBanner(commandName);
+            }
+        });
+
+    const cache = createCacheContext();
+
+    process.on('SIGINT', () => void gracefulShutdown(cache, SIGINT_EXIT_CODE));
+    process.on('SIGTERM', () => void gracefulShutdown(cache, SIGTERM_EXIT_CODE));
+
+    process.on('uncaughtException', (err: Error) => {
+        handleFatalAsyncFailure(cache, 'Unexpected error', err);
     });
 
-  const cache = createCacheContext();
+    process.on('unhandledRejection', (reason: unknown) => {
+        handleFatalAsyncFailure(cache, 'Unhandled promise rejection', reason);
+    });
 
-  process.on('SIGINT', () => void gracefulShutdown(cache, 130));
-  process.on('SIGTERM', () => void gracefulShutdown(cache, 143));
+    try {
+        registerAllBuiltinRules();
 
-  process.on('uncaughtException', (err: Error) => {
-    restoreCursor();
-    console.error(`\n[ngcompass] Unexpected error: ${err.message}`);
-    void gracefulShutdown(cache, 1);
-  });
+        registerCommands(program, cache);
 
-  process.on('unhandledRejection', (reason: unknown) => {
-    restoreCursor();
-    const msg = reason instanceof Error ? reason.message : String(reason);
-    console.error(`\n[ngcompass] Unhandled promise rejection: ${msg}`);
-    void gracefulShutdown(cache, 1);
-  });
+        if (!process.argv.slice(2).length) {
+            program.outputHelp();
+            return;
+        }
 
-  try {
-    registerAllBuiltinRules();
+        await program.parseAsync(process.argv);
 
-    registerCommands(program, cache);
+        await cache.flush();
 
-    if (!process.argv.slice(2).length) {
-      program.outputHelp();
-      return;
+        process.exit(0);
+    } catch (err: unknown) {
+        printError('[ngcompass] Fatal error', err);
+        await gracefulShutdown(cache, 1);
     }
-
-    await program.parseAsync(process.argv);
-
-    await cache.flush();
-
-    process.exit(0);
-  } catch (err: unknown) {
-    restoreCursor();
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`[ngcompass] Fatal error: ${msg}`);
-    await gracefulShutdown(cache, 1);
-  }
 }
 
 run().catch((err: unknown) => {
-  restoreCursor();
-  const msg = err instanceof Error ? err.message : String(err);
-  console.error(`[ngcompass] Fatal error: ${msg}`);
-  process.exit(1);
+    printError('[ngcompass] Fatal error', err);
+    restoreCursor();
+    process.exit(1);
 });

@@ -75,7 +75,9 @@ describe('Init Command', () => {
 
         await program.parseAsync(['node', 'test', 'init']);
 
-        expect(mockConsoleError).toHaveBeenCalledWith('Boom');
+        expect(mockConsoleError).toHaveBeenCalled();
+        const errorArg = String(mockConsoleError.mock.calls[0][0]);
+        expect(errorArg).toContain('Boom');
         expect(mockExit).toHaveBeenCalledWith(1);
     });
 });

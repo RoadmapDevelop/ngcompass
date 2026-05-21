@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { findAndLoadConfig } from '../loaders/discovery.js';
 import type { InitResult } from '@ngcompass/common';
 
 export class ConfigExistsError extends Error {
@@ -47,12 +46,15 @@ export default defineConfig({
 export async function initConfig(options: InitOptions = {}): Promise<InitResult> {
     const cwd = options.cwd ?? process.cwd();
     const targetPath = path.join(cwd, 'ngcompass.config.ts');
-    const existing = await findAndLoadConfig(cwd);
+    // Only check the target directory — never walk up. Walking up (as the
+    // analyze/run path does) would treat a stray ngcompass.config.ts in any
+    // ancestor directory as "already exists" and block init in this project.
+    const exists = await fs.access(targetPath).then(() => true, () => false);
 
-    if (existing && !options.force) {
+    if (exists && !options.force) {
         return {
             success: false,
-            filePath: existing.filepath,
+            filePath: targetPath,
             alreadyExists: true
         };
     }

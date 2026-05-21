@@ -1,7 +1,8 @@
 /**
- * Stable Serialization Utility
+ * @fileoverview
+ * Deterministic JSON serializer for cache keys and hashes.
  *
- * Produces a deterministic JSON string suitable for use in cache keys and hashes.
+ * Produces a stable JSON string suitable for use in cache keys and hashes.
  *
  * Guarantees:
  *  - Objects: keys sorted alphabetically at every depth level
@@ -17,6 +18,12 @@
  * keys must not affect the resulting string (e.g. batch keys, cache keys).
  */
 
+/**
+ * Error raised when a value cannot be represented as deterministic JSON.
+ *
+ * The `path` records the nested key/index trail to the invalid value so cache
+ * callers can produce actionable diagnostics instead of a generic hash failure.
+ */
 export class SerializationError extends Error {
     constructor(
         message: string,

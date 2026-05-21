@@ -1,7 +1,11 @@
 /**
- * @angular-analyzer/common
+ * @fileoverview
+ * Public entry point for `@ngcompass/common`.
  *
- * Common types, interfaces, and utilities shared across all packages
+ * Re-exports the shared domain types, interfaces, errors, logger, and
+ * serialization helpers consumed by every other package in the monorepo.
+ * This barrel is intentionally dependency-light because `common` sits at
+ * the innermost architecture layer and must never import sibling packages.
  */
 
 export * from './constants';
