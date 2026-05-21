@@ -1,19 +1,33 @@
-<div align="center">
-  <h1>ngcompass</h1>
-  <p><strong>Angular-aware static analysis for architecture, performance, SSR, security, and code quality.</strong></p>
-  <p>
-    <a href="https://www.npmjs.com/package/ngcompass"><img src="https://img.shields.io/npm/v/ngcompass/beta?label=beta&color=ec4899&style=flat-square" alt="npm beta"></a>
-    <img src="https://img.shields.io/badge/Angular-v15%2B-dd0031?style=flat-square" alt="Angular v15+">
-    <img src="https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square" alt="Node.js 20+">
-    <img src="https://img.shields.io/badge/license-PolyForm%20Shield%201.0.0-6366f1?style=flat-square" alt="PolyForm Shield 1.0.0">
-  </p>
-</div>
+# ngcompass
+
+[![npm beta](https://img.shields.io/npm/v/ngcompass/beta?label=beta&color=ec4899&style=flat-square)](https://www.npmjs.com/package/ngcompass)
+![Angular v15+](https://img.shields.io/badge/Angular-v15%2B-dd0031?style=flat-square)
+![Node.js 20+](https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square)
+![Privacy: 100% Local](https://img.shields.io/badge/Privacy-100%25_Local-success?style=flat-square)
+
+**ngcompass** is an Angular-aware command-line static analysis tool for architecture, performance, SSR, security, reactivity, and code quality.
+
+This repository is the public issue tracker and discussion space for ngcompass. The source code for the ngcompass analysis engine is currently closed-source and is not hosted in this repository.
 
 ## Overview
 
-ngcompass is a command-line static analysis tool built for Angular projects. It reads TypeScript, Angular templates, styles, and project configuration without running the application, then reports issues that generic TypeScript linters often miss.
+ngcompass analyzes Angular projects without running the application. It reads TypeScript, Angular templates, styles, and project configuration, then reports issues that generic TypeScript linters often miss.
 
-It is designed for teams that want a clearer view of Angular-specific risks: component architecture, rendering performance, SSR compatibility, Signals and RxJS patterns, template safety, and modern Angular API adoption.
+It is designed for teams that want a clearer view of Angular-specific risks, including component architecture, rendering performance, SSR compatibility, Signals and RxJS patterns, template safety, and modern Angular API adoption.
+
+## Privacy and Security
+
+ngcompass runs entirely on your local machine.
+
+It does not:
+
+- Upload your source code
+- Transmit file paths
+- Send AST data
+- Require an internet connection to analyze a project
+- Include analytics or telemetry tracking
+
+Your project code stays on your machine.
 
 ## Highlights
 
@@ -46,7 +60,7 @@ Using pnpm:
 pnpm add -D ngcompass@beta
 ```
 
-> ngcompass is currently in beta. Install with `@beta` to opt in to the prerelease channel.
+ngcompass is currently in beta. Install with `@beta` to use the prerelease channel.
 
 ## Quick Start
 
@@ -117,7 +131,7 @@ export default defineConfig({
 });
 ```
 
-### Presets
+## Presets
 
 | Preset | Purpose |
 |---|---|
@@ -154,7 +168,7 @@ export default defineConfig({
 | `ngcompass cache clear` | Clear cached analysis data |
 | `ngcompass cache path` | Print the cache directory |
 
-### Analyze Options
+## Analyze Options
 
 | Option | Description |
 |---|---|
@@ -170,7 +184,7 @@ export default defineConfig({
 | `--max-workers <n>` | Limit worker threads |
 | `--skip-type-check` | Skip rules that require TypeScript type checking |
 
-## CI
+## CI Usage
 
 ngcompass exits with code `0` when analysis passes and a non-zero code when configured violations are found.
 
@@ -194,44 +208,10 @@ ngcompass cache clear
 ngcompass analyze --force
 ```
 
-## Monorepo
-
-| Package | Responsibility |
-|---|---|
-| [`ngcompass`](packages/cli) | CLI entry point |
-| [`@ngcompass/config`](packages/config) | Config loading, validation, profiles, and health checks |
-| [`@ngcompass/scanner`](packages/scanner) | File discovery and filtering |
-| [`@ngcompass/rules`](packages/rules) | Built-in rules, presets, and rule registry |
-| [`@ngcompass/planner`](packages/planner) | Incremental execution planning |
-| [`@ngcompass/engine`](packages/engine) | Rule execution and analysis orchestration |
-| [`@ngcompass/ast`](packages/ast) | TypeScript, template, and style parsing helpers |
-| [`@ngcompass/cache`](packages/cache) | Memory and disk cache services |
-| [`@ngcompass/reporters`](packages/reporters) | Console, JSON, SARIF, and HTML reporters |
-| [`@ngcompass/common`](packages/common) | Shared types and utilities |
-| [`@ngcompass/site`](packages/site) | Documentation site |
-
-## Development
-
-```bash
-pnpm install
-pnpm build
-pnpm test
-pnpm typecheck
-```
-
-Additional workspace checks:
-
-```bash
-pnpm smoke
-pnpm validate:packages
-pnpm prerelease:check
-```
-
 ## Requirements
 
 - Node.js `^20.19.0` or `>=22.12.0`
 - Angular v15 or later
-- pnpm for repository development
 
 ## Beta Notes
 
@@ -239,3 +219,54 @@ pnpm prerelease:check
 - Template analysis is best-effort for highly dynamic templates.
 - Validate ngcompass against your project before making it a required CI gate.
 
+## Public Repository Scope
+
+This repository exists for public feedback and community support.
+
+Use this repository for:
+
+- Bug reports
+- Feature requests
+- Documentation feedback
+- Usage questions
+- Rule suggestions
+- Compatibility reports
+- Discussions about Angular analysis patterns
+
+This repository does not contain the ngcompass source code.
+
+## Reporting Bugs
+
+When reporting a bug, please include:
+
+- ngcompass version
+- Angular version
+- Node.js version
+- Package manager and version
+- Operating system
+- Command that failed
+- Error output, if available
+- Minimal reproduction, if possible
+
+Please avoid sharing proprietary source code. If needed, create a simplified example that reproduces the issue.
+
+## Feature Requests
+
+When requesting a feature, please include:
+
+- The problem you are trying to solve
+- The Angular pattern involved
+- Why existing tools do not cover it
+- Example input, if possible
+- Expected output or behavior
+
+## Links
+
+- Website: https://www.ngcompass.dev
+- npm package: https://www.npmjs.com/package/ngcompass
+
+## License
+
+ngcompass is distributed under its published package license.
+
+This public repository is provided for issue tracking, feedback, and discussion.
