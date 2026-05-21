@@ -157,7 +157,10 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(npm whoami *)",
-      "Bash(npm view *)"
+      "Bash(npm view *)",
+      "WebFetch(domain:polyformproject.org)",
+      "PowerShell($packages = @\\('ast','cache','cli','common','config','engine','planner','reporters','rules','scanner'\\); foreach \\($p in $packages\\) { Copy-Item -Path 'LICENSE' -Destination \"packages\\\\$p\\\\LICENSE\" -Force }; Write-Host \"Copied LICENSE to $\\($packages.Count\\) packages\")",
+      "Bash(git status *)"
     ]
   }
 }
