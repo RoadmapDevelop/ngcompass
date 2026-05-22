@@ -1,16 +1,40 @@
 /**
- * Minimal AST Type Definitions (Zero-Copy, ESTree-like)
+
+* @fileoverview
+ * Minimal AST type definitions.
  *
- * These types match Oxc's ESTree-compatible AST structure.
- * Only include fields we actually use to minimize overhead.
+ * These interfaces mirror the relevant subset of Oxc's ESTree-compatible AST
+ * shape so the rest of the package (matchers, analyzers, streams) can be
+ * typed without depending on the full Oxc type tree. Only the fields we
+ * actually read are declared — keeping the surface narrow makes accidental
+ * coupling visible at compile time.
+ *
+ * Both `start`/`end` (Oxc-style) and `span: {start, end}` (some older nodes)
+ * are accepted; consumers should use {@link nodeStart} / {@link nodeEnd}
+ * helpers below rather than reading either field directly.
  */
 
+/** Base AST node. Every concrete node carries a discriminant `type` string. */
 export interface Node {
     readonly type: string;
     readonly span?: { start: number; end: number };
     readonly start?: number;
     readonly end?: number;
 }
+
+/**
+ * Returns the start offset of an AST node, accepting either field layout
+ * (`start` or `span.start`) and defaulting to `0` when neither is present.
+ */
+export const nodeStart = (node: Pick<Node, 'start' | 'span'>): number =>
+    node.start ?? node.span?.start ?? 0;
+
+/**
+ * Returns the end offset of an AST node, accepting either field layout
+ * (`end` or `span.end`) and defaulting to `0` when neither is present.
+ */
+export const nodeEnd = (node: Pick<Node, 'end' | 'span'>): number =>
+    node.end ?? node.span?.end ?? 0;
 
 export interface Identifier extends Node {
     readonly type: 'Identifier';
@@ -153,6 +177,15 @@ export interface TemplateBlockParameter extends Node {
     readonly expression: string;
 }
 
+/**
+ * Union of expression-position nodes the matchers reason about.
+ *
+ * The trailing `Node` fallback is retained on purpose — Oxc occasionally
+ * produces shapes we have not yet enumerated here (e.g. `ChainExpression`,
+ * `TSAsExpression`); rather than refuse to typecheck, callers receive
+ * `Node` and rely on the explicit `node.type === '…'` discrimination they
+ * already perform.
+ */
 export type Expression =
     | Identifier
     | CallExpression
