@@ -1,3 +1,12 @@
+/**
+ * @fileoverview
+ * Unit tests for the initConfig configuration scaffold action.
+ *
+ * Verifies that initConfig successfully outputs a valid defineConfig typescript template
+ * populated with standard directory and file glob inclusions/exclusions, handles already-existing files,
+ * and handles force overwrite options correctly.
+ */
+
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -33,16 +42,14 @@ export default defineConfig({
   extends: 'ngcompass:recommended',
 
   include: [
-    'src/**/*.ts',
-    'src/**/*.html',
+    '**/*.ts',
+    '**/*.html',
   ],
 
   exclude: [
-    'node_modules/**',
-    'dist/**',
-    'build/**',
-    'coverage/**',
-    '**/*.d.ts',
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/build/**',
     '**/*.spec.ts',
     '**/*.test.ts',
   ],
