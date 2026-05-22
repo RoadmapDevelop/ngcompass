@@ -1,13 +1,11 @@
 /**
- * Cache Key Context
+ * @fileoverview
+ * Cache-key context.
  *
- * Encapsulates all version-related inputs that affect cache validity.
- * Must be included in EVERY cache key so that stale entries from a previous
- * version of the tool, parser, or rule set are never reused.
- *
- * This resolves the critical result-cache staleness bug where upgrading the
- * tool changes the globalHash (plan cache miss) but NOT the individual taskIds,
- * allowing old per-task results from the previous engine version to be served.
+ * Encapsulates every version-tied input that affects cache validity so the
+ * planner and config loader can mix them into their respective cache keys.
+ * Must be included in EVERY cache key — otherwise an upgrade can keep
+ * serving stale per-task results even when the plan-level cache rotates.
  *
  * Exact key formulas:
  *
@@ -22,9 +20,8 @@
  */
 
 import { createRequire } from 'node:module';
-import { PACKAGE_VERSION, CACHE_VERSION } from '@ngcompass/common';
+import { PACKAGE_VERSION, CACHE_VERSION, stableSerialize } from '@ngcompass/common';
 import { computeHash } from './hashing.js';
-import { stableSerialize } from './utils/stable-serialize.js';
 
 // ============================================================
 // INTERFACE

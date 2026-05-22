@@ -60,17 +60,12 @@ export interface ResultCache {
  * - Cache warmth analysis
  */
 /**
- * Maximum number of result entries to read/write in a single parallel batch.
- * Sized to stay well within typical OS per-process file-descriptor limits (~1024)
- * while keeping batch overhead low. Benchmarked at 200 on ext4 and APFS.
+ * Maximum number of result entries handled in a single parallel batch (for
+ * both reads and writes). Sized to stay well within typical OS per-process
+ * file-descriptor limits (~1024) while keeping batch overhead low.
+ * Benchmarked at 200 on ext4 and APFS.
  */
-const RESULT_BATCH_SIZE = 200;
-
-/**
- * Maximum number of entries to write in a single parallel batch.
- * cacache manages its own fd pool, so we can safely match RESULT_BATCH_SIZE.
- */
-const WRITE_BATCH_SIZE = 200;
+const BATCH_SIZE = 200;
 
 export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => {
 
@@ -149,8 +144,8 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
             }
             await driver.bulkSet(all);
         } else {
-            for (let i = 0; i < entries.length; i += WRITE_BATCH_SIZE) {
-                const batch = entries.slice(i, i + WRITE_BATCH_SIZE);
+            for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+                const batch = entries.slice(i, i + BATCH_SIZE);
                 await Promise.all(batch.map(([hash, result]) => driver.set(hash, result)));
                 await Promise.all(batch.map(([hash]) =>
                     driver.set(getMetadataKey(hash), {
@@ -214,8 +209,8 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
             const results = new Map<string, T>();
 
             // Batched concurrency to avoid overwhelming OS with unbounded parallel I/O
-            for (let i = 0; i < hashes.length; i += RESULT_BATCH_SIZE) {
-                const batch = hashes.slice(i, i + RESULT_BATCH_SIZE);
+            for (let i = 0; i < hashes.length; i += BATCH_SIZE) {
+                const batch = hashes.slice(i, i + BATCH_SIZE);
                 await Promise.all(
                     batch.map(async (hash) => {
                         // Check write-behind buffer first
@@ -273,8 +268,8 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
             const existing = new Set<string>();
 
             // Batched concurrency to avoid overwhelming the OS with unbounded parallel fs.access
-            for (let i = 0; i < hashes.length; i += RESULT_BATCH_SIZE) {
-                const batch = hashes.slice(i, i + RESULT_BATCH_SIZE);
+            for (let i = 0; i < hashes.length; i += BATCH_SIZE) {
+                const batch = hashes.slice(i, i + BATCH_SIZE);
                 await Promise.all(
                     batch.map(async (hash) => {
                         if (pendingWrites.has(hash)) {
@@ -319,8 +314,8 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
             const metadataUpdates: Array<[string, CacheMetadata]> = [];
 
             // Batched concurrency to avoid overwhelming OS with unbounded parallel I/O
-            for (let i = 0; i < hashes.length; i += RESULT_BATCH_SIZE) {
-                const batch = hashes.slice(i, i + RESULT_BATCH_SIZE);
+            for (let i = 0; i < hashes.length; i += BATCH_SIZE) {
+                const batch = hashes.slice(i, i + BATCH_SIZE);
                 await Promise.all(
                     batch.map(async (hash) => {
                         const result = (pendingWrites.has(hash)
@@ -343,8 +338,8 @@ export const createResultCache = (driver: AsyncDriver<unknown>): ResultCache => 
 
             // Batch update all metadata at once
             if (metadataUpdates.length > 0) {
-                for (let i = 0; i < metadataUpdates.length; i += WRITE_BATCH_SIZE) {
-                    const batch = metadataUpdates.slice(i, i + WRITE_BATCH_SIZE);
+                for (let i = 0; i < metadataUpdates.length; i += BATCH_SIZE) {
+                    const batch = metadataUpdates.slice(i, i + BATCH_SIZE);
                     await Promise.all(
                         batch.map(async ([hash, updated]) => {
                             await driver.set(getMetadataKey(hash), updated);
