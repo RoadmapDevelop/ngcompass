@@ -1,63 +1,65 @@
-import { ConfigIssue } from "@ngcompass/common";
-import { MESSAGES } from "../messages.js";
-import { ConfigBlock, ConfigBlockValidation, ValidationContext } from "../types.js";
-
 /**
- * Constants governing validation limits and thresholds.
+ * @fileoverview
+ * Base configuration-block check.
+ *
+ * Validates fields that exist on every block — root config or profile —
+ * namely worker-count bounds and cache TTL. Profile-specific checks call
+ * this with a non-empty `basePath` so issues are attributed to the right
+ * profile entry.
  */
+
+import type { ConfigIssue } from '@ngcompass/common';
+import { MESSAGES } from '../messages.js';
+import type { ConfigBlock, ConfigBlockValidation, ValidationContext } from '../types.js';
+
+/** Bounds applied by the base block check. */
 const LIMITS = {
     WORKERS_MIN: 1,
     WORKERS_CPU_MULTIPLIER: 2,
-    CACHE_TTL_MIN: 0
+    CACHE_TTL_MIN: 0,
 } as const;
 
 /**
- * Performs a comprehensive validation of a configuration block, which can represent
- * either the root configuration or a specific profile.
+ * Validates fields common to both the root config and individual profiles.
  *
- * @param block - The configuration object to validate.
- * @param context - The validation context providing access to environmental data like CPU count.
- * @param basePath - The breadcrumb path used for accurate error reporting in nested structures.
- * @returns A validation result object containing any discovered issues.
+ * @param block - The block to validate (root config or a profile entry).
+ * @param context - Provides CPU-count lookup for worker bounds.
+ * @param basePath - Path prefix used to attribute issues inside profiles.
+ * @returns {ConfigBlockValidation} Issues discovered in this block.
  */
 export function validateConfigBlock(
     block: ConfigBlock,
     context: ValidationContext,
-    basePath: (string | number)[] = []
+    basePath: (string | number)[] = [],
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
 
-    /**
-     * Resource Allocation: Worker Threads
-     * Validates that the worker count is within reasonable hardware limits.
-     */
+    // Worker bounds: must be ≥ 1 and not absurdly larger than the host CPU count.
     if (block.maxWorkers !== undefined) {
         const cpuCores = context.os.cpus().length;
         const workerLimit = cpuCores * LIMITS.WORKERS_CPU_MULTIPLIER;
 
         if (block.maxWorkers < LIMITS.WORKERS_MIN) {
             issues.push({
-                ...MESSAGES.WORKERS_BELOW_MINIMUM(),
-                path: [...basePath, "maxWorkers"]
+                ...MESSAGES.WORKERS_BELOW_MINIMUM,
+                path: [...basePath, 'maxWorkers'],
             });
         } else if (block.maxWorkers > workerLimit) {
             issues.push({
                 ...MESSAGES.WORKERS_EXCESSIVE(block.maxWorkers, workerLimit),
-                path: [...basePath, "maxWorkers"]
+                path: [...basePath, 'maxWorkers'],
             });
         }
     }
 
-    /**
-     * Persistence: Cache Time-to-Live
-     * Ensures the cache TTL is a non-negative value.
-     */
-    if (block.cache && typeof block.cache === "object" && block.cache.ttl !== undefined) {
+    // Cache TTL: must be a non-negative number when supplied as an object.
+    if (block.cache && typeof block.cache === 'object' && block.cache.ttl !== undefined) {
         const { ttl } = block.cache;
-        const path = [...basePath, "cache", "ttl"];
-
         if (ttl < LIMITS.CACHE_TTL_MIN) {
-            issues.push({ ...MESSAGES.NEGATIVE_CACHE_TTL(ttl), path });
+            issues.push({
+                ...MESSAGES.NEGATIVE_CACHE_TTL(ttl),
+                path: [...basePath, 'cache', 'ttl'],
+            });
         }
     }
 

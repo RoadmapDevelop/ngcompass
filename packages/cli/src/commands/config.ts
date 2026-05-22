@@ -7,6 +7,7 @@
  * the dedicated config reporter.
  */
 
+import process from 'node:process';
 import { Command } from 'commander';
 import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
@@ -25,6 +26,7 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
         .action(async (options) => {
             try {
                 const result = await validateConfig({
+                    cwd: process.cwd(),
                     cache: options.cache ? cache : undefined,
                     profile: options.profile
                 });

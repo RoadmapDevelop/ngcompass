@@ -314,7 +314,7 @@ const resolveAstRequirements = (rule: ResolvedRule) => {
         /** True when the rule needs full semantic type information. */
         needsTypeChecker: Boolean(requires.typeChecker),
         /**
-         * True when the rule needs the project-wide `ProjectContext` (CTX-001).
+         * True when the rule needs the project-wide `ProjectContext`.
          * Routes the task to the type-aware execution path on the main thread.
          */
         needsProjectContext: Boolean(requires.projectContext),

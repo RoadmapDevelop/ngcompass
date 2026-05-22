@@ -144,7 +144,7 @@ export interface RuleTask {
     readonly needsTypeChecker?: boolean;
 
     /**
-     * Whether this task requires a pre-computed `ProjectContext` (CTX-001).
+     * Whether this task requires a pre-computed `ProjectContext`.
      * Routed to the type-aware execution path alongside `needsTypeChecker`.
      */
     readonly needsProjectContext?: boolean;
@@ -237,7 +237,7 @@ export interface Task {
     readonly needsTypeChecker?: boolean;
 
     /**
-     * Whether this task requires a pre-computed `ProjectContext` (CTX-001).
+     * Whether this task requires a pre-computed `ProjectContext`.
      *
      * When `true` the task is routed to the type-aware execution path on the
      * main thread (same as `needsTypeChecker`) because `ProjectContext` is

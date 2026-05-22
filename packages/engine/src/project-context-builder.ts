@@ -68,17 +68,14 @@ export function buildProjectContext(
     return {
         importGraph:        importGraph        as ReadonlyMap<string, ReadonlySet<string>>,
         reverseImportGraph: reverseImportGraph as ReadonlyMap<string, ReadonlySet<string>>,
-        // CTX-004
         ngModuleMap:          ngModuleMap          as ReadonlyMap<string, NgModuleInfo>,
         standaloneComponents: standaloneComponents as ReadonlySet<string>,
         classToFile:          classToFile          as ReadonlyMap<string, string>,
         componentGraph,
         projectFiles:   projectFileSet,
         rootDir,
-        // CTX-002
         barrelFiles:  barrelFiles  as ReadonlySet<string>,
         externalDeps: externalDeps as ReadonlyMap<string, ReadonlySet<string>>,
-        // CTX-003
         templateToComponent: templateToComponent as ReadonlyMap<string, string>,
     };
 }
@@ -248,7 +245,7 @@ function detectBarrelFiles(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODULE SPECIFIER COLLECTION  (CTX-002: full AST walk)
+// MODULE SPECIFIER COLLECTION  (full AST walk)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -258,7 +255,7 @@ function detectBarrelFiles(
  *   - `import … from 'specifier'`          (static import)
  *   - `export … from 'specifier'`          (re-export / barrel)
  *   - `export * from 'specifier'`          (namespace re-export)
- *   - `import('specifier')`               (dynamic import — CTX-002)
+ *   - `import('specifier')`               (dynamic import)
  *
  * Uses a full depth-first AST walk (`ts.forEachChild`) so that dynamic
  * imports inside function bodies, class methods, arrow functions, and
@@ -302,7 +299,7 @@ function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXTERNAL PACKAGE NAME EXTRACTION  (CTX-002)
+// EXTERNAL PACKAGE NAME EXTRACTION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -359,7 +356,7 @@ function normaliseDir(dir: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CTX-003: COMPONENT GRAPH DETECTION
+// COMPONENT GRAPH DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -529,7 +526,7 @@ function buildTemplateToComponentMap(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CTX-004: ANGULAR DECORATOR SCANNER
+// ANGULAR DECORATOR SCANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
