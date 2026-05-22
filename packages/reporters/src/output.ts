@@ -1,3 +1,13 @@
+/**
+ * @fileoverview
+ * Output abstraction used by every reporter.
+ *
+ * Decouples reporters from Node's `process.stdout` / `process.stderr` so
+ * tests can capture output in-memory without monkey-patching globals. The
+ * production singleton (`processOutput`) wires both methods to the real
+ * streams; tests use `createTestOutput()` to capture writes into arrays.
+ */
+
 import process from 'node:process';
 
 /**

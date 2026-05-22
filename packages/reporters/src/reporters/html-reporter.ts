@@ -1,12 +1,28 @@
-﻿import fs from 'node:fs';
+﻿/**
+ * @fileoverview
+ * Single-file HTML reporter.
+ *
+ * Emits a self-contained `.html` document (inline CSS + JS) summarising the
+ * analysis run. The document supports interactive filtering and search; all
+ * styles and behaviours are embedded so the report is safe to email,
+ * archive, or open offline.
+ *
+ * Side note on file size: the template strings (CSS, the `<script>` payload,
+ * the static HTML scaffolding) intentionally live in one module so the
+ * report layout can be reviewed end-to-end without jumping between files.
+ * If the file grows further it should be split into `html-template.ts`,
+ * `html-styles.ts`, and `html-script.ts`.
+ */
+
+import { spawn } from 'node:child_process';
+import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { spawn } from 'node:child_process';
-import type { RuleResult, RuleFailure } from '@ngcompass/common';
-import type { Reporter, ResultSummary, ParseError } from '../types.js';
-import { isErrorSeverity, severityRank, compareByPosition } from '../severity-utils.js';
-import { processOutput, type ReporterOutput } from '../output.js';
+import type { RuleFailure, RuleResult } from '@ngcompass/common';
 import { getAnalysisStatus } from '../analysis-status.js';
+import { processOutput, type ReporterOutput } from '../output.js';
+import { compareByPosition, isErrorSeverity, severityRank } from '../severity-utils.js';
+import type { ParseError, Reporter, ResultSummary } from '../types.js';
 
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';
 const SEVERITY_ORDER = ['critical', 'high', 'error', 'moderate', 'warn', 'low', 'info', 'hint'] as const;
@@ -76,27 +92,58 @@ function humanSeverity(severity: string): string {
     return severity.charAt(0).toUpperCase() + severity.slice(1);
 }
 
+/**
+ * Heuristic mapping from rule names to display categories. Ideally the
+ * `domain` field on each rule would be the source of truth (the registry
+ * already carries it), but `RuleFailure` doesn't surface it today, so this
+ * reporter keeps a small lookup table until that pipeline is wired through.
+ *
+ * Order matters — the first matching predicate wins.
+ */
+const CATEGORY_RULES: ReadonlyArray<{
+    readonly category: string;
+    readonly match: (ruleName: string) => boolean;
+}> = [
+    {
+        category: 'Security',
+        match: (n) => n === 'no-bypass-sanitization' || n === 'template-no-unsafe-bindings',
+    },
+    {
+        category: 'Template',
+        match: (n) => n === 'template-prefer-control-flow' || n === 'template-no-async-pipe-duplication',
+    },
+    {
+        category: 'Performance',
+        match: (n) =>
+            n.startsWith('template-no-')
+            || n.startsWith('template-track')
+            || n === 'prefer-on-push-component-change-detection',
+    },
+    {
+        category: 'Reactivity',
+        match: (n) =>
+            n.startsWith('rxjs-')
+            || n.startsWith('toSignal-')
+            || n.startsWith('signal-avoid')
+            || n.startsWith('signal-prefer-computed'),
+    },
+    {
+        category: 'Modern API',
+        match: (n) => n.startsWith('signal-prefer-') || n === 'prefer-inject-over-constructor-di',
+    },
+    {
+        category: 'SSR',
+        match: (n) => n === 'no-document-access' || n === 'prefer-after-render-over-after-view-init',
+    },
+    {
+        category: 'Testing',
+        match: (n) => n.startsWith('spec-'),
+    },
+];
+
 function categoryForRule(ruleName: string): string {
-    if (ruleName === 'no-bypass-sanitization' || ruleName === 'template-no-unsafe-bindings') {
-        return 'Security';
-    }
-    if (ruleName === 'template-prefer-control-flow' || ruleName === 'template-no-async-pipe-duplication') {
-        return 'Template';
-    }
-    if (ruleName.startsWith('template-no-') || ruleName.startsWith('template-track') || ruleName === 'prefer-on-push-component-change-detection') {
-        return 'Performance';
-    }
-    if (ruleName.startsWith('rxjs-') || ruleName.startsWith('toSignal-') || ruleName.startsWith('signal-avoid') || ruleName.startsWith('signal-prefer-computed')) {
-        return 'Reactivity';
-    }
-    if (ruleName.startsWith('signal-prefer-') || ruleName === 'prefer-inject-over-constructor-di') {
-        return 'Modern API';
-    }
-    if (ruleName === 'no-document-access' || ruleName === 'prefer-after-render-over-after-view-init') {
-        return 'SSR';
-    }
-    if (ruleName.startsWith('spec-')) {
-        return 'Testing';
+    for (const entry of CATEGORY_RULES) {
+        if (entry.match(ruleName)) return entry.category;
     }
     return 'Correctness';
 }

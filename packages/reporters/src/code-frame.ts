@@ -1,3 +1,17 @@
+/**
+ * @fileoverview
+ * Code-frame renderer used by reporters that surface source-level context.
+ *
+ * Reads source files on demand, caches the line arrays for the lifetime of
+ * the CLI process, and renders coloured violation frames using Babel's
+ * `code-frame` for TypeScript / JavaScript and a custom renderer for HTML
+ * (Babel's highlighter doesn't ship an HTML grammar).
+ *
+ * Cache lifetime: the in-memory line cache is unbounded but lives only for
+ * the duration of one CLI invocation. Reporters do not run inside long-lived
+ * daemons today; revisit if that changes.
+ */
+
 import fs from 'node:fs';
 import pc from 'picocolors';
 import { codeFrameColumns } from '@babel/code-frame';

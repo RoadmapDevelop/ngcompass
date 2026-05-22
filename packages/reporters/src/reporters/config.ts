@@ -1,13 +1,23 @@
+/**
+ * @fileoverview
+ * Text reporter for `ngcompass config`, `ngcompass init`, and
+ * `ngcompass config health`.
+ *
+ * Separate from the analysis reporters because config commands don't
+ * produce `RuleResult` output — forcing them through the same interface
+ * would require empty stubs for every analysis method. Goes through
+ * `ReporterOutput` so tests can assert on the captured lines.
+ */
+
 import pc from 'picocolors';
 import {
-    type HealthReport,
-    type InitResult,
     type ConfigIssue,
     type ConfigReport,
+    type HealthReport,
+    type InitResult,
 } from '@ngcompass/common';
+import { processOutput, type ReporterOutput } from '../output.js';
 import type { ConfigReporter } from '../types.js';
-import type { ReporterOutput } from '../output.js';
-import { processOutput } from '../output.js';
 
 /** Minimum column width reserved for a `"line:col"` location label. */
 const LOCATION_COLUMN_WIDTH = 6;
@@ -72,11 +82,14 @@ function pluralise(count: number, word: string): string {
  * Pure function, no rendering, no side effects.
  */
 function groupIssuesByFile(issues: readonly ConfigIssue[]): Map<string, ConfigIssue[]> {
-    return issues.reduce<Map<string, ConfigIssue[]>>((map, issue) => {
+    const map = new Map<string, ConfigIssue[]>();
+    for (const issue of issues) {
         const file = issue.file ?? 'unknown';
-        const existing = map.get(file) ?? [];
-        return map.set(file, [...existing, issue]);
-    }, new Map());
+        const existing = map.get(file);
+        if (existing) existing.push(issue);
+        else map.set(file, [issue]);
+    }
+    return map;
 }
 
 /**

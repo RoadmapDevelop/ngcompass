@@ -1,18 +1,31 @@
-﻿import pc from 'picocolors';
+﻿/**
+ * @fileoverview
+ * Rich and compact terminal reporters for the default `console` format.
+ *
+ * Two render modes share most of the helpers:
+ *  - Compact mode (`options.compact === true`) — one line per violation,
+ *    suitable for CI logs and editor problem panes.
+ *  - Rich mode (default) — boxed "card" per violation with a code frame,
+ *    suggestion text, and a context indicator pointing at the source line.
+ *
+ * Source-file reads go through an injectable `SourceReader` so unit tests
+ * can capture render output without touching the filesystem.
+ */
+
 import path from 'node:path';
 import process from 'node:process';
+import { RuleFailure, RuleResult } from '@ngcompass/common';
+import pc from 'picocolors';
+import { getAnalysisStatus } from '../analysis-status.js';
+import { defaultSourceReader, renderCodeFrame, type SourceReader } from '../code-frame.js';
+import { processOutput, type ReporterOutput } from '../output.js';
+import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
 import type {
-    ParseError,
     ConsoleReporterOptions,
+    ParseError,
     Reporter,
     ResultSummary,
 } from '../types.js';
-import type { ReporterOutput } from '../output.js';
-import { processOutput } from '../output.js';
-import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
-import { renderCodeFrame, defaultSourceReader, type SourceReader } from '../code-frame.js';
-import { RuleFailure, RuleResult } from '@ngcompass/common';
-import { getAnalysisStatus } from '../analysis-status.js';
 
 // ---------------------------------------------------------------------------
 // Named constants — no magic numbers or inline literals
@@ -138,22 +151,24 @@ function computeLocationWidth(failures: RuleFailure[]): number {
 
 function buildSummaryLine(errorCount: number, warningCount: number, stats?: ResultSummary): string {
     const total = errorCount + warningCount;
-    const status = stats ? getAnalysisStatus(stats) : (errorCount > 0 ? { status: 'failed' as const, label: 'FAILED' as const } : { status: 'passed-with-warnings' as const, label: 'WARN' as const });
+    const status = stats
+        ? getAnalysisStatus(stats)
+        : (errorCount > 0
+            ? { status: 'failed' as const, label: 'FAILED' as const }
+            : { status: 'passed-with-warnings' as const, label: 'WARN' as const });
+
     const failed = status.status === 'failed';
-    const hasErrors = errorCount > 0;
     const statusColor = failed ? pc.red : pc.yellow;
-    const statusIcon = hasErrors || failed ? '×' : '!';
-    const statusLabel = failed
-        ? pc.red(pc.bold(status.label))
-        : pc.yellow(pc.bold(status.label));
+    const statusIcon = failed ? '×' : '!';
+    const statusLabel = statusColor(pc.bold(status.label));
     const errorText = pc.red(`${errorCount} error${errorCount !== 1 ? 's' : ''}`);
     const warningText = pc.yellow(`${warningCount} warning${warningCount !== 1 ? 's' : ''}`);
 
     return (
-        `${statusColor(statusIcon)} ` +
-        `${total} violation${total !== 1 ? 's' : ''} ` +
-        `(${errorText}, ${warningText})  ` +
-        statusLabel
+        `${statusColor(statusIcon)} `
+        + `${total} violation${total !== 1 ? 's' : ''} `
+        + `(${errorText}, ${warningText})  `
+        + statusLabel
     );
 }
 
