@@ -1,7 +1,12 @@
 /**
- * Execution Plan Types
+ * @fileoverview
+ * Execution-plan type system.
  *
- * Maps discovered files + resolved rules → executable tasks with indexes.
+ * Maps the planner's external contract — discovered files plus resolved rules
+ * become an `ExecutionPlanOutput` with content-addressed tasks plus
+ * pre-computed indexes. The shape is consumed verbatim by the engine and the
+ * cache layer, so changes here ripple downstream and usually require a
+ * cache-version bump.
  */
 
 import type { CacheContext } from '@ngcompass/cache';

@@ -1,12 +1,19 @@
 /**
- * Scanner → Planner Bridge Utilities
+ * @fileoverview
+ * Scanner → planner bridge.
  *
  * Convenience helpers that convert `@ngcompass/scanner`'s `ScanResult` into
  * the inputs expected by `@ngcompass/planner`'s `buildExecutionPlan`.
  *
- * Using this module eliminates the boilerplate of manually forwarding
- * `ScanResult.files` and keeps the two packages loosely coupled — if either
- * package changes its contract, only this file needs updating.
+ * The `ScanResult` shape is duplicated inline (as `ScanResultBridge`)
+ * rather than imported from the scanner — adding a scanner→planner import
+ * would create a package cycle (planner→cache→cache types→planner) which
+ * Turbo would refuse to build. The bridge therefore mirrors only the fields
+ * actually used by `scanResultToPlanInput`.
+ *
+ * This module is intentionally kept self-contained so external consumers
+ * (downstream tooling, scripts) can adopt the planner without manually
+ * wiring scanner output to `ExecutionPlanOptions`.
  */
 
 import type { ResolvedRule } from '@ngcompass/common';

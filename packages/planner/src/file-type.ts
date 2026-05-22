@@ -1,8 +1,15 @@
 /**
- * File Type Detection
+ * @fileoverview
+ * Convention-based file-type detection.
  *
- * Pure functions for detecting Angular file types based on naming conventions.
- * Follows FP principles: pure, deterministic, no side effects.
+ * Maps each file path to a `FileType` discriminant by inspecting its base
+ * name and extension only — no filesystem reads. The detector is pure and
+ * deterministic so the same input always produces the same classification,
+ * which the planner relies on for stable cache keys.
+ *
+ * Plain `.ts` files that contain Angular class decorators are detected as
+ * `'logic'` here and later upgraded to `'angular-class'` by the builder's
+ * Level-2 content-based classifier (`preclassifyLogicFiles` in `builder.ts`).
  */
 
 import path from 'node:path';

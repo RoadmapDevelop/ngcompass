@@ -1,164 +1,113 @@
 /**
- * Execution Plan Builder
+ * @fileoverview
+ * Top-level execution-plan builder.
  *
- * Builds an execution plan from discovered files and resolved rules.
- * Produces both task-centric and file-centric representations plus indexes.
+ * Orchestrates the planner pipeline: input validation → hash-cache warmup →
+ * plan/analysis cache short-circuits → task building (sequential or parallel
+ * worker-threads) → cache filtering → index construction → result assembly.
+ *
+ * The builder is the only module that knows about every other piece of the
+ * planner. Consumers receive an `ExecutionPlanOutput` via {@link Result};
+ * errors are returned as values, never thrown.
  */
 
-import type {
-    ExecutionPlanOptions,
-    ExecutionPlanOutput,
-    FileAnalysisUnit,
-    Task,
-    RuleTask,
-    Result,
-    FileType,
-} from "./types.js";
-import type { ConfigOverride, ResolvedRule } from "@ngcompass/common";
-import { resolveOverridesForFile } from "./overrides.js";
-import { Ok, Err } from "./types.js";
-import { AnalysisResult, debug, time, timeLog } from "@ngcompass/common";
-import { detectFileType, ANGULAR_DECORATOR_RE } from "./file-type.js";
-import { readFile } from "node:fs/promises";
-import { filterCachedTasks } from "./incremental.js";
-import { buildTasksForFileTaskCentric, type TaskBuilderContext } from "./task-builder.js";
-import { createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
-import { buildIndexes } from "./indexes.js";
-import { serializePlan, deserializePlan } from "./serialize.js";
-import { initHasher } from "@ngcompass/cache";
-import { warmupHashCache, calculateGlobalHash, calculateFileHash } from "./hashing.js";
-import { groupTasksByFile } from "./utils.js";
-import { ComponentDependencyGraph } from "./component-graph.js";
+import { readFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+import { initHasher } from '@ngcompass/cache';
+import {
+    AnalysisResult,
+    createInfrastructureError,
+    debug,
+    InfrastructureErrorCollector,
+    time,
+    timeLog,
+    type ConfigOverride,
+    type ResolvedRule,
+} from '@ngcompass/common';
+
+import { ComponentDependencyGraph } from './component-graph.js';
+import { ANGULAR_DECORATOR_RE, detectFileType } from './file-type.js';
+import { calculateFileHash, calculateGlobalHash, warmupHashCache } from './hashing.js';
+import { filterCachedTasks } from './incremental.js';
+import { buildIndexes } from './indexes.js';
+import { resolveOverridesForFile } from './overrides.js';
+import { deserializePlan, PLAN_SCHEMA_VERSION, serializePlan } from './serialize.js';
+import { buildTasksForFileTaskCentric, type TaskBuilderContext } from './task-builder.js';
+import {
+    Err,
+    Ok,
+    type ExecutionPlanOptions,
+    type ExecutionPlanOutput,
+    type FileAnalysisUnit,
+    type FileType,
+    type Result,
+    type RuleTask,
+    type Task,
+} from './types.js';
+import { groupTasksByFile } from './utils.js';
+
+const DEFAULT_PARALLEL_THRESHOLD = 10_000;
+const DEFAULT_WORKER_COUNT = 4;
 const PRECLASSIFY_BATCH_SIZE = 256;
 
+// ── Public API ────────────────────────────────────────────────────────────
+
 /**
- * Builds complete execution plan with indexes and optional caching.
- *
- * @param options - Build options (files + rules)
- * @returns ExecutionPlanOutput with tasks[] + plan + indexes
+ * Builds a complete execution plan with task list, file-centric plan, and
+ * pre-computed indexes. Returns a `Result` so callers never need a try/catch.
  */
 export const buildExecutionPlan = async (
-    options: ExecutionPlanOptions
+    options: ExecutionPlanOptions,
 ): Promise<Result<ExecutionPlanOutput>> => {
-    const timerLabel = "buildExecutionPlan";
+    const timerLabel = 'buildExecutionPlan';
     time(timerLabel);
 
     try {
         await initHasher();
 
         const { files, rules } = options;
-        debug("planner", `Building execution plan for ${files.length} files and ${rules.size} rules`);
+        debug('planner', `Building execution plan for ${files.length} files and ${rules.size} rules`);
 
         const validationError = validateBuildInputs(files, rules);
-        if (validationError) {
-            return Err(validationError);
-        }
+        if (validationError) return Err(validationError);
 
         const context = createTaskBuilderContext(options);
         const fileTypeCache = new Map<string, FileType>();
-
         const errorCollector = new InfrastructureErrorCollector();
 
-        if (options.cache) {
-            debug("planner", "Warming up hash cache from metadata index...");
-            const start = performance.now();
-            await warmupHashCache(
-                options.files as string[],
-                options.cache.metas,
-                context.hashCache!
-            );
-            debug("planner", `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
-        }
+        await warmHashCacheIfPossible(options, context);
 
         const cachedPlan = await tryLoadPlanFromCache(options, context, errorCollector);
 
-        // Build the component dependency graph once (O(N)) so task-builder can
-        // resolve template/styles/spec paths in O(1) instead of per-file dir scans.
+        // Build the component graph once per cold run so the task-builder can
+        // resolve resources in O(1) per file.
         if (!cachedPlan) {
-            const graph = new ComponentDependencyGraph();
-            await graph.build(options.files);
-            context.componentGraph = graph;
-            context.graphStats = { hits: 0, misses: 0, fallbacks: 0 };
-            debug("planner", "Component dependency graph built");
+            await prepareComponentGraph(options, context);
         }
 
-        let allTasks: ReadonlyArray<Task>;
-
         if (cachedPlan && cachedPlan.precomputedAnalysis) {
-            // Fast path: full analysis result is cached, skip everything
-            timeLog(timerLabel, "planner", "Full analysis cached — returning precomputed result");
+            timeLog(timerLabel, 'planner', 'Full analysis cached — returning precomputed result');
             return Ok(cachedPlan);
         }
 
-        if (cachedPlan) {
-            timeLog(timerLabel, "planner", "Execution plan loaded from cache");
-            allTasks = cachedPlan.tasks;
-        } else {
-            debug("planner", "Building tasks...");
-            allTasks = await buildAllTasks(
-                files,
-                rules,
-                context,
-                fileTypeCache,
-                options.parallelThreshold,
-                options.workerCount,
-                options.overrides
-            );
-            if (options.debug && context.graphStats) {
-                const { hits, misses, fallbacks } = context.graphStats;
-                debug("planner", `Graph stats — hits: ${hits}, misses: ${misses}, fallbacks: ${fallbacks}`);
-            }
+        const allTasks = cachedPlan
+            ? (timeLog(timerLabel, 'planner', 'Execution plan loaded from cache'), cachedPlan.tasks)
+            : await buildAndPersistTasks(options, context, fileTypeCache);
 
-            // Save full plan to cache
-            if (options.cache && context.globalHash) {
-                debug("planner", "Converting all tasks to full plan for cache...");
-                const fullPlan = convertTasksToPlan(allTasks, rules, fileTypeCache);
-                const fullIndexes = buildIndexes(fullPlan, allTasks);
-                const fullOutput: ExecutionPlanOutput = {
-                    tasks: allTasks,
-                    plan: fullPlan,
-                    indexes: fullIndexes,
-                    skippedTasks: [],
-                    globalHash: context.globalHash
-                };
-                await savePlanToCacheIfEnabled(options, context, fullOutput);
-            }
-        }
+        const { tasks, skippedTasks, cachedResults, changedFiles, cachedFiles } =
+            await splitTasksAgainstCache(options, allTasks);
 
-        let tasks = allTasks;
-        let skippedTasks: ReadonlyArray<Task> = [];
-        let cachedResults: ReadonlyMap<string, unknown> | undefined;
-        let changedFiles: ReadonlyArray<string> | undefined;
-        let cachedFiles: ReadonlyArray<string> | undefined;
-
-        if (options.cache) {
-            debug("planner", "Filtering cached tasks...");
-            const incremental = await filterCachedTasks(
-                allTasks,
-                options.cache.results,
-                options.incremental
-            );
-            tasks = incremental.tasks;
-            skippedTasks = incremental.skippedTasks;
-            cachedResults = incremental.cachedResults;
-
-            // Derive changed/cached file lists from the incremental split.
-            // A file is "changed" if it has at least one pending task; "cached"
-            // if all its tasks were satisfied from the result cache.
-            changedFiles = [...new Set(tasks.map(t => t.filePath))];
-            cachedFiles = [...new Set(skippedTasks.map(t => t.filePath))].filter(
-                f => !changedFiles!.includes(f)
-            );
-        }
-
-        debug("planner", "Converting tasks to file-centric plan...");
+        debug('planner', 'Converting tasks to file-centric plan...');
         const plan = convertTasksToPlan(tasks, rules, fileTypeCache);
 
-        debug("planner", `Building indexes for ${tasks.length} tasks...`);
+        debug('planner', `Building indexes for ${tasks.length} tasks...`);
         const indexes = buildIndexes(plan, tasks);
 
-        const output: ExecutionPlanOutput = {
+        timeLog(timerLabel, 'planner', 'Execution plan built');
+        return Ok({
             tasks,
             plan,
             indexes,
@@ -167,270 +116,272 @@ export const buildExecutionPlan = async (
             globalHash: context.globalHash,
             changedFiles,
             cachedFiles,
-        };
-        // Note: We do NOT save the filtered plan to the main plan cache, as it is state-dependent.
-        // The main cache stores the full plan.
-
-        timeLog(timerLabel, "planner", "Execution plan built");
-        return Ok(output);
+        });
     } catch (error) {
-        const err = error as Error;
-        debug("planner", `Error building plan: ${err.message}`);
-        return Err(new Error(`Failed to build execution plan: ${err.message}`));
+        const err = error instanceof Error ? error : new Error(String(error));
+        debug('planner', `Error building plan: ${err.message}`);
+        return Err(new Error(`Failed to build execution plan: ${err.message}`, { cause: err }));
     }
 };
 
-
-
-/**
- * Gets execution plan summary (for logging).
- *
- * @param output - Execution plan output
- * @returns Summary string
- */
+/** Renders a short human-readable summary of an execution plan's stats. */
 export const getExecutionPlanSummary = (output: ExecutionPlanOutput): string => {
     const { stats } = output.indexes;
-    const lines: string[] = [];
-
-    lines.push("--- Execution Plan Summary ---");
-    lines.push(`Total files: ${stats.totalFiles}`);
-    lines.push(`Total tasks: ${stats.totalTasks}`);
-    lines.push(`Avg tasks per file: ${stats.avgTasksPerFile.toFixed(1)}`);
-    lines.push(`Files with templates: ${stats.filesWithTemplates}`);
-    lines.push(`Files with styles: ${stats.filesWithStyles}`);
-    lines.push(`Files with specs: ${stats.filesWithSpecs}`);
-    lines.push("");
-
-    return lines.join("\n");
+    return [
+        '--- Execution Plan Summary ---',
+        `Total files: ${stats.totalFiles}`,
+        `Total tasks: ${stats.totalTasks}`,
+        `Avg tasks per file: ${stats.avgTasksPerFile.toFixed(1)}`,
+        `Files with templates: ${stats.filesWithTemplates}`,
+        `Files with styles: ${stats.filesWithStyles}`,
+        `Files with specs: ${stats.filesWithSpecs}`,
+        '',
+    ].join('\n');
 };
 
+// ── Input validation ──────────────────────────────────────────────────────
 
-
-/**
- * Validates top-level inputs for plan build.
- *
- * @param files - Discovered files
- * @param rules - Resolved rules
- * @returns Error if invalid, otherwise null
- */
 const validateBuildInputs = (
     files: ReadonlyArray<string>,
-    rules: ReadonlyMap<string, ResolvedRule>
+    rules: ReadonlyMap<string, ResolvedRule>,
 ): Error | null => {
-    if (files.length === 0) return new Error("No files to analyze");
-    if (rules.size === 0) return new Error("No rules configured");
+    if (files.length === 0) return new Error('No files to analyze');
+    if (rules.size === 0) return new Error('No rules configured');
     return null;
 };
 
-/**
- * Creates a context object used by the task builder to share caches.
- *
- * @param options - Execution plan options (used for cacheKeyCtx)
- * @returns TaskBuilderContext
- */
-const createTaskBuilderContext = (options?: Pick<ExecutionPlanOptions, 'cacheKeyCtx'>): TaskBuilderContext => {
-    return {
-        hashCache: new Map(),
-        resourceCache: new Map(),
-        directoryCache: new Map(),
-        cacheKeyCtx: options?.cacheKeyCtx,
-    };
+const createTaskBuilderContext = (
+    options?: Pick<ExecutionPlanOptions, 'cacheKeyCtx'>,
+): TaskBuilderContext => ({
+    hashCache: new Map(),
+    resourceCache: new Map(),
+    directoryCache: new Map(),
+    cacheKeyCtx: options?.cacheKeyCtx,
+});
+
+const warmHashCacheIfPossible = async (
+    options: ExecutionPlanOptions,
+    context: TaskBuilderContext,
+): Promise<void> => {
+    if (!options.cache) return;
+    debug('planner', 'Warming up hash cache from metadata index...');
+    const start = performance.now();
+    await warmupHashCache(options.files as string[], options.cache.metas, context.hashCache!);
+    debug('planner', `Metadata warmup took ${(performance.now() - start).toFixed(2)}ms`);
 };
 
+const prepareComponentGraph = async (
+    options: ExecutionPlanOptions,
+    context: TaskBuilderContext,
+): Promise<void> => {
+    const graph = new ComponentDependencyGraph();
+    await graph.build(options.files);
+    context.componentGraph = graph;
+    context.graphStats = { hits: 0, misses: 0, fallbacks: 0 };
+    debug('planner', 'Component dependency graph built');
+};
+
+// ── Cache I/O ─────────────────────────────────────────────────────────────
+
 /**
- * Attempts to load an execution plan from cache if enabled.
- *
- * @param options - Execution plan options
- * @param context - Task builder context (used for global hash caching)
- * @param fileTypeCache - File type cache (reserved for future use)
- * @returns Cached ExecutionPlanOutput or null
+ * Attempts to load a plan from the cache. Returns one of:
+ *  - `null`            — no cache hit (or `--force` requested a rebuild).
+ *  - `{ precomputedAnalysis }` — full analysis result was cached.
+ *  - the deserialized plan output.
  */
 const tryLoadPlanFromCache = async (
     options: ExecutionPlanOptions,
     context: TaskBuilderContext,
-    errorCollector?: InfrastructureErrorCollector
+    errorCollector?: InfrastructureErrorCollector,
 ): Promise<ExecutionPlanOutput | null> => {
     if (!options.cache) return null;
 
     const { files, rules } = options;
-
-    // Pass CacheKeyContext so tool/parser/rule-set version changes invalidate the global hash
     const globalHash = await calculateGlobalHash(files, rules, context.hashCache!, options.cacheKeyCtx);
     context.globalHash = globalHash;
 
-    // --force: skip all cache reads so every layer re-runs from scratch.
-    // globalHash is still needed above so the post-run save works correctly.
+    // --force bypasses every cache read but we still need globalHash so the
+    // post-run save uses the correct key.
     if (options.incremental?.forceRerun) return null;
 
-    // Check precomputed analysis first (Short-circuit)
-    const analysisCache = options.cache.analysis;
-    const precomputedAnalysis = await analysisCache.get(globalHash);
-
+    const precomputedAnalysis = await options.cache.analysis.get(globalHash);
     if (precomputedAnalysis) {
-        if (options.debug) {
-            debug("planner", "Analysis results cached (Short-circuit enabled)");
-        }
-        return {
-            tasks: [],
-            plan: {},
-            indexes: {
-                filesNeedingTsAst: [],
-                filesNeedingHtmlAst: [],
-                filesNeedingCssAst: [],
-                filesNeedingTypeChecker: [],
-                tasksByFile: {},
-                tasksByRule: {},
-                tasksBySeverityLevel: { off: [], warn: [], error: [] },
-                filesByType: {
-                    component: [], directive: [], pipe: [], service: [],
-                    module: [], guard: [], logic: [], 'angular-class': [], spec: [], template: [],
-                    style: [], config: [], unknown: [],
-                },
-                tasksBySeverity: { off: 0, warn: 0, error: 0 },
-                stats: {
-                    totalFiles: 0,
-                    totalTasks: 0,
-                    avgTasksPerFile: 0,
-                    filesWithTemplates: 0,
-                    filesWithStyles: 0,
-                    filesWithSpecs: 0,
-                },
-            },
-            skippedTasks: [],
-            globalHash,
-            precomputedAnalysis: precomputedAnalysis as AnalysisResult,
-        };
+        if (options.debug) debug('planner', 'Analysis results cached (Short-circuit enabled)');
+        return buildPrecomputedOutput(globalHash, precomputedAnalysis as AnalysisResult);
     }
 
-    const tCacheStart = performance.now();
+    const tIOStart = performance.now();
     const cachedData = await options.cache.plans.get(globalHash);
     const tIOEnd = performance.now();
-
     if (!cachedData) return null;
-
-    const planSize = JSON.stringify(cachedData).length;
 
     const tDeserStart = performance.now();
     let output: ExecutionPlanOutput;
     try {
         const versioned = cachedData as { v?: number };
-        output = versioned.v === 1
+        output = versioned.v === PLAN_SCHEMA_VERSION
             ? deserializePlan(cachedData as Parameters<typeof deserializePlan>[0])
             : (cachedData as ExecutionPlanOutput);
     } catch (deserErr) {
-        // Cache corruption: delete the bad entry and trigger a cold rebuild.
-        // This self-heals without user intervention (same pattern as the AST cache).
-        debug("planner", `Plan cache deserialization failed — deleting corrupted entry and rebuilding`);
+        // Self-heal: corrupt plans are deleted and the cold rebuild proceeds.
+        debug('planner', 'Plan cache deserialization failed — deleting corrupted entry and rebuilding');
         try {
             await options.cache.plans.delete?.(globalHash);
-        } catch { /* best-effort delete */ }
-
+        } catch {
+            // best-effort delete
+        }
         if (errorCollector) {
-            errorCollector.record(createInfrastructureError('CacheCorruption', {
-                cause: deserErr instanceof Error ? deserErr.message : String(deserErr),
-                phase: 'planner',
-                recoverable: true,
-                details: { globalHash },
-            }));
+            errorCollector.record(
+                createInfrastructureError('CacheCorruption', {
+                    cause: deserErr instanceof Error ? deserErr.message : String(deserErr),
+                    phase: 'planner',
+                    recoverable: true,
+                    details: { globalHash },
+                }),
+            );
         }
         return null;
     }
     const tDeserEnd = performance.now();
 
     if (options.debug) {
-        debug("planner", "Plan cache HIT");
-        debug("planner", `  Size:   ${(planSize / 1024).toFixed(1)}KB`);
-        debug("planner", `  IO:     ${(tIOEnd - tCacheStart).toFixed(2)}ms`);
-        debug("planner", `  Deser:  ${(tDeserEnd - tDeserStart).toFixed(2)}ms`);
+        debug('planner', 'Plan cache HIT');
+        debug('planner', `  IO:    ${(tIOEnd - tIOStart).toFixed(2)}ms`);
+        debug('planner', `  Deser: ${(tDeserEnd - tDeserStart).toFixed(2)}ms`);
     }
 
-    return {
-        ...output,
-        globalHash, // Ensure globalHash is passed through
-    };
+    return { ...output, globalHash };
 };
 
-/**
- * Saves an execution plan to cache if enabled.
- *
- * @param options - Execution plan options
- * @param context - Task builder context (contains global hash)
- * @param output - Execution plan output to persist
- */
+const buildPrecomputedOutput = (
+    globalHash: string,
+    precomputedAnalysis: AnalysisResult,
+): ExecutionPlanOutput => ({
+    tasks: [],
+    plan: {},
+    indexes: emptyIndexes(),
+    skippedTasks: [],
+    globalHash,
+    precomputedAnalysis,
+});
+
+const emptyIndexes = (): ExecutionPlanOutput['indexes'] => ({
+    filesNeedingTsAst: [],
+    filesNeedingHtmlAst: [],
+    filesNeedingCssAst: [],
+    filesNeedingTypeChecker: [],
+    tasksByFile: {},
+    tasksByRule: {},
+    tasksBySeverityLevel: { off: [], warn: [], error: [] },
+    filesByType: {
+        component: [], directive: [], pipe: [], service: [],
+        module: [], guard: [], logic: [], 'angular-class': [],
+        spec: [], template: [], style: [], config: [], unknown: [],
+    },
+    tasksBySeverity: { off: 0, warn: 0, error: 0 },
+    stats: {
+        totalFiles: 0,
+        totalTasks: 0,
+        avgTasksPerFile: 0,
+        filesWithTemplates: 0,
+        filesWithStyles: 0,
+        filesWithSpecs: 0,
+    },
+});
+
 const savePlanToCacheIfEnabled = async (
     options: ExecutionPlanOptions,
     context: TaskBuilderContext,
-    output: ExecutionPlanOutput
+    output: ExecutionPlanOutput,
 ): Promise<void> => {
-    if (!options.cache) return;
-    if (!context.globalHash) return;
+    if (!options.cache || !context.globalHash) return;
 
-    const cacheSaveStart = performance.now();
-    debug("planner", "Saving execution plan to cache...");
-
+    const start = performance.now();
+    debug('planner', 'Saving execution plan to cache...');
     const compact = serializePlan(output);
     await options.cache.plans.set(context.globalHash, compact);
-
-    const cacheSaveTime = performance.now() - cacheSaveStart;
-    debug("planner", `  Plan cache saved in ${cacheSaveTime.toFixed(2)}ms`);
+    debug('planner', `  Plan cache saved in ${(performance.now() - start).toFixed(2)}ms`);
 };
 
-/**
- * Collects applicable rules for a file based on tasks generated for that file.
- *
- * @param tasks - Tasks generated for a file
- * @param rules - All resolved rules
- * @returns List of rules applicable to the file
- */
-const collectApplicableRulesFromTasks = (
-    tasks: ReadonlyArray<Task>,
-    rules: ReadonlyMap<string, ResolvedRule>
-): ResolvedRule[] => {
-    const ruleNamesInFile = new Set(tasks.map((t) => t.ruleName));
-    const applicable: ResolvedRule[] = [];
+// ── Task building ─────────────────────────────────────────────────────────
 
-    for (const ruleName of ruleNamesInFile) {
-        const rule = rules.get(ruleName);
-        if (rule) applicable.push(rule);
+const buildAndPersistTasks = async (
+    options: ExecutionPlanOptions,
+    context: TaskBuilderContext,
+    fileTypeCache: Map<string, FileType>,
+): Promise<ReadonlyArray<Task>> => {
+    debug('planner', 'Building tasks...');
+    const allTasks = await buildAllTasks(
+        options.files,
+        options.rules,
+        context,
+        fileTypeCache,
+        options.parallelThreshold,
+        options.workerCount,
+        options.overrides,
+    );
+
+    if (options.debug && context.graphStats) {
+        const { hits, misses, fallbacks } = context.graphStats;
+        debug('planner', `Graph stats — hits: ${hits}, misses: ${misses}, fallbacks: ${fallbacks}`);
     }
 
-    return applicable;
+    if (options.cache && context.globalHash) {
+        debug('planner', 'Converting all tasks to full plan for cache...');
+        const fullPlan = convertTasksToPlan(allTasks, options.rules, fileTypeCache);
+        const fullIndexes = buildIndexes(fullPlan, allTasks);
+        await savePlanToCacheIfEnabled(options, context, {
+            tasks: allTasks,
+            plan: fullPlan,
+            indexes: fullIndexes,
+            skippedTasks: [],
+            globalHash: context.globalHash,
+        });
+    }
+
+    return allTasks;
 };
 
-/**
- * Calculates file-level hash using representative task inputs.
- *
- * @param tasks - Tasks for a file
- * @param applicableRules - Rules applicable to the file
- * @returns File-level content hash
- */
-const calculateHashFromTasks = (tasks: ReadonlyArray<Task>, applicableRules: ResolvedRule[]): string => {
-    if (tasks.length === 0) return "";
-    return calculateFileHash(tasks[0].inputs, applicableRules);
+const splitTasksAgainstCache = async (
+    options: ExecutionPlanOptions,
+    allTasks: ReadonlyArray<Task>,
+): Promise<{
+    tasks: ReadonlyArray<Task>;
+    skippedTasks: ReadonlyArray<Task>;
+    cachedResults?: ReadonlyMap<string, unknown>;
+    changedFiles?: ReadonlyArray<string>;
+    cachedFiles?: ReadonlyArray<string>;
+}> => {
+    if (!options.cache) {
+        return { tasks: allTasks, skippedTasks: [] };
+    }
+
+    debug('planner', 'Filtering cached tasks...');
+    const incremental = await filterCachedTasks(allTasks, options.cache.results, options.incremental);
+
+    const changedFiles = [...new Set(incremental.tasks.map((t) => t.filePath))];
+    const cachedFiles = [...new Set(incremental.skippedTasks.map((t) => t.filePath))].filter(
+        (f) => !changedFiles.includes(f),
+    );
+
+    return {
+        tasks: incremental.tasks,
+        skippedTasks: incremental.skippedTasks,
+        cachedResults: incremental.cachedResults,
+        changedFiles,
+        cachedFiles,
+    };
 };
 
-/**
- * Builds all tasks for all files.
- *
- * @param files - Discovered files
- * @param rules - Resolved rules
- * @param context - Optional context for caching
- * @param fileTypeCache - Optional cache for file types
- * @returns Array of all tasks
- */
 const buildAllTasks = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, ResolvedRule>,
     context?: TaskBuilderContext,
     fileTypeCache?: Map<string, FileType>,
-    parallelThreshold = 10000,
-    workerCount = 4,
-    overrides?: ReadonlyArray<ConfigOverride>
+    parallelThreshold = DEFAULT_PARALLEL_THRESHOLD,
+    workerCount = DEFAULT_WORKER_COUNT,
+    overrides?: ReadonlyArray<ConfigOverride>,
 ): Promise<ReadonlyArray<Task>> => {
-    // Level-2 classification: upgrade plain 'logic' files that contain Angular
-    // decorators to 'angular-class' so component/directive rules are applied.
-    // Runs in parallel before either execution path so workers also benefit
-    // from the pre-populated fileTypeCache.
     await preclassifyLogicFiles(files, fileTypeCache);
 
     if (files.length >= parallelThreshold) {
@@ -442,262 +393,197 @@ const buildAllTasks = async (
 };
 
 /**
- * Level-2 file classification: reads content of unclassified `.ts` files and
- * upgrades them from `'logic'` to `'angular-class'` when they contain an
- * Angular class decorator.
- *
- * All reads are issued concurrently so the overhead on a cold run is bounded
- * by I/O latency rather than file count. Results are stored in `fileTypeCache`
- * so the plan cache and worker threads both benefit without re-reading.
- *
- * @param files - All discovered files
- * @param fileTypeCache - Shared type cache (mutated in-place)
+ * Level-2 file classification: reads each unclassified `.ts` file and
+ * upgrades its `FileType` from `'logic'` to `'angular-class'` when it
+ * carries an Angular class decorator. Runs concurrently so the overhead is
+ * bounded by I/O latency, not file count.
  */
 const preclassifyLogicFiles = async (
     files: ReadonlyArray<string>,
-    fileTypeCache?: Map<string, FileType>
+    fileTypeCache?: Map<string, FileType>,
 ): Promise<void> => {
     if (!fileTypeCache) return;
 
-    // Collect files not yet classified that resolve to 'logic' by filename.
-    const candidates = files.filter(f => {
+    const candidates = files.filter((f) => {
         if (fileTypeCache.has(f)) return false;
         return detectFileType(f) === 'logic';
     });
-
     if (candidates.length === 0) return;
 
-    debug("planner", `Level-2 classification: scanning ${candidates.length} unclassified .ts files for Angular decorators`);
-    const t = performance.now();
+    debug('planner', `Level-2 classification: scanning ${candidates.length} unclassified .ts files for Angular decorators`);
+    const start = performance.now();
 
     for (let i = 0; i < candidates.length; i += PRECLASSIFY_BATCH_SIZE) {
         const batch = candidates.slice(i, i + PRECLASSIFY_BATCH_SIZE);
-        await Promise.all(batch.map(async (filePath) => {
-            try {
-                const content = await readFile(filePath, 'utf8');
-                fileTypeCache.set(filePath, ANGULAR_DECORATOR_RE.test(content) ? 'angular-class' : 'logic');
-            } catch {
-                fileTypeCache.set(filePath, 'logic');
-            }
-        }));
+        await Promise.all(
+            batch.map(async (filePath) => {
+                try {
+                    const content = await readFile(filePath, 'utf8');
+                    fileTypeCache.set(filePath, ANGULAR_DECORATOR_RE.test(content) ? 'angular-class' : 'logic');
+                } catch {
+                    fileTypeCache.set(filePath, 'logic');
+                }
+            }),
+        );
     }
 
-    debug("planner", `Level-2 classification complete in ${(performance.now() - t).toFixed(1)}ms — upgraded ${
-        [...fileTypeCache.values()].filter(v => v === 'angular-class').length
-    } files to 'angular-class'`);
+    const upgraded = [...fileTypeCache.values()].filter((v) => v === 'angular-class').length;
+    debug('planner', `Level-2 classification complete in ${(performance.now() - start).toFixed(1)}ms — upgraded ${upgraded} files to 'angular-class'`);
 };
 
-/**
- * Builds all tasks sequentially.
- *
- * @param files - Discovered files
- * @param rules - Resolved rules
- * @param context - Task builder context
- * @param fileTypeCache - File type cache
- * @returns Array of tasks
- */
 const buildAllTasksSequential = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, ResolvedRule>,
     context?: TaskBuilderContext,
     fileTypeCache?: Map<string, FileType>,
-    overrides?: ReadonlyArray<ConfigOverride>
+    overrides?: ReadonlyArray<ConfigOverride>,
 ): Promise<Task[]> => {
     const allTasks: Task[] = [];
-
     for (const file of files) {
         const fileType = getOrDetectFileType(file, fileTypeCache);
-        // Apply per-file overrides when configured; returns globalRules unchanged on no match.
         const fileRules = overrides?.length
             ? resolveOverridesForFile(file, rules, overrides)
             : rules;
         const fileTasks = await buildTasksForFileTaskCentric(file, fileType, fileRules, context);
         allTasks.push(...fileTasks);
     }
-
     return allTasks;
 };
 
-/**
- * Attempts to build all tasks in parallel using worker threads.
- *
- * @param files - Discovered files
- * @param rules - Resolved rules
- * @param fileTypeCache - File type cache
- * @param workerCount - Number of workers
- * @returns Tasks array if successful, otherwise null
- */
 const tryBuildAllTasksParallel = async (
     files: ReadonlyArray<string>,
     rules: ReadonlyMap<string, ResolvedRule>,
     fileTypeCache: Map<string, FileType> | undefined,
     workerCount: number,
-    overrides?: ReadonlyArray<ConfigOverride>
+    overrides?: ReadonlyArray<ConfigOverride>,
 ): Promise<Task[] | null> => {
-    debug("planner", `Parallelizing task discovery across ${workerCount} workers...`);
+    debug('planner', `Parallelizing task discovery across ${workerCount} workers...`);
 
     try {
-        const workerPath = await resolveWorkerPath();
+        const workerPath = resolveWorkerPath();
         if (!workerPath) {
-            debug("planner", "Worker script not found, falling back to sequential execution");
+            debug('planner', 'Worker script not found, falling back to sequential execution');
             return null;
         }
-
-        debug("planner", `Using worker: ${workerPath}`);
+        debug('planner', `Using worker: ${workerPath}`);
 
         const chunks = splitIntoChunks(files, workerCount);
-        debug("planner", `Split ${files.length} files into ${chunks.length} chunks`);
+        debug('planner', `Split ${files.length} files into ${chunks.length} chunks`);
 
         const tasks = await runWorkerChunks(chunks, workerPath, rules, fileTypeCache, overrides);
-        debug("planner", `Workers completed. Generated ${tasks.length} tasks.`);
+        debug('planner', `Workers completed. Generated ${tasks.length} tasks.`);
         return tasks;
     } catch (error) {
-        debug("planner", `Parallel execution failed, falling back to sequential: ${String(error)}`);
+        debug('planner', `Parallel execution failed, falling back to sequential: ${String(error)}`);
         return null;
     }
 };
 
 /**
- * Resolves a worker script path.
- *
- * @returns Worker path or null if not found
+ * Resolves the worker script path. Searches the `.js` / `.cjs` outputs (built
+ * distributions); the unbuilt `.ts` candidate would never be invokable by
+ * `node:worker_threads` so it is intentionally not tried.
  */
-const resolveWorkerPath = async (): Promise<string | null> => {
-    const { Worker } = await import("node:worker_threads");
-    void Worker;
-
-    const { fileURLToPath } = await import("node:url");
-    const { dirname, join } = await import("node:path");
-    const { existsSync } = await import("node:fs");
-
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-
+const resolveWorkerPath = (): string | null => {
+    const here = dirname(fileURLToPath(import.meta.url));
     const candidates = [
-        join(__dirname, "worker.js"),
-        join(__dirname, "worker.cjs"),
-        join(__dirname, "worker.ts"),
-        join(__dirname, "planner", "worker.js"),
-        join(__dirname, "planner", "worker.cjs"),
+        join(here, 'worker.js'),
+        join(here, 'worker.cjs'),
+        join(here, 'planner', 'worker.js'),
+        join(here, 'planner', 'worker.cjs'),
     ];
-
-    for (const candidate of candidates) {
-        if (existsSync(candidate)) return candidate;
-    }
-
-    return null;
+    return candidates.find((c) => existsSync(c)) ?? null;
 };
 
 /**
- * Splits an array into approximately equal chunks.
- *
- * @param items - Items to split
- * @param chunkCount - Number of chunks
- * @returns Chunked arrays
+ * Splits `items` into approximately equal chunks. When `chunkCount` exceeds
+ * `items.length` the returned array contains `items.length` single-item
+ * chunks (chunk count is the cap, not a guarantee).
  */
 const splitIntoChunks = (items: ReadonlyArray<string>, chunkCount: number): string[][] => {
-    const size = Math.ceil(items.length / chunkCount);
+    const size = Math.max(1, Math.ceil(items.length / chunkCount));
     const chunks: string[][] = [];
-
     for (let i = 0; i < items.length; i += size) {
         chunks.push(items.slice(i, i + size));
     }
-
     return chunks;
 };
 
-/**
- * Runs worker threads over file chunks and collects all tasks.
- *
- * Rules and fileTypeCache are serialized to plain arrays of entries before
- * being sent via workerData because Node.js structured-clone does not
- * preserve Map instances with complex object values (prototype chains are
- * lost). The worker reconstructs the Maps from the serialized entries.
- *
- * @param chunks - File chunks
- * @param workerPath - Worker script path
- * @param rules - Resolved rules
- * @param fileTypeCache - File type cache
- * @returns Flattened task list
- */
 const runWorkerChunks = async (
     chunks: ReadonlyArray<string[]>,
     workerPath: string,
     rules: ReadonlyMap<string, ResolvedRule>,
     fileTypeCache?: Map<string, FileType>,
-    overrides?: ReadonlyArray<ConfigOverride>
+    overrides?: ReadonlyArray<ConfigOverride>,
 ): Promise<Task[]> => {
-    const { Worker } = await import("node:worker_threads");
+    const { Worker } = await import('node:worker_threads');
 
-    // Serialize Maps to plain arrays so structured-clone preserves all data.
+    // Serialize Maps to plain arrays so structured-clone preserves the data
+    // (Map values with custom prototypes lose their chain across the boundary).
     const rulesEntries = Array.from(rules.entries());
     const fileTypeCacheEntries = fileTypeCache ? Array.from(fileTypeCache.entries()) : undefined;
-    // ConfigOverride[] is plain JSON — safe to send as-is via structured-clone.
     const overridesData = overrides?.length ? [...overrides] : undefined;
 
-    const workerPromises = chunks.map((chunk, index) => {
-        return new Promise<Task[]>((resolve, reject) => {
+    const workerPromises = chunks.map((chunk, index) =>
+        new Promise<Task[]>((resolve, reject) => {
             const worker = new Worker(workerPath, {
-                workerData: {
-                    files: chunk,
-                    rulesEntries,
-                    fileTypeCacheEntries,
-                    overridesData,
-                },
+                workerData: { files: chunk, rulesEntries, fileTypeCacheEntries, overridesData },
             });
-
-            worker.on("message", (message: { tasks: Task[] }) => resolve(message.tasks));
-            worker.on("error", (err) => {
-                debug("planner", `Worker ${index} error: ${String(err)}`);
+            worker.on('message', (message: { tasks: Task[] }) => resolve(message.tasks));
+            worker.on('error', (err) => {
+                debug('planner', `Worker ${index} error: ${String(err)}`);
                 reject(err instanceof Error ? err : new Error(String(err)));
             });
-            worker.on("exit", (code) => {
+            worker.on('exit', (code) => {
                 if (code !== 0) reject(new Error(`Worker ${index} stopped with exit code ${code}`));
             });
-        });
-    });
+        }),
+    );
 
     const results = await Promise.all(workerPromises);
     return results.flat();
 };
 
-/**
- * Gets a file type from cache or detects and caches it.
- *
- * @param filePath - File path
- * @param cache - Cache map
- * @returns File type
- */
+// ── File-type caching and plan conversion ────────────────────────────────
+
 const getOrDetectFileType = (filePath: string, cache?: Map<string, FileType>): FileType => {
     if (!cache) return detectFileType(filePath);
-
     const cached = cache.get(filePath);
     if (cached) return cached;
-
     const detected = detectFileType(filePath);
     cache.set(filePath, detected);
     return detected;
 };
 
-/**
- * Converts flat tasks array to file-centric plan (backward compatibility).
- *
- * @param tasks - All tasks
- * @param rules - Resolved rules (for hash calculation)
- * @param fileTypeCache - Optional file type cache
- * @returns File-centric plan
- */
+const collectApplicableRulesFromTasks = (
+    tasks: ReadonlyArray<Task>,
+    rules: ReadonlyMap<string, ResolvedRule>,
+): ResolvedRule[] => {
+    const ruleNamesInFile = new Set(tasks.map((t) => t.ruleName));
+    const applicable: ResolvedRule[] = [];
+    for (const ruleName of ruleNamesInFile) {
+        const rule = rules.get(ruleName);
+        if (rule) applicable.push(rule);
+    }
+    return applicable;
+};
+
+const calculateHashFromTasks = (tasks: ReadonlyArray<Task>, applicableRules: ResolvedRule[]): string => {
+    if (tasks.length === 0) return '';
+    return calculateFileHash(tasks[0].inputs, applicableRules);
+};
+
+/** Converts the flat task list into the file-centric plan shape. */
 const convertTasksToPlan = (
     tasks: ReadonlyArray<Task>,
     rules: ReadonlyMap<string, ResolvedRule>,
-    fileTypeCache?: Map<string, FileType>
+    fileTypeCache?: Map<string, FileType>,
 ): Record<string, FileAnalysisUnit> => {
     const tasksByFile = groupTasksByFile(tasks);
     const plan: Record<string, FileAnalysisUnit> = {};
 
     for (const [filePath, fileTasks] of tasksByFile) {
         const fileType = getOrDetectFileType(filePath, fileTypeCache);
-
         const applicableRules = collectApplicableRulesFromTasks(fileTasks, rules);
         const hash = calculateHashFromTasks(fileTasks, applicableRules);
 
@@ -708,16 +594,11 @@ const convertTasksToPlan = (
             cacheKey: task.taskId,
             inputs: task.inputs,
             needsTypeChecker: task.needsTypeChecker,
+            needsProjectContext: task.needsProjectContext,
         }));
 
-        plan[filePath] = {
-            file: { path: filePath, type: fileType, hash },
-            tasks: ruleTasks,
-        };
+        plan[filePath] = { file: { path: filePath, type: fileType, hash }, tasks: ruleTasks };
     }
 
     return plan;
 };
-
-
-
