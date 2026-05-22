@@ -1,39 +1,35 @@
 /**
  * @fileoverview
- * Provides the AnalysisContext abstraction for ngcompass.
+ * Memoized file-system and AST accessor for a single analysis run.
  *
- * This module facilitates deterministic, memoized access to file system resources
- * and abstract syntax tree (AST) artifacts, ensuring peak performance during
- * analysis by minimizing redundant I/O and parsing operations.
+ * Every cache is LRU-bounded so the engine cannot accumulate ASTs / file
+ * contents past a known budget when running over very large monorepos. The
+ * file-content tier is kept small (raw text is cheap to re-read); program /
+ * template / style tiers carry more weight per entry, so their caps are
+ * sized accordingly.
  *
- * Implementation Strategy:
- * - Memoization: Caches raw file content, TypeScript Programs, Template ASTs, and Style ASTs.
- * - Resource Management: Implements an explicit eviction mechanism to control heap usage.
- * - Determinism: Ensures the same file path always yields consistent artifacts across a run.
+ * `evict(filePath)` is the per-file release point — invoked by the
+ * orchestrator once every task targeting that file has completed.
+ * `dispose()` is the run-level release point — invoked after a type-aware
+ * chunk finishes so the next chunk starts with a clean heap.
  */
 
-import { readFile } from "node:fs/promises";
-import * as path from "node:path";
-import { LRUCache } from "lru-cache";
-import { parseTs, parseHtml, parseCss, extractTemplateFromProgram } from "@ngcompass/ast";
-import type { TemplateAst, StyleAst } from "@ngcompass/common";
-import type { Program } from "oxc-parser";
+import { readFile } from 'node:fs/promises';
+import * as path from 'node:path';
+import { LRUCache } from 'lru-cache';
+import { extractTemplateFromProgram, parseCss, parseHtml, parseTs } from '@ngcompass/ast';
+import type { StyleAst, TemplateAst } from '@ngcompass/common';
+import type { Program } from 'oxc-parser';
 
-/**
- * Supported style sheet extensions for CSS/SCSS analysis.
- */
+/** Style-sheet extensions whose contents are passed to the CSS parser. */
 const CSS_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.less']);
 
-/**
- * The maximum capacity for the Least Recently Used (LRU) file cache.
- * Configured to balance memory footprint and I/O efficiency.
- */
 const FILE_CACHE_MAX = 128;
+const PROGRAM_CACHE_MAX = 64;
+const TEMPLATE_CACHE_MAX = 64;
+const STYLE_CACHE_MAX = 64;
 
-/**
- * Encapsulates the state and logic required for analyzing a set of source files.
- * Provides unified access to file content and parsed metadata with internal memoization.
- */
+/** Operational surface used by the engine to read files and obtain parsed artifacts. */
 export interface AnalysisContext {
     readonly rootDir: string;
     readonly readFile: (filePath: string) => Promise<string>;
@@ -41,38 +37,30 @@ export interface AnalysisContext {
     readonly getTemplate: (filePath: string) => Promise<TemplateAst | undefined>;
     readonly getStyle: (filePath: string) => Promise<StyleAst | undefined>;
     /**
-     * Purges all cached artifacts associated with the specified file path.
-     *
-     * This method is critical for memory governance in large-scale repositories.
-     * It should be invoked immediately upon completion of a file's analysis tasks
-     * to release references to raw strings and AST structures, enabling garbage
-     * collection.
-     *
-     * @param filePath The path of the file to evict from internal caches.
+     * Releases every cached artifact tied to `filePath`. Call this once all
+     * tasks targeting the file have produced their results so the underlying
+     * AST / string buffers can be reclaimed by the garbage collector.
      */
     readonly evict: (filePath: string) => void;
-    /**
-     * Clears every cached artifact owned by this context.
-     */
+    /** Releases every cached artifact owned by this context. */
     readonly dispose: () => void;
 }
 
 /**
- * Instantiates an AnalysisContext provider with integrated memoization logic.
+ * Builds a memoized {@link AnalysisContext} rooted at `rootDir`.
  *
- * @param rootDir The base directory used to resolve relative file transitions.
- * @returns A stateful AnalysisContext instance.
+ * @param rootDir - Project root used to resolve relative paths.
+ * @returns A fully wired analysis context.
  */
 export const createAnalysisContext = (rootDir: string): AnalysisContext => {
-    const fileCache = new LRUCache<string, Promise<string>>({ max: FILE_CACHE_MAX });
-    const programCache  = new Map<string, Promise<Program>>();
-    const templateCache = new Map<string, Promise<TemplateAst | undefined>>();
-    const styleCache    = new Map<string, Promise<StyleAst | undefined>>();
+    const fileCache     = new LRUCache<string, Promise<string>>({ max: FILE_CACHE_MAX });
+    const programCache  = new LRUCache<string, Promise<Program>>({ max: PROGRAM_CACHE_MAX });
+    const templateCache = new LRUCache<string, Promise<TemplateAst | undefined>>({ max: TEMPLATE_CACHE_MAX });
+    const styleCache    = new LRUCache<string, Promise<StyleAst | undefined>>({ max: STYLE_CACHE_MAX });
 
     const readFileCached = (filePath: string): Promise<string> => {
         const cached = fileCache.get(filePath);
         if (cached) return cached;
-
         const promise = readFileSafe(rootDir, filePath);
         fileCache.set(filePath, promise);
         return promise;
@@ -81,12 +69,7 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
     const getProgram = (filePath: string): Promise<Program> => {
         const cached = programCache.get(filePath);
         if (cached) return cached;
-
-        const promise = (async () => {
-            const content = await readFileCached(filePath);
-            return parseTs(content, filePath).program;
-        })();
-
+        const promise = readFileCached(filePath).then((content) => parseTs(content, filePath).program);
         programCache.set(filePath, promise);
         return promise;
     };
@@ -94,13 +77,7 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
     const getTemplate = (filePath: string): Promise<TemplateAst | undefined> => {
         const cached = templateCache.get(filePath);
         if (cached) return cached;
-
-        const promise = (async () => {
-            const extracted = await resolveTemplateContent(filePath, readFileCached, getProgram);
-            if (!extracted || !extracted.content) return undefined;
-            return parseHtml(extracted.content, extracted.startOffset);
-        })();
-
+        const promise = resolveTemplate(filePath, readFileCached, getProgram);
         templateCache.set(filePath, promise);
         return promise;
     };
@@ -116,12 +93,9 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
             return promise;
         }
 
-        const promise = (async (): Promise<StyleAst | undefined> => {
-            const content = await readFileCached(filePath);
-            const result = parseCss(content, filePath);
-            return result as StyleAst;
-        })();
-
+        const promise = readFileCached(filePath).then((content) =>
+            parseCss(content, filePath) as StyleAst,
+        );
         styleCache.set(filePath, promise);
         return promise;
     };
@@ -143,27 +117,37 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
     return { rootDir, readFile: readFileCached, getProgram, getTemplate, getStyle, evict, dispose };
 };
 
+// ── Internal helpers ──────────────────────────────────────────────────────
+
 /**
- * Performs a sanitized file system read operation.
- *
- * Handles relative-to-root path resolution and provides structured error
- * reporting in the event of I/O failures.
- *
- * @param rootDir The project root directory.
- * @param filePath The path of the target file.
- * @returns A promise resolving to the file contents in UTF-8.
- * @throws Error signaling I/O failure or accessibility issues.
+ * Reads `filePath` (resolved against `rootDir`) and re-throws any I/O error
+ * with a clearer message. The underlying error message is preserved in the
+ * suffix for debugging without overwhelming the report.
  */
 const readFileSafe = async (rootDir: string, filePath: string): Promise<string> => {
     try {
-        return await readFile(path.resolve(rootDir, filePath), "utf-8");
+        return await readFile(path.resolve(rootDir, filePath), 'utf-8');
     } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         throw new Error(`Cannot read file: ${filePath}. ${msg}`);
     }
 };
 
-/** Result from resolving a template's content and position in the source. */
+/**
+ * Resolves a file path to a parsed template AST, handling both external
+ * `.html` files and inline `template: '…'` strings inside a `.ts` component.
+ */
+const resolveTemplate = async (
+    filePath: string,
+    readFileCached: (p: string) => Promise<string>,
+    getProgram: (p: string) => Promise<Program>,
+): Promise<TemplateAst | undefined> => {
+    const extracted = await resolveTemplateContent(filePath, readFileCached, getProgram);
+    if (!extracted || !extracted.content) return undefined;
+    return parseHtml(extracted.content, extracted.startOffset);
+};
+
+/** Result of locating a template's content and its position in the source file. */
 interface ResolvedTemplate {
     content: string;
     /** Byte offset in the source file where `content[0]` lives. */
@@ -171,30 +155,23 @@ interface ResolvedTemplate {
 }
 
 /**
- * Disambiguates and retrieves template content from various source formats.
- *
- * Supports both external HTML templates and inline templates embedded within
- * TypeScript decorators. Correctly identifies the start offset for accurate
- * positional mapping of findings.
- *
- * @param filePath The file path containing the template reference.
- * @param readFileCached Memoized file loading provider.
- * @param getProgram Memoized AST program provider.
- * @returns A ResolvedTemplate structure or null if no template is identified.
+ * Locates the raw template text for `filePath`. For `.html` files this is the
+ * file's content with `startOffset = 0`; for `.ts` files this is the inline
+ * `template: '…'` value extracted from the first `@Component` decorator.
  */
 const resolveTemplateContent = async (
     filePath: string,
     readFileCached: (p: string) => Promise<string>,
-    getProgram: (p: string) => Promise<Program>
+    getProgram: (p: string) => Promise<Program>,
 ): Promise<ResolvedTemplate | null> => {
     const ext = path.extname(filePath);
 
-    if (ext === ".html") {
+    if (ext === '.html') {
         const content = await readFileCached(filePath);
         return { content, startOffset: 0 };
     }
 
-    if (ext === ".ts") {
+    if (ext === '.ts') {
         const program = await getProgram(filePath);
         const extracted = extractTemplateFromProgram(program);
         return extracted.content ? extracted : null;
@@ -202,4 +179,3 @@ const resolveTemplateContent = async (
 
     return null;
 };
-
