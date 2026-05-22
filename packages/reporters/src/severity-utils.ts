@@ -1,14 +1,18 @@
+/**
+ * @fileoverview
+ * Severity ordering and classification helpers shared by every reporter.
+ *
+ * Centralizes "is this severity an error?" and "how do I sort by source
+ * position?" so reporter implementations never re-encode the rule. Reporters
+ * use these helpers to keep their output deterministic and aligned with the
+ * CI failure semantics the user expects.
+ */
+
 import type { RuleSeverity } from '@ngcompass/common';
 
 /**
- * Numeric priority values for each severity level.
- *
- * Why numeric priorities:
- * - Enables deterministic sorting.
- * - Prevents scattered "magic numbers".
- * - Centralizes severity ordering logic.
- *
- * Lower number = higher priority.
+ * Numeric priority for each severity (lower = higher priority). Used as the
+ * sort key when reporters need to surface the most important findings first.
  */
 const SEVERITY_PRIORITY: Readonly<Record<RuleSeverity, number>> = {
     error: 0,
@@ -17,66 +21,36 @@ const SEVERITY_PRIORITY: Readonly<Record<RuleSeverity, number>> = {
 } as const;
 
 /**
- * Set of severities considered fatal to the analysis result.
+ * Returns `true` when `severity` should fail CI / block a build.
  *
- * Why a Set instead of inline conditionals:
- * - O(1) lookup.
- * - Single source of truth.
- * - Easier to extend without modifying logic.
- */
-const ERROR_SEVERITIES: ReadonlySet<RuleSeverity> = new Set([
-    'error'
-]);
-
-/**
- * Determines whether a severity represents a hard failure.
- *
- * Contract:
- * - Returns true for severities that should fail CI or block builds.
- * - Returns false for informational or advisory severities.
+ * Currently only `'error'` qualifies. Kept as a function (not an inline
+ * comparison) so future fail-on policies can be encoded here without
+ * touching every reporter.
  */
 export function isErrorSeverity(severity: RuleSeverity): boolean {
-    return ERROR_SEVERITIES.has(severity);
+    return severity === 'error';
 }
 
 /**
- * Returns the numeric priority rank of a severity.
- *
- * Lower numbers indicate higher priority.
- *
- * This function is safe against future severity additions,
- * as long as they are defined in SEVERITY_PRIORITY.
+ * Returns the numeric priority rank for a severity. Unknown values fall back
+ * to `Number.MAX_SAFE_INTEGER` so reporters never crash on a value Zod did
+ * not catch upstream.
  */
 export function severityRank(severity: RuleSeverity): number {
     return SEVERITY_PRIORITY[severity] ?? Number.MAX_SAFE_INTEGER;
 }
 
-/**
- * Represents a source code position.
- *
- * Extracted as a named contract to improve readability and reuse.
- */
+/** Named coordinates used for stable position-based sorting. */
 export interface SourcePosition {
     readonly line: number;
     readonly column: number;
 }
 
 /**
- * Comparator for deterministic sorting by source position.
- *
- * Sorting order:
- * 1. Line number ascending
- * 2. Column number ascending
- *
- * This ensures stable and predictable reporter output.
+ * Comparator for sorting findings by source position (line then column).
+ * Stable across runs because both fields are integers.
  */
-export function compareByPosition(
-    a: SourcePosition,
-    b: SourcePosition,
-): number {
-    if (a.line !== b.line) {
-        return a.line - b.line;
-    }
-
+export function compareByPosition(a: SourcePosition, b: SourcePosition): number {
+    if (a.line !== b.line) return a.line - b.line;
     return a.column - b.column;
 }
