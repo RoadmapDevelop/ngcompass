@@ -188,7 +188,9 @@ describe('serializePlan / deserializePlan (round-trip)', () => {
         };
         const output = makeOutput([], { '/src/app.component.ts': unit });
         const compact = serializePlan(output);
-        expect(compact.v).toBe(1);
+        // Schema version was bumped to 2 to encode the `needsProjectContext` flag.
+        // Older v1 entries still deserialize (missing flag defaults to undefined).
+        expect(compact.v).toBe(2);
     });
 
     it('round-trips an empty plan', () => {
