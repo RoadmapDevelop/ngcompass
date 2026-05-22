@@ -1,28 +1,27 @@
 /**
- * @ngcompass/cache
+ * @fileoverview
+ * Public entry point for `@ngcompass/cache`.
  *
- * Caching layer for the ngcompass analysis engine.
- * Provides disk, memory, and JSON-file backed drivers,
- * plus cache services for AST, results, config, and meta data.
+ * Surfaces the cache services, drivers, hashing primitives, key-context
+ * helpers, and the runtime cache factory used by the CLI. Implementations
+ * are intentionally kept private — consumers receive a `CacheContext` and
+ * never reach for individual driver modules.
  */
 
-// Core types
 export * from './types.js';
 export * from './constants.js';
 
-// Hashing primitives (also used by @ngcompass/planner)
+// Hashing primitives (also used by @ngcompass/planner).
 export { computeHash, initHasher } from './hashing.js';
-export { stableSerialize, SerializationError } from './utils/stable-serialize.js';
 
-// Cache key context
+// Cache-key context (consumed by planner + config loader).
 export * from './key-context.js';
 
-// Drivers
-export type { CacheConfig } from './drivers/types.js';
+// Driver configuration surface (consumed by `createRuntimeCache` callers).
+export type { CacheConfig, DriverConfig } from './drivers/types.js';
 
-// Context (CacheContext factory)
+// Context factory.
 export * from './context.js';
 
-// Runtime cache helpers used by the CLI
+// CLI-facing runtime cache helper.
 export * from './runtime-cache.js';
-
