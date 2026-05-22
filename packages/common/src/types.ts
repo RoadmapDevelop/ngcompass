@@ -314,7 +314,7 @@ export interface StyleAst {
 }
 
 // ==============================================================================
-// PROJECT CONTEXT  (CTX-001)
+// PROJECT CONTEXT
 // Shared, read-only, pre-computed project-level metadata passed to rules that
 // declare `requires.projectContext: true`.  Built once per analysis run by
 // `buildProjectContext()` in @ngcompass/engine and threaded into RuleContext
@@ -339,7 +339,7 @@ export interface ComponentFiles {
 
 /**
  * Angular module metadata extracted from `@NgModule` or standalone
- * `@Component` decorators.  Populated by CTX-004; initially empty.
+ * `@Component` decorators. Initially empty when no Angular decorators are detected.
  */
 export interface NgModuleInfo {
     /** Absolute path to the module/component file. */
@@ -379,7 +379,7 @@ export interface ProjectContext {
     readonly reverseImportGraph: ReadonlyMap<string, ReadonlySet<string>>;
 
     /**
-     * Angular module / standalone component map.  (CTX-004)
+     * Angular module / standalone component map.
      *
      * Key:   absolute path to the `@NgModule` or standalone `@Component` file.
      * Value: `NgModuleInfo` with declarations, imports, exports, providers.
@@ -390,7 +390,7 @@ export interface ProjectContext {
     readonly ngModuleMap: ReadonlyMap<string, NgModuleInfo>;
 
     /**
-     * Set of absolute file paths for all standalone Angular entities.  (CTX-004)
+     * Set of absolute file paths for all standalone Angular entities.
      *
      * Includes files that contain `@Component({ standalone: true })`,
      * `@Directive({ standalone: true })`, or `@Pipe({ standalone: true })`.
@@ -402,7 +402,7 @@ export interface ProjectContext {
     readonly standaloneComponents: ReadonlySet<string>;
 
     /**
-     * Class name to absolute file path resolver. (CTX-004)
+     * Class name to absolute file path resolver.
      *
      * Maps the name of every exported class in the project to the absolute
      * path of the file that declares it.  Enables NgModule rules to resolve
@@ -432,8 +432,6 @@ export interface ProjectContext {
     /** Root directory of the project (absolute, normalised). */
     readonly rootDir: string;
 
-    // ── CTX-002 additions ────────────────────────────────────────────────────
-
     /**
      * Set of barrel file absolute paths.
      *
@@ -448,7 +446,7 @@ export interface ProjectContext {
     readonly barrelFiles: ReadonlySet<string>;
 
     /**
-     * External dependency map (CTX-002).
+     * External dependency map.
      *
      * Key:   absolute path of the project source file.
      * Value: set of npm package names (scope-aware bare specifiers, e.g.
@@ -464,8 +462,6 @@ export interface ProjectContext {
      */
     readonly externalDeps: ReadonlyMap<string, ReadonlySet<string>>;
 
-    // ── CTX-003 additions ────────────────────────────────────────────────────
-
     /**
      * Reverse map from absolute template file path to absolute component `.ts` path.
      *
@@ -480,7 +476,7 @@ export interface ProjectContext {
 }
 
 // ==============================================================================
-// COMPONENT ↔ TEMPLATE CROSS-REFERENCE  (CTX-003)
+// COMPONENT ↔ TEMPLATE CROSS-REFERENCE
 // Structural and semantic link between a component class file and its
 // associated template, styles, and spec.  Populated by RuleContextFactory
 // when ProjectContext is available and the file under analysis is a component
@@ -598,7 +594,7 @@ export interface RuleContext {
     readonly project?: ProjectContext;
 
     /**
-     * Component ↔ template cross-reference (CTX-003).
+     * Component ↔ template cross-reference.
      *
      * Non-`undefined` when `project` is available **and** the file under
      * analysis is either a `.component.ts` file or its associated template.

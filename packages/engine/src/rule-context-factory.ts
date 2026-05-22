@@ -110,7 +110,7 @@ export class RuleContextFactory {
         };
     }
 
-    // ── CTX-003: Cross-Reference Helpers ─────────────────────────────────────
+    // ── Cross-Reference Helpers ──────────────────────────────────────────────
 
     /**
      * Builds a `ComponentCrossRef` for the given file path when that file is
@@ -199,7 +199,7 @@ export class RuleContextFactory {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CTX-003: STATIC AST EXTRACTION HELPERS
+// STATIC AST EXTRACTION HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

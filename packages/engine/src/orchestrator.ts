@@ -147,7 +147,7 @@ export interface AnalysisOptions {
     /**
      * All files discovered by the scanner for this run.
      *
-     * CTX-001: Forwarded to `createTypeAwareAnalysisContext()` so the
+     * Forwarded to `createTypeAwareAnalysisContext()` so the
      * `ProjectContext` import-graph builder can restrict edges to intra-project
      * imports and correctly populate `ProjectContext.projectFiles`.
      *
@@ -367,7 +367,7 @@ const executeTasksLocally = async (
     concurrency: number,
     useTypeAwareContext: boolean,
     errorCollector?: InfrastructureErrorCollector,
-    /** CTX-001: scanner-discovered files forwarded to ProjectContext builder. */
+    /** Scanner-discovered files forwarded to ProjectContext builder. */
     files?: ReadonlyArray<string>,
     parserOptions?: ParserOptions,
     buildProjectContext = true,

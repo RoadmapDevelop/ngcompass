@@ -1,50 +1,43 @@
-import { ConfigIssue } from "@ngcompass/common";
-import { MESSAGES } from "../messages.js";
-import { ConfigBlockValidation, ValidatedConfig, ValidationContext } from "../types.js";
-import { validateConfigBlock } from "./base.js";
-
 /**
- * Constants governing global configuration validation limits.
+ * @fileoverview
+ * Cross-field validation for the root configuration.
+ *
+ * Validates fields whose constraints span the whole config (e.g. `maxWarnings`)
+ * and delegates per-block checks to {@link validateConfigBlock} so the same
+ * worker/cache rules apply to both the root and individual profiles.
  */
+
+import type { ConfigIssue } from '@ngcompass/common';
+import { MESSAGES } from '../messages.js';
+import type { ConfigBlockValidation, ValidatedConfig, ValidationContext } from '../types.js';
+import { validateConfigBlock } from './base.js';
+
 const LIMITS = {
-    WARNINGS_MIN: 0
+    WARNINGS_MIN: 0,
 } as const;
 
 /**
- * Performs top-level validation for the configuration object, addressing cross-field 
- * constraints and delegating to the base configuration block validator.
+ * Runs top-level field constraints and delegates block-level checks.
  *
- * @param config - The fully composed configuration object to validate.
- * @param context - The validation context providing access to environmental data.
- * @param basePath - The structural path used for pinpointing issues in error reports.
- * @returns A consolidated validation result containing issues from all checks.
+ * @param config - The composed configuration object to validate.
+ * @param context - Validation context (CPU lookup, FS abstraction).
+ * @param basePath - Path prefix for nested attribution (profiles, overrides).
+ * @returns {ConfigBlockValidation} Combined issues from this layer and the base block.
  */
 export function validateCrossFields(
     config: ValidatedConfig,
     context: ValidationContext,
-    basePath: (string | number)[] = []
+    basePath: (string | number)[] = [],
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
 
-    /**
-     * Global Constraints: Max Warnings
-     * Validates that the warning threshold is not a negative value.
-     */
-    if (config.maxWarnings !== undefined) {
-        const { maxWarnings } = config;
-
-        if (maxWarnings < LIMITS.WARNINGS_MIN) {
-            issues.push({
-                ...MESSAGES.NEGATIVE_MAX_WARNINGS(maxWarnings),
-                path: [...basePath, "maxWarnings"]
-            });
-        }
+    if (config.maxWarnings !== undefined && config.maxWarnings < LIMITS.WARNINGS_MIN) {
+        issues.push({
+            ...MESSAGES.NEGATIVE_MAX_WARNINGS(config.maxWarnings),
+            path: [...basePath, 'maxWarnings'],
+        });
     }
 
-    /**
-     * Inheritance: Base Block Validation
-     * Aggregates validation issues from the standard configuration block logic.
-     */
     const { issues: blockIssues } = validateConfigBlock(config, context, basePath);
     issues.push(...blockIssues);
 

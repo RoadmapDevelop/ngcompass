@@ -1,158 +1,135 @@
-import { minimatch } from "minimatch";
-import { ConfigIssue } from "@ngcompass/common";
-import { MESSAGES } from "../messages.js";
-import { ConfigBlockValidation, ValidatedConfig } from "../types.js";
-
 /**
- * Constants and Regular Expressions for glob pattern validation.
- */
-const GLOB_RULES = {
-    TRIPLE_SLASH: /\/\/\//,
-    BRACE_OPEN: /\{/g,
-    BRACE_CLOSE: /\}/g,
-    SAMPLE_FILE: "sample.ts"
-} as const;
-
-/**
- * Validates an individual glob pattern string against structural and 
- * syntax-based rules.
+ * @fileoverview
+ * Validates the `include`, `exclude`, and `ignorePatterns` glob arrays.
  *
- * @param field - The configuration property name (e.g., 'include').
- * @param pattern - The specific glob string to validate.
- * @param index - The array index of the pattern for error reporting.
- * @param basePath - The structural path prefix.
- * @returns An array of discovered issues for the single pattern.
+ * Performs syntactic checks (balanced braces and brackets, trailing slashes,
+ * empty entries) and array-level checks (duplicates, empty `include`/`exclude`).
+ * Catches malformed patterns before the scanner spends time on them.
+ */
+
+import { minimatch } from 'minimatch';
+import type { ConfigIssue } from '@ngcompass/common';
+import { MESSAGES } from '../messages.js';
+import type { ConfigBlockValidation, ValidatedConfig } from '../types.js';
+
+const TRIPLE_SLASH_RE = /\/\/\//;
+const BRACE_OPEN_RE = /\{/g;
+const BRACE_CLOSE_RE = /\}/g;
+const BRACKET_OPEN_RE = /\[/g;
+const BRACKET_CLOSE_RE = /\]/g;
+const SAMPLE_FILE = 'sample.ts';
+
+/**
+ * Validates a single glob pattern.
+ *
+ * @param field - Field name owning the pattern (used in messages).
+ * @param pattern - The glob string.
+ * @param index - Array index for issue attribution.
+ * @param basePath - Path prefix for issue attribution.
+ * @returns {ConfigIssue[]} Issues for this pattern (possibly empty).
  */
 function validateSingleGlob(
     field: string,
     pattern: string,
     index: number,
-    basePath: (string | number)[]
+    basePath: (string | number)[],
 ): ConfigIssue[] {
     const issues: ConfigIssue[] = [];
     const path = [...basePath, field, index];
 
-    /**
-     * Constraint: Content Existence
-     * Patterns must not be empty or purely whitespace.
-     */
-    if (!pattern || pattern.trim() === "") {
+    if (!pattern || pattern.trim() === '') {
         issues.push({ ...MESSAGES.EMPTY_GLOB_PATTERN(field), path });
         return issues;
     }
 
-    /**
-     * Syntax: Character Class Integrity
-     * Checks for common errors like unclosed brackets.
-     */
-    if (pattern.includes("[") && !pattern.includes("]")) {
-        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "unclosed bracket"), path });
+    const openBrackets = (pattern.match(BRACKET_OPEN_RE) || []).length;
+    const closeBrackets = (pattern.match(BRACKET_CLOSE_RE) || []).length;
+    if (openBrackets !== closeBrackets) {
+        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, 'unmatched character class brackets'), path });
         return issues;
     }
 
-    /**
-     * Syntax: Path Separators
-     * Prevents invalid path constructs like triple slashes or trailing slashes.
-     */
-    const hasTripleSlash = GLOB_RULES.TRIPLE_SLASH.test(pattern) || pattern.startsWith("///");
-    if (hasTripleSlash) {
-        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "invalid path pattern with multiple slashes"), path });
+    if (TRIPLE_SLASH_RE.test(pattern) || pattern.startsWith('///')) {
+        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, 'invalid path pattern with multiple slashes'), path });
         return issues;
     }
 
-    if (pattern.endsWith("\\") || pattern.endsWith("/")) {
-        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "trailing slash not allowed"), path });
+    if (pattern.endsWith('\\') || pattern.endsWith('/')) {
+        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, 'trailing slash not allowed'), path });
     }
 
-    /**
-     * Syntax: Braces Balancing
-     * Ensures that expansion braces {} are correctly balanced.
-     */
-    const openBraces = (pattern.match(GLOB_RULES.BRACE_OPEN) || []).length;
-    const closeBraces = (pattern.match(GLOB_RULES.BRACE_CLOSE) || []).length;
-
+    const openBraces = (pattern.match(BRACE_OPEN_RE) || []).length;
+    const closeBraces = (pattern.match(BRACE_CLOSE_RE) || []).length;
     if (openBraces !== closeBraces) {
-        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, "unmatched braces"), path });
+        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, 'unmatched braces'), path });
     }
 
-    /**
-     * Engine: Minimatch Verification
-     * Performs a dry-run using the underlying library to catch deeper syntax errors.
-     */
     try {
-        minimatch(GLOB_RULES.SAMPLE_FILE, pattern);
+        minimatch(SAMPLE_FILE, pattern);
     } catch (err) {
-        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, (err as Error).message), path });
+        const message = err instanceof Error ? err.message : String(err);
+        issues.push({ ...MESSAGES.INVALID_GLOB_PATTERN(pattern, message), path });
     }
 
     return issues;
 }
 
 /**
- * Validates all glob-based fields within the configuration, including 
- * uniqueness checks and mandatory field presence.
+ * Identifies duplicates in a pattern array using a single-pass `Set`.
+ * Preserves insertion order so dedup messages match user expectations.
  *
- * @param config - The composed configuration object.
- * @param basePath - The structural path prefix.
- * @returns A validation result containing all glob-related issues.
+ * @returns {string[]} Deduplicated list of patterns that appeared more than once.
+ */
+function findDuplicates(patterns: readonly string[]): string[] {
+    const seen = new Set<string>();
+    const duplicates = new Set<string>();
+    for (const pattern of patterns) {
+        if (seen.has(pattern)) {
+            duplicates.add(pattern);
+        } else {
+            seen.add(pattern);
+        }
+    }
+    return [...duplicates];
+}
+
+/**
+ * Validates all glob fields inside the configuration.
+ *
+ * @param config - Validated configuration.
+ * @param basePath - Path prefix for issue attribution.
+ * @returns {ConfigBlockValidation} All glob-related issues.
  */
 export function validateGlobPatterns(
     config: ValidatedConfig,
-    basePath: (string | number)[] = []
+    basePath: (string | number)[] = [],
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
-    const targetFields = ["include", "exclude", "ignorePatterns"] as const;
+    const targetFields = ['include', 'exclude', 'ignorePatterns'] as const;
 
-    /**
-     * Iterative Check: Field-Level Validation
-     * Processes each glob field to check for individual pattern validity 
-     * and array-wide properties like uniqueness.
-     */
     for (const field of targetFields) {
         const patterns = config[field];
+        if (!Array.isArray(patterns)) continue;
 
-        /**
-         * Guard: Array Integrity
-         * Skips processing if the field is missing or incorrectly typed 
-         * (e.g., due to a failed schema cast).
-         */
-        if (!Array.isArray(patterns)) {
-            continue;
+        for (let i = 0; i < patterns.length; i++) {
+            issues.push(...validateSingleGlob(field, patterns[i], i, basePath));
         }
 
-        /**
-         * Logic: Pattern Syntax
-         * Delegates individual string validation to the helper function.
-         */
-        patterns.forEach((pattern, index) => {
-            issues.push(...validateSingleGlob(field, pattern, index, basePath));
-        });
-
-        /**
-         * Logic: Uniqueness
-         * Identifies duplicate patterns within the same field to prevent 
-         * redundant processing.
-         */
-        const duplicates = patterns.filter((item, index) => patterns.indexOf(item) !== index);
+        const duplicates = findDuplicates(patterns);
         if (duplicates.length > 0) {
             issues.push({
-                ...MESSAGES.DUPLICATE_PATTERNS(field, [...new Set(duplicates)]),
-                path: [...basePath, field]
+                ...MESSAGES.DUPLICATE_PATTERNS(field, duplicates),
+                path: [...basePath, field],
             });
         }
     }
 
-    /**
-     * Integrity: Mandatory Collections
-     * Ensures that 'include' and 'exclude' are not empty, as this would 
-     * result in an invalid or ineffective analysis run.
-     */
     if (!config.include || config.include.length === 0) {
-        issues.push({ ...MESSAGES.EMPTY_INCLUDE(), path: [...basePath, "include"] });
+        issues.push({ ...MESSAGES.EMPTY_INCLUDE, path: [...basePath, 'include'] });
     }
 
     if (!config.exclude || config.exclude.length === 0) {
-        issues.push({ ...MESSAGES.EMPTY_EXCLUDE(), path: [...basePath, "exclude"] });
+        issues.push({ ...MESSAGES.EMPTY_EXCLUDE, path: [...basePath, 'exclude'] });
     }
 
     return { issues };
