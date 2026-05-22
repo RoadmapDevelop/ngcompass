@@ -1,7 +1,10 @@
 /**
- * Cached Analyzers
+ * @fileoverview
+ * Barrel for the cached analyzers.
  *
- * Centralized, cached, tri-state metadata extraction.
+ * Surfaces the `@Component` / `@Directive` metadata extractor with its
+ * tri-state value types and the template analyzer that turns an
+ * `angular-html-parser` AST into the stream nodes the engine dispatches.
  */
 
 export {
