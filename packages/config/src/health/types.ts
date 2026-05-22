@@ -42,10 +42,21 @@ export interface ValidationContext {
     };
 }
 
-/** Subset of validated-config fields consumed by the base block check. */
+/**
+ * Subset of fields consumed by the base block check.
+ *
+ * Accepts the loose shape of a profile entry (where `cache` may still be a
+ * boolean) as well as the normalized root config — both flow through the
+ * same block validator.
+ */
 export interface ConfigBlock {
     maxWorkers?: number;
-    cache?: CacheConfig;
+    cache?: boolean | {
+        readonly enabled?: boolean;
+        readonly location?: string;
+        readonly strategy?: 'memory' | 'local';
+        readonly ttl?: number;
+    };
 }
 
 /** Uniform return value from every check. */

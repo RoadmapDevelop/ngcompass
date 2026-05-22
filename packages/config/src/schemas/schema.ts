@@ -92,40 +92,35 @@ export const ProfileConfigSchema: z.ZodType<Partial<z.infer<typeof BaseAnalyzerC
 // ── Normalization transform ────────────────────────────────────────────────
 
 /**
- * Resolves legacy aliases and applies defaults so the downstream consumer
- * always receives a fully populated `NormalizedAnalyzerConfig`.
- */
-const normalize = (data: z.infer<typeof BaseAnalyzerConfigSchema> & { profiles?: unknown }) => {
-    const maxWorkers = data.maxWorkers ?? data.concurrency ?? getDefaultMaxWorkers();
-
-    let cache: Required<CacheOptions>;
-    if (data.cache === false) {
-        cache = { ...DEFAULT_CACHE_OPTIONS, enabled: false };
-    } else if (data.cache === true || data.cache === undefined) {
-        const location = data.cacheLocation ?? DEFAULT_CACHE_OPTIONS.location;
-        cache = { ...DEFAULT_CACHE_OPTIONS, location };
-    } else {
-        cache = { ...DEFAULT_CACHE_OPTIONS, ...data.cache };
-    }
-
-    return {
-        ...data,
-        maxWorkers,
-        cache,
-        rules: data.rules ?? {},
-        overrides: data.overrides ?? [],
-        ignorePatterns: data.ignorePatterns ?? [],
-    };
-};
-
-/**
  * Main analyzer config schema.
  *
- * The transformed output type is left to Zod's inference instead of being
- * widened by an explicit `z.ZodType<AnalyzerConfig>` annotation. That way
- * downstream code receives the full normalized shape (`maxWorkers`, `cache`,
- * `rules`, etc. all non-optional) without resorting to a double-cast.
+ * The transformed output type is left to Zod's inference (no explicit
+ * `z.ZodType<AnalyzerConfig>` annotation) so downstream code receives the
+ * full normalized shape — `maxWorkers`, `cache`, `rules`, etc. all
+ * non-optional — without resorting to a double-cast.
  */
 export const AnalyzerConfigSchema = BaseAnalyzerConfigSchema
     .extend({ profiles: z.record(z.string(), ProfileConfigSchema).optional() })
-    .transform(normalize);
+    .transform((data) => {
+        // Resolve legacy aliases and apply defaults.
+        const maxWorkers = data.maxWorkers ?? data.concurrency ?? getDefaultMaxWorkers();
+
+        let cache: Required<CacheOptions>;
+        if (data.cache === false) {
+            cache = { ...DEFAULT_CACHE_OPTIONS, enabled: false };
+        } else if (data.cache === true || data.cache === undefined) {
+            const location = data.cacheLocation ?? DEFAULT_CACHE_OPTIONS.location;
+            cache = { ...DEFAULT_CACHE_OPTIONS, location };
+        } else {
+            cache = { ...DEFAULT_CACHE_OPTIONS, ...data.cache };
+        }
+
+        return {
+            ...data,
+            maxWorkers,
+            cache,
+            rules: data.rules ?? {},
+            overrides: data.overrides ?? [],
+            ignorePatterns: data.ignorePatterns ?? [],
+        };
+    });

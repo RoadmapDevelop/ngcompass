@@ -13,13 +13,13 @@
  * caching can key results by exact file bytes.
  */
 
-import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createJiti } from 'jiti';
 import { lilconfig } from 'lilconfig';
 import { debug, time, timeEnd } from '@ngcompass/common';
+import { sha1Hex } from '../utils/hash.js';
 
 const MODULE_NAME = 'ngcompass';
 
@@ -109,7 +109,7 @@ export const findAndLoadConfig = async (cwd: string): Promise<ConfigDiscoveryRes
     time('content-hash');
     try {
         content = fs.readFileSync(result.filepath, 'utf-8');
-        contentHash = crypto.createHash('sha1').update(content).digest('hex');
+        contentHash = sha1Hex(content);
         const hashTime = timeEnd('content-hash');
         debug('discovery', `Content hash: ${contentHash.substring(0, 8)}... (${hashTime.toFixed(1)}ms)`);
     } catch (err) {
