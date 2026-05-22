@@ -10,10 +10,10 @@
  * Uses the `AstCache` to avoid re-parsing unchanged files across runs.
  */
 
-import crypto from 'node:crypto';
 import type { AstCache } from '@ngcompass/cache';
 import { ASTUtils, CACHE_VERSION } from '@ngcompass/common';
 import type { ConfigIssue, LocationMap } from '@ngcompass/common';
+import { sha1Hex } from '../utils/hash.js';
 import type { WritableIssue } from './types.js';
 
 /**
@@ -24,11 +24,6 @@ import type { WritableIssue } from './types.js';
  */
 function buildVersionedCacheKey(contentHash: string): string {
     return `v${CACHE_VERSION}:${contentHash}`;
-}
-
-/** Computes the SHA-1 hex digest of `fileContent`. */
-function computeContentHash(fileContent: string): string {
-    return crypto.createHash('sha1').update(fileContent).digest('hex');
 }
 
 /** Parses `fileContent` and derives a path-keyed location map. */
@@ -129,7 +124,7 @@ export async function enrichIssueLocations(
 ): Promise<void> {
     if (issues.length === 0) return;
 
-    const hash = contentHash ?? computeContentHash(fileContent);
+    const hash = contentHash ?? sha1Hex(fileContent);
     const locationMap = await resolveLocationMap(fileContent, filePath, astCache, hash);
 
     applyLocationsToIssues(issues, locationMap, filePath);
