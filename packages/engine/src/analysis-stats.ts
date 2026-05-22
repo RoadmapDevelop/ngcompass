@@ -1,34 +1,39 @@
 /**
  * @fileoverview
- * Facilitates the calculation of aggregate analytical metrics.
+ * Aggregate statistics for an analysis run.
  *
- * This module provides utilities to derive summary statistics from rule execution
- * results, including file counts, severity distributions, and execution durations.
+ * Reduces a flat `RuleResult[]` into the `AnalysisResult.stats` shape:
+ * unique-file count, totals by severity, wall-clock duration, and an
+ * optional cache-hit rate threaded through from the planner's incremental
+ * filter.
  */
 
-import { RuleFailure, RuleResult, AnalysisResult } from "@ngcompass/common";
-
+import type { AnalysisResult, RuleFailure, RuleResult, RuleSeverity } from '@ngcompass/common';
 
 /**
- * Computes comprehensive analytical statistics based on raw rule results.
+ * Builds the `stats` field of an `AnalysisResult`.
  *
- * @param results A collection of rule execution results.
- * @param startTime The high-resolution timestamp indicating the start of execution.
- * @param cacheHitRate An optional precalculated cache hit ratio [0, 1].
- * @returns An object encapsulating the aggregated statistical data.
+ * @param results       - Flat result list produced by the engine.
+ * @param startTime     - High-resolution timestamp captured at analysis start.
+ * @param cacheHitRate  - Optional pre-computed ratio in `[0, 1]`.
+ * @returns Aggregate statistics suitable for embedding in `AnalysisResult`.
  */
 export const calculateStats = (
     results: ReadonlyArray<RuleResult>,
     startTime: number,
     cacheHitRate?: number,
-): AnalysisResult["stats"] => {
+): AnalysisResult['stats'] => {
     const duration = performance.now() - startTime;
     const failures = results.flatMap((r) => r.failures);
 
     const uniqueFiles = new Set<string>(failures.map((f: RuleFailure) => f.filePath));
 
-    const totalErrors = failures.filter((f: RuleFailure) => isErrorSeverity(f.severity)).length;
-    const totalWarnings = failures.filter((f: RuleFailure) => isWarningSeverity(f.severity)).length;
+    let totalErrors = 0;
+    let totalWarnings = 0;
+    for (const failure of failures) {
+        if (isErrorSeverity(failure.severity)) totalErrors++;
+        else if (isWarningSeverity(failure.severity)) totalWarnings++;
+    }
 
     return {
         totalFiles: uniqueFiles.size,
@@ -39,23 +44,8 @@ export const calculateStats = (
     };
 };
 
-/**
- * Predicate to identify if a given severity level denotes a terminal error.
- *
- * @param severity The severity metadata to evaluate.
- * @returns True if the severity is classified as an error.
- */
-const isErrorSeverity = (severity: unknown): boolean => {
-    return severity === "error";
-};
+/** Returns `true` when `severity` marks a terminal error. */
+const isErrorSeverity = (severity: RuleSeverity): boolean => severity === 'error';
 
-/**
- * Predicate to identify if a given severity level denotes a non-terminal warning.
- *
- * @param severity The severity metadata to evaluate.
- * @returns True if the severity is classified as a warning.
- */
-const isWarningSeverity = (severity: unknown): boolean => {
-    return severity === "warn";
-};
-
+/** Returns `true` when `severity` marks a non-terminal warning. */
+const isWarningSeverity = (severity: RuleSeverity): boolean => severity === 'warn';

@@ -21,6 +21,13 @@ export * from './rule-context-factory.js';
 // Orchestrator
 export * from './orchestrator.js';
 
+// Shared per-file progress utilities (used by orchestrator and worker-pool).
+export {
+    buildFileProgress,
+    isAnalysisFileProgress,
+    isWorkerFileProgress,
+} from './progress.js';
+
 // Memoized file system and AST accessors.
 export { createAnalysisContext } from './analysis-context.js';
 export type { AnalysisContext } from './analysis-context.js';
