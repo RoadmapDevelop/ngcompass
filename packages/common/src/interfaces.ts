@@ -99,7 +99,7 @@ export interface CacheOptions {
  */
 export interface ConfigOverride {
     files: string | string[];
-    rules?: Record<string, RuleConfig | Severity | 'off'>;
+    rules?: Record<string, RuleConfig>;
 }
 
 /**
@@ -149,7 +149,7 @@ export interface AnalyzerConfig {
     plugins?: string[];
 
     /** Rule configuration keyed by rule name. */
-    rules?: Record<string, RuleConfig | Severity | 'off'>;
+    rules?: Record<string, RuleConfig>;
 
     /** Per-file rule overrides merged with global rule settings. */
     overrides?: ConfigOverride[];
@@ -162,12 +162,6 @@ export interface AnalyzerConfig {
 
     /** Structured telemetry collection settings. */
     telemetry?: TelemetryConfig;
-
-    /** Engine execution thresholds for advanced tuning. */
-    engine?: {
-        /** Task count above which the worker pool is used. */
-        parallelThreshold?: number;
-    };
 }
 
 /**
@@ -225,7 +219,7 @@ export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' |
     maxWarnings: number;
 
     /** Resolved rule configuration keyed by rule name. */
-    rules: Record<string, RuleConfig | Severity | 'off'>;
+    rules: Record<string, RuleConfig>;
 }
 
 /**

@@ -600,16 +600,17 @@ export function hasTeardownInReceiverChain(receiverExpr: AstNode | null | undefi
 // ============================================
 
 /**
- * Computes absolute offset for template expressions, accounting for inline template offset.
+ * Returns the already-absolute template stream offset.
+ *
+ * `analyzeTemplate()` translates Angular parser spans by
+ * `templateStartOffset` before rules see them. Keeping this helper as the
+ * single call site prevents older rules from adding the inline template
+ * offset a second time.
  */
 export function getTemplateAbsoluteOffset(
-    context: { template?: { templateStartOffset?: number } },
+    _context: { template?: { templateStartOffset?: number } },
     nodeStart: number
 ): number {
-    const templateStartOffset = context.template?.templateStartOffset;
-    if (typeof templateStartOffset === 'number' && Number.isFinite(templateStartOffset)) {
-        return nodeStart + templateStartOffset;
-    }
     return nodeStart;
 }
 

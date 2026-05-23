@@ -65,8 +65,12 @@ const KNOWN_NAMESPACES: ReadonlySet<string> = new Set<string>(
         'discovery', 'loader', 'validator', 'cache', 'scanner', 'parser',
         'rules', 'workers', 'reporter', 'init', 'config',
         'planner', 'incremental', 'dry-run', 'engine', 'plugin-loader', 'env-fingerprint',
-    ] satisfies Namespace[]
+    ] satisfies Namespace[],
 );
+
+/** Pre-formatted list for the unknown-namespace warning. Cached so each
+ *  warning doesn't re-traverse the set. */
+const KNOWN_NAMESPACE_LIST = [...KNOWN_NAMESPACES].join(', ');
 
 const COLORS = [
     pc.cyan,
@@ -195,6 +199,14 @@ class Logger {
         return duration;
     }
 
+    /**
+     * Writes a formatted message to stderr. Every level uses `console.error`
+     * by design — log output never pollutes stdout, which is reserved for
+     * machine-readable analyzer output (JSON, SARIF, HTML reports).
+     *
+     * The level parameter is accepted for call-site readability but does not
+     * change the sink; reserve it for future per-level filtering.
+     */
     private log(_level: LogLevel, namespace: Namespace, message: string, ...args: unknown[]) {
         if (!this.config.enabled) return;
         if (this.config.namespaces !== 'all' && !this.config.namespaces.has(namespace)) return;
@@ -229,7 +241,7 @@ class Logger {
                 // Uses console.warn directly (not the logger itself) to avoid recursion.
                 console.warn(
                     `[ngcompass] Unknown debug namespace: "${ns}". ` +
-                    `Valid namespaces: ${[...KNOWN_NAMESPACES].join(', ')}`
+                    `Valid namespaces: ${KNOWN_NAMESPACE_LIST}`,
                 );
             }
         }

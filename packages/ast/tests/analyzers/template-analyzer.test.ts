@@ -38,4 +38,18 @@ describe('template-analyzer', () => {
         expect(analyzed.expressions.length).toBeGreaterThan(0);
         expect(analyzed.expressions[0].expression.type).toBe('Identifier');
     });
+
+    it('returns file-absolute spans for inline templates', () => {
+        const html = '<custom-component [prop]="someValue"></custom-component>';
+        const base = analyzeTemplate(parseHtml(html));
+        const parsed = parseHtml(html, 100);
+        const analyzed = analyzeTemplate(parsed);
+
+        const expression = analyzed.expressions[0];
+        expect(expression.sourceSpan.start).toBe(base.expressions[0].sourceSpan.start + 100);
+
+        const binding = analyzed.attributes.find(a => a.name === '[prop]');
+        const baseBinding = base.attributes.find(a => a.name === '[prop]');
+        expect(binding?.sourceSpan.start).toBe((baseBinding?.sourceSpan.start ?? 0) + 100);
+    });
 });

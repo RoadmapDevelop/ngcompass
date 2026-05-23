@@ -13,6 +13,9 @@ import pc from 'picocolors';
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;
 
+/**
+ * Renders a lightweight in-place progress indicator for interactive output.
+ */
 export class Spinner {
     private timer: NodeJS.Timeout | null = null;
     private frameIndex = 0;
