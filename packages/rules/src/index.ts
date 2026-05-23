@@ -1,3 +1,20 @@
+/**
+ * @fileoverview
+ * Public entry point for `@ngcompass/rules`.
+ *
+ * Surfaces:
+ *  - Every built-in rule (re-exported by domain for backward compatibility).
+ *  - The rule registry (`RuleRegistry`, `getGlobalRegistry`, `RulePlugin`).
+ *  - The bootstrap helper (`registerAllBuiltinRules`).
+ *  - The engine adapter (`executeBatchedNewEngineRules`, `isNewEngineRule`).
+ *  - The resolution pipeline (`resolveRules`, presets, merger, loader).
+ *  - Reporter inputs (`RECOMMENDATIONS`, `CODE_EXAMPLES`).
+ *
+ * Worker entry points (`execution-worker`, `type-aware-worker`) live in
+ * their own files at the package root because tsup bundles them as
+ * standalone scripts.
+ */
+
 export const rules = '@ngcompass/rules';
 
 // ─── Correctness ─────────────────────────────────────────────────────────────

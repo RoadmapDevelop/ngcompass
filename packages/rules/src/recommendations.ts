@@ -1,8 +1,13 @@
 /**
- * Rule Recommendations
+ * @fileoverview
+ * Rule recommendations and inline code examples.
  *
- * Actionable, one-sentence fix recommendations surfaced in reporter output.
- * Keys must match the ruleName field on RuleFailure exactly.
+ * The two exported tables are keyed by rule name and surfaced by reporters
+ * (Console, HTML) below the violation message. Recommendation entries must
+ * match the `ruleName` field on `RuleFailure` exactly — including the
+ * subtype suffixes some rules emit (e.g. `template-trackby-required` emits
+ * `template-trackby-required-for-ngfor` for ngFor-specific findings, so
+ * both keys live here).
  */
 export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'prefer-on-push-component-change-detection':
@@ -11,6 +16,8 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
         'Move the value to a pipe, computed signal, or cached component property.',
     'rxjs-no-subscribe-in-component':
         'Use `toSignal()` or the `async` pipe for view state; add `takeUntilDestroyed()` for long-lived imperative subscriptions.',
+    'template-trackby-required':
+        'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
     'template-trackby-required-for-ngfor':
         'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
     'template-no-object-literal-binding':

@@ -1,27 +1,26 @@
 /**
  * @fileoverview
- * Facilitates asynchronous file discovery using glob pattern evaluation.
+ * Glob-based file discovery.
  *
- * Implements a result-oriented execution wrapper around the underlying glob
- * engine, ensuring consistent error handling and absolute path resolution.
+ * Thin wrapper around `tinyglobby` that produces a {@link Result} so the
+ * scanner pipeline can keep error handling uniform. Used both as the
+ * non-Git default and as the fallback when `git ls-files` returns nothing.
  */
 
 import { glob } from 'tinyglobby';
-import type { ExpandedPatterns, RawFileList, Result } from './types.js';
-import { Ok, Err } from './types.js';
+import { Err, Ok, type ExpandedPatterns, type RawFileList, type Result } from './types.js';
 
 /**
- * Executes a glob operation to discover files satisfying the specified patterns.
+ * Runs a glob over `rootDir` using `patterns.include` / `patterns.ignore`.
  *
- * @param patterns - A collection of inclusion and exclusion glob patterns.
- * @param rootDir - The base directory for the scan operation.
- * @param options - Configuration parameters for glob execution.
- * @returns A promise resolving to a Result containing the discovered file paths.
+ * @param patterns - Expanded include/ignore globs.
+ * @param rootDir  - Search root.
+ * @param options  - Toggles for symlink following and dotfile matching.
  */
 export const executeGlob = async (
     patterns: ExpandedPatterns,
     rootDir: string,
-    options: { readonly followSymlinks: boolean; readonly dot: boolean }
+    options: { readonly followSymlinks: boolean; readonly dot: boolean },
 ): Promise<Result<RawFileList>> => {
     try {
         const files = await glob([...patterns.include], {
@@ -32,7 +31,6 @@ export const executeGlob = async (
             onlyFiles: true,
             dot: options.dot,
         });
-
         return Ok({ files });
     } catch (error) {
         return Err(new Error(`Glob execution failed: ${(error as Error).message}`));
@@ -40,17 +38,11 @@ export const executeGlob = async (
 };
 
 /**
- * Determines if a collection of glob patterns is likely to produce matches.
- *
- * Performs a static analysis of the provided patterns to identify configurations
- * that are inherently empty or exclusively exclusionary.
- *
- * @param patterns - The pattern collection to analyze.
- * @returns True if the patterns are structurally valid for matching.
+ * Returns `true` when the supplied include patterns can plausibly match at
+ * least one file. Useful as a fast guard before invoking the glob engine.
  */
 export const patternsLikelyHaveMatches = (patterns: ExpandedPatterns): boolean => {
     if (patterns.include.length === 0) return false;
-    if (patterns.include.every(p => p.startsWith('!'))) return false;
-
+    if (patterns.include.every((p) => p.startsWith('!'))) return false;
     return true;
 };

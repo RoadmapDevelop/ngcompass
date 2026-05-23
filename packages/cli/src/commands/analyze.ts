@@ -560,7 +560,7 @@ async function resolveRulesStep(
         };
     }
 
-    const rulesResult = await resolveRules(effectiveConfig);
+    const rulesResult = await resolveRules(effectiveConfig, process.cwd());
 
     if (!rulesResult.ok) {
         reporter.error(new Error(`Rule resolution failed: ${rulesResult.error.message}`));

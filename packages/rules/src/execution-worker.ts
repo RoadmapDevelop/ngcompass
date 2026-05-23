@@ -1,34 +1,40 @@
-import { parentPort, workerData } from "node:worker_threads";
-import { RuleResult, WorkerFileProgress } from "@ngcompass/common";
-import { Task } from "@ngcompass/planner";
-import { createAnalysisContext, executeBatchedTasks, configureRuleExecutor } from "@ngcompass/engine";
-import { registerAllBuiltinRules } from "./registry/register-all.js";
-import { executeBatchedNewEngineRules, isNewEngineRule } from "./engine/adapter.js";
-
 /**
- * Worker input payload.
+ * @fileoverview
+ * Worker-thread entry point for syntax-only rule execution.
+ *
+ * The engine's worker pool spawns one of these per file chunk so syntactic
+ * rules can run in parallel across CPU cores. Each worker re-registers the
+ * built-in rules (worker threads have their own module registry isolated
+ * from the main thread) and wires the rule executor into the engine before
+ * processing its chunk.
  */
+
+import { parentPort, workerData } from 'node:worker_threads';
+import type { RuleResult } from '@ngcompass/common';
+import type { Task } from '@ngcompass/planner';
+import {
+    configureRuleExecutor,
+    createAnalysisContext,
+    executeBatchedTasks,
+} from '@ngcompass/engine';
+import { executeBatchedNewEngineRules, isNewEngineRule } from './engine/adapter.js';
+import { registerAllBuiltinRules } from './registry/register-all.js';
+import { buildWorkerFileProgress } from './workers/progress.js';
+
+/** Payload received from the parent thread on worker creation. */
 export interface ExecutionWorkerData {
     rootDir: string;
     tasks: Task[];
 }
 
-/**
- * Worker output payload.
- */
+/** Payload posted back to the parent thread when the chunk completes. */
 export interface ExecutionWorkerResult {
     results: RuleResult[];
     errors: Array<{ task: Task; error: string }>;
 }
 
-const main = async () => {
-
-    // Re-register all built-in rules — each worker thread has its own module
-    // registry isolated from the main thread, so registration must happen here.
+const main = async (): Promise<void> => {
     registerAllBuiltinRules();
-
-    // Wire the rule executor into the engine's DI boundary so that
-    // executeBatchedTasks() can call back into the rules registry.
     configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
     if (!parentPort) return;
@@ -36,11 +42,9 @@ const main = async () => {
     const { rootDir, tasks } = workerData as ExecutionWorkerData;
     const results: RuleResult[] = [];
     const errors: Array<{ task: Task; error: string }> = [];
-
-    // Use the shared analysis context (same memoized caches as orchestrator)
     const context = createAnalysisContext(rootDir);
 
-    // Group tasks by file
+    // Group tasks by file so each batch shares one parse + one analysis context.
     const tasksByFile = new Map<string, Task[]>();
     for (const task of tasks) {
         const fileTasks = tasksByFile.get(task.filePath) ?? [];
@@ -48,22 +52,22 @@ const main = async () => {
         tasksByFile.set(task.filePath, fileTasks);
     }
 
-    // Execute batched tasks per file — evict after each file so ASTs are
-    // released to the GC rather than accumulating for the worker's full chunk.
+    // Evict per-file caches after each batch so ASTs are released to the GC
+    // rather than accumulating for the worker's full chunk.
     for (const [filePath, fileTasks] of tasksByFile) {
         const fileStart = performance.now();
         try {
             const batchResults = await executeBatchedTasks(fileTasks, context);
             results.push(...batchResults);
-            parentPort.postMessage(buildFileProgress(filePath, fileTasks.length, batchResults, performance.now() - fileStart));
+            parentPort.postMessage(
+                buildWorkerFileProgress(filePath, fileTasks.length, batchResults, performance.now() - fileStart, false),
+            );
         } catch (e) {
-            for (const task of fileTasks) {
-                errors.push({
-                    task,
-                    error: e instanceof Error ? e.message : String(e)
-                });
-            }
-            parentPort.postMessage(buildFileProgress(filePath, fileTasks.length, [], performance.now() - fileStart));
+            const message = e instanceof Error ? e.message : String(e);
+            for (const task of fileTasks) errors.push({ task, error: message });
+            parentPort.postMessage(
+                buildWorkerFileProgress(filePath, fileTasks.length, [], performance.now() - fileStart, false),
+            );
         } finally {
             context.evict(filePath);
         }
@@ -73,31 +77,3 @@ const main = async () => {
 };
 
 void main();
-
-const buildFileProgress = (
-    filePath: string,
-    taskCount: number,
-    results: ReadonlyArray<RuleResult>,
-    duration: number,
-): WorkerFileProgress => {
-    let errorCount = 0;
-    let warningCount = 0;
-
-    for (const result of results) {
-        for (const failure of result.failures) {
-            if (failure.severity === 'error') errorCount++;
-            else if (failure.severity === 'warn') warningCount++;
-        }
-    }
-
-    return {
-        kind: 'file-progress',
-        filePath,
-        taskCount,
-        typeAware: false,
-        issueCount: errorCount + warningCount,
-        errorCount,
-        warningCount,
-        duration,
-    };
-};

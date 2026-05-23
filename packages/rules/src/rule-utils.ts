@@ -1,10 +1,17 @@
 /**
- * Shared Utilities for Migration Rules
+ * @fileoverview
+ * Shared utilities for migration rules.
  *
- * Consolidated helper functions used across multiple rule files.
- * Eliminates duplication and ensures consistent behavior.
+ * Consolidated helpers used across multiple rule files: AST navigation,
+ * RxJS import-alias detection, HTTP-observable heuristics, TypeScript
+ * TypeChecker integration, and small predicates. Every helper is
+ * zero-allocation where possible so it can be safely called from the
+ * single-pass engine's per-node hot path.
  *
- * PERFORMANCE: All functions are zero-allocation where possible.
+ * `AstNode` below is deliberately loose (`[key: string]: unknown`) — the
+ * engine passes Oxc's untyped AST through to rules. The cost of strict
+ * typing across 30+ rules outweighs the safety benefit; consumers narrow
+ * with explicit `node.type === '…'` discrimination at every site.
  */
 
 import { RuleContext } from '@ngcompass/common';
@@ -15,8 +22,11 @@ import { RuleContext } from '@ngcompass/common';
 
 /**
  * Loosely-typed AST node used by migration rules.
- * Provides minimal structure while allowing dynamic property access
- * that the oxc-parser AST requires.
+ *
+ * The shape mirrors the subset of Oxc's AST our rules read, with an
+ * unconstrained index signature so dynamic property access (which Oxc's
+ * AST requires) compiles. Narrow with `node.type === '…'` at each site
+ * instead of casting.
  */
 export interface AstNode {
     readonly type?: string;
@@ -829,17 +839,24 @@ export function getTsSymbolAtNode(
     if (!ts) return undefined;
 
     try {
-        // Lazy-create a TS SourceFile from file content if not already present
-        if (!context.sourceFile && context.fileContent) {
-            (context as any).sourceFile = ts.createSourceFile(
+        // Lazy-create a TS SourceFile from file content if not already present.
+        // The cast captures the (deliberate) mutation of an otherwise opaque
+        // context property: the engine doesn't know about `sourceFile`, but
+        // every consumer of `getTsSymbolAtNode` does.
+        type ContextWithSourceFile = RuleContext & {
+            sourceFile?: import('typescript').SourceFile;
+        };
+        const ctx = context as ContextWithSourceFile;
+        if (!ctx.sourceFile && context.fileContent) {
+            ctx.sourceFile = ts.createSourceFile(
                 context.filePath,
                 context.fileContent,
                 ts.ScriptTarget.Latest,
-                true
+                true,
             );
         }
 
-        const sourceFile = context.sourceFile as import('typescript').SourceFile;
+        const sourceFile = ctx.sourceFile;
         if (!sourceFile) return undefined;
 
         const tsNode = findTsNodeAtPosition(sourceFile, getNodeStart(oxcNode), ts);
