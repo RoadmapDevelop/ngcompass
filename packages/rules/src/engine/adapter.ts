@@ -1,32 +1,34 @@
 /**
- * High-Performance Engine Adapter
+ * @fileoverview
+ * Engine adapter — bridges the `RuleRegistry` (plugin boundary) with the
+ * single-pass engine.
  *
- * Bridges the RuleRegistry (plugin boundary) with the single-pass engine
- * and the legacy orchestrator API. Maintains backward compatibility while
- * enabling batched rule execution and external plugin registration.
+ * Built-in rules and plugin rules both register through
+ * {@link registerNewEngineRule}; the engine's `configureRuleExecutor` then
+ * routes batched executions through {@link executeBatchedNewEngineRules},
+ * which fans rule names out to the global registry and hands the resolved
+ * handlers to `runSinglePassAnalysis`.
  *
- * The mutable bare Map that previously lived here has been replaced by
- * the global RuleRegistry singleton — see rules/registry/rule-registry.ts.
+ * No mutable global state lives here — all rule storage is owned by
+ * `RuleRegistry`.
  */
 
-import type { RuleContext, RuleResult } from '@ngcompass/common';
-import { runSinglePassAnalysis } from '@ngcompass/engine';
-import type { RuleHandler } from '@ngcompass/engine';
-import { debug } from '@ngcompass/common';
-import { getGlobalRegistry } from '../registry/rule-registry.js';
-import type { RulePlugin } from '../registry/rule-registry.js';
+import { debug, type RuleContext, type RuleResult } from '@ngcompass/common';
+import { runSinglePassAnalysis, type RuleHandler } from '@ngcompass/engine';
+import { getGlobalRegistry, type RulePlugin } from '../registry/rule-registry.js';
 
-// ============================================
-// REGISTRATION API
-// ============================================
+// ── Registration ──────────────────────────────────────────────────────────
 
 /**
- * Registers a new-style rule handler.
+ * Registers a rule handler with the global registry.
  *
- * Delegates to RuleRegistry.register() — the single source of truth
- * for both rule handlers and metadata. No dual-registration needed.
+ * Delegates to `RuleRegistry.register()` so handlers and metadata live in
+ * exactly one place — no dual-registration needed.
  */
-export const registerNewEngineRule = (handler: RuleHandler<unknown>, category?: string): void => {
+export const registerNewEngineRule = (
+    handler: RuleHandler<unknown>,
+    category?: string,
+): void => {
     const plugin: RulePlugin = {
         name: handler.name,
         handler,
@@ -34,53 +36,36 @@ export const registerNewEngineRule = (handler: RuleHandler<unknown>, category?: 
             dependencyType: 'component',
             ...handler.meta,
             category: category ?? handler.meta?.category ?? 'best-practice',
-            requires: {
-                ...handler.meta?.requires
-            }
+            requires: handler.meta?.requires ?? {},
         },
     };
 
     getGlobalRegistry().register(plugin);
-
     debug('engine', `Registered rule: ${handler.name}`);
 };
 
-// ============================================
-// QUERY API
-// ============================================
+// ── Query ─────────────────────────────────────────────────────────────────
+
+/** Returns `true` when `ruleName` is registered in the global registry. */
+export const isNewEngineRule = (ruleName: string): boolean =>
+    getGlobalRegistry().has(ruleName);
+
+// ── Batched execution ─────────────────────────────────────────────────────
 
 /**
- * Checks if a rule is implemented in the engine.
- */
-export const isNewEngineRule = (ruleName: string): boolean => {
-    return getGlobalRegistry().has(ruleName);
-};
-
-/**
- * Gets all registered rule names.
- */
-export const getNewEngineRuleNames = (): ReadonlyArray<string> => {
-    return getGlobalRegistry().getRuleNames();
-};
-
-// ============================================
-// BATCHED EXECUTION API
-// ============================================
-
-/**
- * Executes multiple rules in a single AST pass (optimal path).
+ * Executes every rule in `ruleNames` against `context` in a single AST pass.
  *
- * All handlers for the given rule names are collected from the global
- * RuleRegistry (which includes both built-in rules and plugin rules) and
- * passed to runSinglePassAnalysis() — the AST is walked exactly once.
+ * Handlers are resolved from the global registry (which contains both
+ * built-in rules and plugin rules); the engine walks the AST exactly once
+ * regardless of how many rules are batched together.
  *
- * @param ruleNames - Rules to execute
- * @param context   - Rule execution context
- * @returns Array of RuleResults, one per rule name
+ * @param ruleNames - Rules to execute on this file.
+ * @param context   - Engine-provided rule context.
+ * @returns Per-rule `RuleResult` objects in registration order.
  */
 export const executeBatchedNewEngineRules = (
     ruleNames: ReadonlyArray<string>,
-    context: RuleContext
+    context: RuleContext,
 ): ReadonlyArray<RuleResult> => {
     const registry = getGlobalRegistry();
 
@@ -89,79 +74,23 @@ export const executeBatchedNewEngineRules = (
         const handler = registry.get(name);
         if (handler) handlers.push(handler);
     }
-
-    if (handlers.length === 0) {
-        return [];
-    }
+    if (handlers.length === 0) return [];
 
     debug('engine', `Executing ${handlers.length} rules in single pass on ${context.filePath}`);
 
     const { results, performance } = runSinglePassAnalysis(handlers, context);
 
     debug('engine', `Single-pass complete: ${performance.traversalMs.toFixed(2)}ms, ${performance.nodesVisited} nodes`);
-    debug('engine', `Cache hit rate: ${(
-        (performance.cacheStats.hits / (performance.cacheStats.hits + performance.cacheStats.misses || 1)) * 100
-    ).toFixed(1)}%`);
+
+    const cacheTotal = performance.cacheStats.hits + performance.cacheStats.misses;
+    if (cacheTotal > 0) {
+        const hitRate = (performance.cacheStats.hits / cacheTotal) * 100;
+        debug('engine', `Component metadata cache hit rate: ${hitRate.toFixed(1)}%`);
+    }
 
     if (performance.budgetViolations.length > 0) {
-        debug('engine', 'Performance budget violations:', performance.budgetViolations);
+        debug('engine', `Performance budget violations: ${performance.budgetViolations.join('; ')}`);
     }
 
     return results;
-};
-
-/**
- * Performance statistics for monitoring.
- */
-export interface EngineStats {
-    readonly totalExecutions: number;
-    readonly totalBatchedExecutions: number;
-    readonly avgTraversalMs: number;
-    readonly avgCacheHitRate: number;
-}
-
-/**
- * Scoped stats accumulator – avoids loose mutable module-level variables.
- */
-interface EngineStatsAccumulator {
-    totalExecutions: number;
-    totalBatchedExecutions: number;
-    totalTraversalMs: number;
-    totalCacheHits: number;
-    totalCacheMisses: number;
-}
-
-const stats: EngineStatsAccumulator = {
-    totalExecutions: 0,
-    totalBatchedExecutions: 0,
-    totalTraversalMs: 0,
-    totalCacheHits: 0,
-    totalCacheMisses: 0,
-};
-
-/**
- * Gets engine performance statistics.
- *
- * @returns Current statistics snapshot
- */
-export const getEngineStats = (): EngineStats => {
-    const totalCache = stats.totalCacheHits + stats.totalCacheMisses || 1;
-
-    return {
-        totalExecutions: stats.totalExecutions,
-        totalBatchedExecutions: stats.totalBatchedExecutions,
-        avgTraversalMs: stats.totalExecutions > 0 ? stats.totalTraversalMs / stats.totalExecutions : 0,
-        avgCacheHitRate: (stats.totalCacheHits / totalCache) * 100,
-    };
-};
-
-/**
- * Resets engine statistics (for testing).
- */
-export const resetEngineStats = (): void => {
-    stats.totalExecutions = 0;
-    stats.totalBatchedExecutions = 0;
-    stats.totalTraversalMs = 0;
-    stats.totalCacheHits = 0;
-    stats.totalCacheMisses = 0;
 };

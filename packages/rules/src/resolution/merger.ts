@@ -1,7 +1,11 @@
 /**
- * Rule Configuration Merger
+ * @fileoverview
+ * Rule-config merger.
  *
- * Pure functions to merge rule configurations with proper precedence
+ * Pure helpers that combine rule configurations with deterministic
+ * precedence: later inputs override earlier ones, with rule options merged
+ * key-by-key so a user can selectively replace one option while inheriting
+ * the rest from a preset.
  */
 
 import type { RulesConfig, RuleConfig, RuleConfigFull } from '@ngcompass/common';

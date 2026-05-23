@@ -1,30 +1,24 @@
 /**
  * @fileoverview
- * Definitional contracts and primitive types for the @ngcompass/scanner package.
+ * Type contracts for the scanner package.
  *
- * Adheres to functional programming principles by ensuring type immutability
- * and providing explicit structures for configuration, results, and progress reporting.
+ * Defines the configuration and result shapes that callers (planner, CLI)
+ * depend on. Every type is `readonly` because the scanner produces
+ * immutable snapshots — downstream code never mutates its output.
  */
 
-import { Result, Ok, Err } from '@ngcompass/common';
+import type { CacheContext } from '@ngcompass/cache';
+import { Err, Ok, type Result } from '@ngcompass/common';
 
-/**
- * Utility constructors for the Result type.
- */
-// Result type imported from @ngcompass/common
+// Re-export `Result` from common so consumers can satisfy the scanner API
+// without a separate import from a different package.
 export type { Result };
 export { Ok, Err };
 
-import type { CacheContext } from '@ngcompass/cache';
-
-/**
- * Represents a value that may be present, null, or undefined.
- */
+/** Optional value used internally by the gitignore loader. */
 export type Option<T> = T | null | undefined;
 
-/**
- * Defines the input configuration options for a scanner operation.
- */
+/** User-facing scanner configuration. */
 export interface ScanOptions {
     readonly rootDir: string;
     readonly include: ReadonlyArray<string>;
@@ -47,9 +41,9 @@ export interface ScanOptions {
     readonly onProgress?: OnProgressCallback;
     /**
      * Optional path to a `tsconfig.json` file. When provided, the scanner
-     * narrows discovered files to those the TypeScript compiler would include
-     * by merging the tsconfig's `include` / `exclude` / `files` arrays with
-     * the scan options.
+     * narrows discovered files to those the TypeScript compiler would
+     * include by merging the tsconfig's `include` / `exclude` / `files`
+     * arrays with the scan options.
      *
      * Relative paths inside the tsconfig are resolved against the tsconfig's
      * directory, not `rootDir`.
@@ -57,9 +51,7 @@ export interface ScanOptions {
     readonly tsConfigPath?: string;
 }
 
-/**
- * Represents scanner configuration options after the application of project defaults.
- */
+/** Scanner configuration after defaults are applied. */
 export interface NormalizedOptions {
     readonly rootDir: string;
     readonly include: ReadonlyArray<string>;
@@ -67,36 +59,28 @@ export interface NormalizedOptions {
     readonly ignorePatterns: ReadonlyArray<string>;
     readonly respectGitignore: boolean;
     readonly followSymlinks: boolean;
-    /** Resolved value of ScanOptions.dot β€” always a boolean after normalization. */
+    /** Resolved value of `ScanOptions.dot` — always a boolean after normalization. */
     readonly dot: boolean;
 }
 
-/**
- * Represents a set of inclusion and exclusion glob patterns.
- */
+/** Pair of include/ignore glob patterns ready for the glob engine. */
 export interface ExpandedPatterns {
     readonly include: ReadonlyArray<string>;
     readonly ignore: ReadonlyArray<string>;
 }
 
-/**
- * Represents the initial collection of file paths discovered by the scanner.
- */
+/** Initial file list produced by discovery (git or glob). */
 export interface RawFileList {
     readonly files: ReadonlyArray<string>;
 }
 
-/**
- * Represents a file collection after the application of ignore and deduplication filters.
- */
+/** File list after ignore + dedup filters have run. */
 export interface FilteredFileList {
     readonly files: ReadonlyArray<string>;
-    readonly filtered: number; // Number of files filtered out
+    readonly filtered: number;
 }
 
-/**
- * Encapsulates statistical metadata for a completed scan operation.
- */
+/** Aggregate statistics for a completed scan. */
 export interface ScanStatistics {
     readonly totalFiles: number;
     readonly byExtension: ReadonlyMap<string, number>;
@@ -105,19 +89,16 @@ export interface ScanStatistics {
     readonly cacheHit: boolean;
 }
 
-/**
- * Encapsulates high-resolution timing data for various scan phases.
- */
+/** High-resolution per-phase timings. */
 export interface ScanTimings {
     readonly normalization: number;
-    readonly discovery: number; // git or glob
+    /** Git or glob phase. */
+    readonly discovery: number;
     readonly filtering: number;
     readonly total: number;
 }
 
-/**
- * Encapsulates the consolidated results and metadata of a scan operation.
- */
+/** Consolidated scan result. */
 export interface ScanResult {
     readonly files: ReadonlyArray<string>;
     readonly stats: ScanStatistics;
@@ -125,18 +106,12 @@ export interface ScanResult {
     readonly timings?: ScanTimings;
 }
 
-/**
- * Gitignore filter function type
- */
+/** Predicate that returns `true` when `file` should be KEPT (i.e. not ignored). */
 export type GitignoreFilter = (file: string, rootDir: string) => boolean;
 
-// ==============================================================================
-// PROGRESS REPORTING
-// ==============================================================================
+// ── Progress reporting ────────────────────────────────────────────────────
 
-/**
- * Represents the distinct phases of an active scan operation.
- */
+/** Lifecycle phases an active scan transitions through. */
 export type ScanPhase =
     | 'normalizing'
     | 'discovering'
@@ -145,10 +120,10 @@ export type ScanPhase =
     | 'complete';
 
 /**
- * Callback invoked at each scan phase transition with the current file count.
- * Useful for driving progress bars or log output in CLI consumers.
+ * Callback invoked at each scan-phase transition with the current file
+ * count. Useful for driving progress bars / log output in the CLI.
  *
- * @param phase - The phase that just started (or completed for 'complete').
+ * @param phase - The phase that just started (or completed for `'complete'`).
  * @param count - Number of files known at this point in the scan.
  */
 export type OnProgressCallback = (phase: ScanPhase, count: number) => void;

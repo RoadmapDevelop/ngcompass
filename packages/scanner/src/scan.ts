@@ -1,32 +1,60 @@
 /**
  * @fileoverview
- * Orchestrates the file scanning process for @ngcompass projects.
+ * Top-level scan orchestrator.
  *
- * Implements a multi-stage pipeline: normalization, discovery (Git-optimized),
- * filtering (respecting .gitignore), and result aggregation. Supports caching
- * and progress reporting for large-scale projects.
+ * Pipeline:
+ *   normalize options
+ *     → optionally merge tsconfig patterns
+ *     → check on-disk cache
+ *     → discover (git ls-files when possible, otherwise glob)
+ *     → apply gitignore + dedup filters
+ *     → compute stats and persist to cache
+ *
+ * Each stage emits a debug log and times itself so users can profile slow
+ * scans via the standard `DEBUG=scanner` channel. Errors propagate as
+ * `Result<…>` values; callers never need to wrap calls in `try/catch`.
  */
+
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { debug, time, timeEnd } from '@ngcompass/common';
-import type { ScanOptions, ScanResult, Result, ScanTimings, ScanStatistics, NormalizedOptions, ExpandedPatterns, OnProgressCallback } from './types.js';
+import { debug, stableSerialize, time, timeEnd } from '@ngcompass/common';
 import type { FileCacheEntry } from '@ngcompass/cache';
-import { Ok, Err } from './types.js';
+import { applyFilters, filterByGlob } from './filters.js';
+import { executeGlob } from './glob.js';
+import {
+    executeGitDiscovery,
+    getDirectoryFingerprint,
+    getRepoFingerprint,
+    isGitRepo,
+} from './git.js';
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
-import { executeGlob } from './glob.js';
-import { applyFilters, filterByGlob } from './filters.js';
 import { calculateStats } from './stats.js';
-import { isGitRepo, executeGitDiscovery, getRepoFingerprint, getDirectoryFingerprint } from './git.js';
+import {
+    Err,
+    Ok,
+    type ExpandedPatterns,
+    type NormalizedOptions,
+    type OnProgressCallback,
+    type Result,
+    type ScanOptions,
+    type ScanResult,
+    type ScanStatistics,
+    type ScanTimings,
+} from './types.js';
 
 /**
- * Executes a comprehensive file scan based on the provided configuration.
+ * Cache-key salt bumped whenever the scan output shape changes. Old cache
+ * entries miss after a bump, forcing a cold scan.
+ */
+const SCAN_CACHE_VERSION = 'v1';
+
+/**
+ * Runs a full file scan.
  *
- * Discovers files using optimized Git utilities or standard globbing, applies
- * hierarchical ignore filters, and computes project-level statistics.
- *
- * @param options - The configuration settings for the scan operation.
- * @returns A promise resolving to a Result containing the discovered files and scan metadata.
+ * @param options - Caller-supplied scan configuration.
+ * @returns A {@link Result} containing the discovered files plus stats and
+ *          per-phase timings.
  */
 export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> => {
     time('file-scan');
@@ -40,7 +68,6 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
     const normalized = normalizeOptions(options);
     let patterns = expandPatterns(normalized);
     const normalizationTime = performance.now() - t0;
-
     logNormalization(normalized, patterns);
 
     if (options.tsConfigPath) {
@@ -69,7 +96,6 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
     progress('discovering', 0);
     const t1 = performance.now();
     const discoveryResult = await discoverFiles(normalized, patterns, isGit);
-
     if (!discoveryResult.ok) {
         logAndReturnError('Scan', discoveryResult.error);
         return discoveryResult;
@@ -81,23 +107,20 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
 
     const t2 = performance.now();
     const filterResult = await applyFilters({ files: rawFiles }, normalized);
-
     if (!filterResult.ok) {
         logAndReturnError('Filter', filterResult.error);
         return filterResult;
     }
 
-    const finalFiles = filterResult.data.files as string[];
+    const finalFiles = filterResult.data.files;
     const filteringTime = performance.now() - t2;
-
     logFiltering(finalFiles.length, filterResult.data.filtered);
-    progress('calculating-stats', finalFiles.length);
 
+    progress('calculating-stats', finalFiles.length);
     const stats = await calculateStats(finalFiles, startTime, false);
     await saveToCache(normalized, patterns, finalFiles, serializeScanStats(stats), isGit, options);
 
     const totalTime = timeEnd('file-scan');
-
     logScanEnd(stats, totalTime);
     progress('complete', finalFiles.length);
 
@@ -105,84 +128,65 @@ export const scan = async (options: ScanOptions): Promise<Result<ScanResult>> =>
         normalization: normalizationTime,
         discovery: discoveryTime,
         filtering: filteringTime,
-        total: totalTime
+        total: totalTime,
     };
-
-    return Ok({
-        files: finalFiles,
-        stats,
-        timestamp: Date.now(),
-        timings: timings
-    });
+    return Ok({ files: finalFiles, stats, timestamp: Date.now(), timings });
 };
 
+// ── Discovery ─────────────────────────────────────────────────────────────
+
 /**
- * Discovers the raw set of files using Git-optimized utilities or filesystem globbing.
- *
- * @param normalized - The normalized scanner options.
- * @param patterns - The expanded inclusion and exclusion patterns.
- * @param isGit - Indicates if the root directory is a verified Git repository.
- * @returns A promise resolving to a Result containing the initial collection of file paths.
+ * Discovers the raw file set via `git ls-files` (when in a repo) or via
+ * glob. Falls back to glob when Git returns nothing.
  */
 async function discoverFiles(
     normalized: NormalizedOptions,
     patterns: ExpandedPatterns,
-    isGit: boolean
+    isGit: boolean,
 ): Promise<Result<ReadonlyArray<string>>> {
     if (isGit) {
         debug('scanner', 'Git repository detected. Using fast Git discovery...');
         const gitFiles = await executeGitDiscovery(normalized.rootDir);
 
         if (gitFiles.length === 0) {
-            debug('scanner', 'Git discovery returned 0 files — this may indicate a git command failure. Falling back to glob-based scanning.');
-            const result = await executeGlob(patterns, normalized.rootDir, {
-                followSymlinks: normalized.followSymlinks,
-                dot: normalized.dot,
-            });
-            if (result.ok) {
-                debug('scanner', `Glob fallback found ${result.data.files.length} files`);
-            }
-            return result.ok ? Ok(result.data.files) : result;
+            debug('scanner', 'Git discovery returned 0 files — falling back to glob-based scanning.');
+            return runGlobDiscovery(normalized, patterns);
         }
 
-        const filtered = filterByGlob(
-            gitFiles,
-            patterns.include,
-            patterns.ignore,
-            normalized.rootDir
-        ) as string[];
-
+        const filtered = filterByGlob(gitFiles, patterns.include, patterns.ignore, normalized.rootDir);
         debug('scanner', `Git discovery found ${filtered.length} files (after glob filtering)`);
         return Ok(filtered);
     }
 
     debug('scanner', 'Not a Git repository. Falling back to standard globbing...');
+    return runGlobDiscovery(normalized, patterns);
+}
+
+async function runGlobDiscovery(
+    normalized: NormalizedOptions,
+    patterns: ExpandedPatterns,
+): Promise<Result<ReadonlyArray<string>>> {
     const result = await executeGlob(patterns, normalized.rootDir, {
         followSymlinks: normalized.followSymlinks,
         dot: normalized.dot,
     });
-
-    if (result.ok) {
-        debug('scanner', `Glob found ${result.data.files.length} files`);
-    }
-
-    return result.ok ? Ok(result.data.files) : result;
+    if (!result.ok) return result;
+    debug('scanner', `Glob found ${result.data.files.length} files`);
+    return Ok(result.data.files);
 }
 
+// ── Cache key / load / save ───────────────────────────────────────────────
+
 /**
- * Computes a robust cache key for the current scan configuration and repository state.
- *
- * @param normalized - The normalized scanner options.
- * @param patterns - The current pattern strings.
- * @param isGit - Indicates if the repository is Git-managed.
- * @param options - The full scan configuration options.
- * @returns A promise resolving to a unique cache key string, or null if caching is disabled.
+ * Computes the cache key from the normalized inputs plus a repo / directory
+ * fingerprint. Uses `stableSerialize` for the pattern serialization so a
+ * key derived here matches one derived elsewhere in the monorepo.
  */
 async function getCacheKey(
     normalized: NormalizedOptions,
     patterns: ExpandedPatterns,
     isGit: boolean,
-    options: ScanOptions
+    options: ScanOptions,
 ): Promise<string | null> {
     if (!options.cache) return null;
 
@@ -194,26 +198,17 @@ async function getCacheKey(
 
     return options.cache.computeHash([
         normalized.rootDir,
-        JSON.stringify(patterns),
+        stableSerialize(patterns),
         fingerprint,
-        'v1'
+        SCAN_CACHE_VERSION,
     ].join('|'));
 }
 
-/**
- * Attempts to retrieve a previous scan result from the cache.
- *
- * @param normalized - The normalized scanner options.
- * @param patterns - The expanded pattern collection.
- * @param isGit - Indicates if the repository is Git-managed.
- * @param options - The full scan configuration options.
- * @returns A promise resolving to the cached file entry, or null on a cache miss.
- */
 async function tryLoadFromCache(
     normalized: NormalizedOptions,
     patterns: ExpandedPatterns,
     isGit: boolean,
-    options: ScanOptions
+    options: ScanOptions,
 ): Promise<FileCacheEntry | null> {
     const key = await getCacheKey(normalized, patterns, isGit, options);
     if (!key || !options.cache) return null;
@@ -223,43 +218,31 @@ async function tryLoadFromCache(
         debug('scanner', `Cache HIT. Loaded ${cached.files.length} files.`);
         return cached;
     }
-
     return null;
 }
 
-/**
- * Persists the results of a file scan to the configured cache.
- *
- * @param normalized - The normalized scanner options.
- * @param patterns - The expanded pattern collection.
- * @param files - The collection of discovered file paths.
- * @param isGit - Indicates if the repository is Git-managed.
- * @param options - The full scan configuration options.
- */
 async function saveToCache(
     normalized: NormalizedOptions,
     patterns: ExpandedPatterns,
-    files: string[],
-    stats: unknown,
+    files: ReadonlyArray<string>,
+    stats: CachedScanStatistics,
     isGit: boolean,
-    options: ScanOptions
+    options: ScanOptions,
 ): Promise<void> {
     if (!options.cache || files.length === 0) return;
 
     const key = await getCacheKey(normalized, patterns, isGit, options);
-    if (key) {
-        await options.cache.files.set(key, files, stats);
-        debug('scanner', 'File list cached.');
-    }
+    if (!key) return;
+
+    await options.cache.files.set(key, [...files], stats);
+    debug('scanner', 'File list cached.');
 }
 
-function buildCachedResult(
-    cached: FileCacheEntry,
-    startTime: number
-): Result<ScanResult> {
+function buildCachedResult(cached: FileCacheEntry, startTime: number): Result<ScanResult> {
     const totalTime = performance.now() - startTime;
     const cachedStats = normalizeCachedStats(cached.stats);
-    const stats = cachedStats
+
+    const stats: ScanStatistics = cachedStats
         ? { ...cachedStats, scanTime: totalTime, cacheHit: true }
         : {
             totalFiles: cached.files.length,
@@ -273,9 +256,13 @@ function buildCachedResult(
         files: cached.files,
         stats,
         timestamp: Date.now(),
-        timings: { normalization: 0, discovery: totalTime, filtering: 0, total: totalTime }
+        // `discovery` reflects the time to recover the cached list — keep
+        // `normalization` and `filtering` at 0 so the breakdown is honest.
+        timings: { normalization: 0, discovery: totalTime, filtering: 0, total: totalTime },
     });
 }
+
+// ── Cached-stats (de)serialization ────────────────────────────────────────
 
 interface CachedScanStatistics {
     readonly totalFiles: number;
@@ -308,10 +295,10 @@ function normalizeCachedStats(value: unknown): ScanStatistics | null {
     if (!value || typeof value !== 'object') return null;
     const stats = value as Partial<CachedScanStatistics>;
     if (
-        typeof stats.totalFiles !== 'number' ||
-        typeof stats.totalSize !== 'number' ||
-        typeof stats.scanTime !== 'number' ||
-        typeof stats.cacheHit !== 'boolean'
+        typeof stats.totalFiles !== 'number'
+        || typeof stats.totalSize !== 'number'
+        || typeof stats.scanTime !== 'number'
+        || typeof stats.cacheHit !== 'boolean'
     ) {
         return null;
     }
@@ -342,6 +329,8 @@ function normalizeExtensionCounts(value: unknown): ReadonlyMap<string, number> |
     return byExtension;
 }
 
+// ── Logging helpers ───────────────────────────────────────────────────────
+
 function logScanStart(options: ScanOptions): void {
     debug('scanner', `Starting file discovery in: ${options.rootDir}`);
     debug('scanner', `Include patterns: ${options.include.join(', ')}`);
@@ -357,7 +346,7 @@ function logFiltering(fileCount: number, filteredCount: number): void {
     debug('scanner', `After filters: ${fileCount} files (${filteredCount} filtered out)`);
 }
 
-function logScanEnd(stats: Awaited<ReturnType<typeof calculateStats>>, scanTime: number): void {
+function logScanEnd(stats: ScanStatistics, scanTime: number): void {
     debug('scanner', `Scan complete: ${stats.totalFiles} files in ${scanTime.toFixed(1)}ms`);
 
     const breakdown = Array.from(stats.byExtension.entries())
@@ -365,7 +354,6 @@ function logScanEnd(stats: Awaited<ReturnType<typeof calculateStats>>, scanTime:
         .slice(0, 5)
         .map(([ext, count]) => `${ext}:${count}`)
         .join(', ');
-
     debug('scanner', `Breakdown: ${breakdown}`);
 
     if (stats.totalFiles === 0) {
@@ -378,32 +366,29 @@ function logAndReturnError(phase: string, error: Error): void {
     debug('scanner', `${phase} failed after ${scanTime.toFixed(1)}ms: ${error.message}`);
 }
 
-// ==============================================================================
-// TSCONFIG SUPPORT (SCANNER-002)
-// ==============================================================================
+// ── tsconfig support ──────────────────────────────────────────────────────
 
-/**
- * Parsed tsconfig patterns β€” only the fields relevant to file discovery.
- */
 interface TsConfigPatterns {
     readonly include: ReadonlyArray<string>;
     readonly exclude: ReadonlyArray<string>;
 }
 
 /**
- * Extracts inclusion and exclusion patterns from a TypeScript configuration file.
+ * Parses a `tsconfig.json` and converts its `include` / `exclude` / `files`
+ * arrays into rootDir-relative globs. Returns `null` when the file can't be
+ * read or parsed.
  *
- * @param tsConfigPath - The path to the tsconfig.json file.
- * @param rootDir - The base directory for relative path resolution.
- * @returns A promise resolving to the parsed patterns, or null if loading fails.
+ * Comment stripping is intentionally simplistic — covers `//` and `/* … *​/`
+ * comments outside string literals, but doesn't attempt full JSON5 parsing.
+ * Real-world tsconfigs that confuse this stripper are rare; the fallback is
+ * a debug log + a no-op merge.
  */
 async function loadTsConfigPatterns(
     tsConfigPath: string,
-    rootDir: string
+    rootDir: string,
 ): Promise<TsConfigPatterns | null> {
     try {
         const raw = await readFile(tsConfigPath, 'utf-8');
-
         const stripped = raw
             .replace(/\/\/[^\n]*/g, '')
             .replace(/\/\*[\s\S]*?\*\//g, '');
@@ -415,44 +400,33 @@ async function loadTsConfigPatterns(
         };
 
         const configDir = path.dirname(path.resolve(tsConfigPath));
-
-        // Convert tsconfig-relative globs to rootDir-relative globs.
-        const toRootRelative = (p: string): string => {
-            const abs = path.resolve(configDir, p);
-            const rel = path.relative(rootDir, abs).replace(/\\/g, '/');
-            return rel;
-        };
+        const toRootRelative = (p: string): string =>
+            path.relative(rootDir, path.resolve(configDir, p)).replace(/\\/g, '/');
 
         const include: string[] = [];
         const exclude: string[] = [];
-
-        if (Array.isArray(config.include)) {
-            include.push(...config.include.map(toRootRelative));
-        }
-        if (Array.isArray(config.files)) {
-            include.push(...config.files.map(toRootRelative));
-        }
-        if (Array.isArray(config.exclude)) {
-            exclude.push(...config.exclude.map(toRootRelative));
-        }
+        if (Array.isArray(config.include)) include.push(...config.include.map(toRootRelative));
+        if (Array.isArray(config.files))   include.push(...config.files.map(toRootRelative));
+        if (Array.isArray(config.exclude)) exclude.push(...config.exclude.map(toRootRelative));
 
         return { include, exclude };
     } catch (err) {
-        debug('scanner', `Failed to load tsconfig patterns from ${tsConfigPath}: ${err instanceof Error ? err.message : String(err)}`);
+        debug(
+            'scanner',
+            `Failed to load tsconfig patterns from ${tsConfigPath}: ${err instanceof Error ? err.message : String(err)}`,
+        );
         return null;
     }
 }
 
 /**
- * Merges patterns derived from a tsconfig into an existing pattern collection.
- *
- * @param patterns - The existing expanded patterns.
- * @param tsPatterns - The patterns extracted from the tsconfig.
- * @returns A new object containing the consolidated patterns.
+ * Merges tsconfig-derived patterns into an existing pattern collection.
+ * Each side is appended only when non-empty so a tsconfig with no
+ * include/exclude leaves the scanner-supplied patterns untouched.
  */
 function mergeTsConfigPatterns(
     patterns: ExpandedPatterns,
-    tsPatterns: TsConfigPatterns
+    tsPatterns: TsConfigPatterns,
 ): ExpandedPatterns {
     return {
         include: tsPatterns.include.length > 0
