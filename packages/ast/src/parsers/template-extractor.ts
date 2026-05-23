@@ -1,88 +1,81 @@
 /**
- * Template Extractor
+ * @fileoverview
+ * Inline-template extractor for Oxc-parsed TypeScript programs.
  *
- * Extracts the inline template string from an Oxc-parsed TypeScript program.
- * Moved from orchestrator.ts to make it independently testable and reusable.
+ * Walks a program via the shared {@link walkProgram} visitor (same traversal
+ * the rules engine uses) and returns the first `template: '...'` /
+ * `template: \`...\`` value found on a class decorated with `@Component`.
  *
- * Uses walkProgram() (the shared visitor) instead of a hand-rolled recursion,
- * which is consistent with how the rules engine traverses the AST and
- * benefits from the same early-exit optimisation (returning false stops descent).
+ * Reports the start offset of the template content in the *original* source
+ * file — i.e. the position immediately after the opening quote/backtick.
+ * That offset is what `parseHtml(content, offset)` and `analyzeTemplate`
+ * use to translate template-relative spans back to file-absolute spans.
  *
- * Handles both:
- *  - StringLiteral:   template: '<h1>Hello</h1>'
- *  - TemplateLiteral: template: `<h1>{{ name }}</h1>`
+ * Only `@Component` is inspected — `@Directive` doesn't carry an inline
+ * `template`, so there is nothing to extract there.
  */
 
-import { walkProgram } from '../visitor.js';
 import type { Program } from 'oxc-parser';
+import { walkProgram } from '../visitor.js';
 
+/** Loose record shape used while traversing the Oxc AST. */
 type AstNode = {
     type?: string;
     [key: string]: unknown;
 };
 
-// ============================================
-// PUBLIC API
-// ============================================
-
-/**
- * Result of extracting an inline template from a TypeScript program.
- */
+/** Result of {@link extractTemplateFromProgram}. */
 export interface ExtractedTemplate {
-    /** The raw HTML content of the template (no surrounding quotes/backticks). */
+    /** Raw HTML content of the template (no surrounding quotes/backticks). */
     readonly content: string;
     /**
-     * Byte offset in the TypeScript source file where `content[0]` lives.
+     * Byte offset in the TypeScript source file where `content[0]` lives —
+     * the position right after the opening quote or backtick.
      *
-     * This is used to convert template-relative offsets (produced by the HTML
-     * parser, which only sees the template content) back into file-absolute
-     * offsets (required by `Locator.location()`).
-     *
-     * For external .html files this value is always 0 — the HTML file IS the
-     * template, so its offsets are already file-absolute.
+     * For external `.html` files this is always `0`; that case is handled
+     * by callers that bypass this extractor.
      */
     readonly startOffset: number;
 }
 
+const EMPTY: ExtractedTemplate = { content: '', startOffset: 0 };
+
 /**
- * Extracts the inline template string from the first @Component class found
- * in the given Oxc program.
+ * Extracts the inline template string from the first `@Component` class in
+ * the supplied Oxc program. Returns `{ content: '', startOffset: 0 }` when
+ * no inline template is found.
  *
- * @param program - Oxc-parsed Program node
- * @returns ExtractedTemplate with content and its start offset in the file,
- *          or `{ content: '', startOffset: 0 }` if no template was found.
+ * @param program - Oxc-parsed Program node.
+ * @returns The extracted template content and its start offset in the file.
  */
 export function extractTemplateFromProgram(program: Program): ExtractedTemplate {
-    let result: ExtractedTemplate = { content: '', startOffset: 0 };
+    let result: ExtractedTemplate = EMPTY;
 
     walkProgram(program, (rawNode) => {
         const node = rawNode as AstNode;
-        // Once we have the template, stop walking (false = skip children)
+
+        // Stop walking once we have the template.
         if (result.content) return false;
 
-        if (node.type === 'ClassDeclaration' && Array.isArray(node.decorators)) {
-            const extracted = tryExtractFromClass(node);
-            if (extracted) {
-                result = extracted;
-                return false; // stop traversal
-            }
+        if (node.type !== 'ClassDeclaration' || !Array.isArray(node.decorators)) return;
+
+        const extracted = tryExtractFromClass(node);
+        if (extracted) {
+            result = extracted;
+            return false; // halt traversal
         }
     });
 
     return result;
 }
 
-// ============================================
-// PRIVATE HELPERS
-// ============================================
+// ── Private helpers ────────────────────────────────────────────────────────
 
-/**
- * Attempts to extract the `template` property value from a class decorated
- * with @Component.
- */
+/** Attempts to extract a `template` value from a class decorated `@Component`. */
 function tryExtractFromClass(classNode: AstNode): ExtractedTemplate | null {
     const decorators = classNode.decorators as ReadonlyArray<AstNode> | undefined;
     if (!decorators) return null;
+
     for (const decorator of decorators) {
         const call = decorator?.expression as AstNode | undefined;
         if (!call || call.type !== 'CallExpression') continue;
@@ -94,18 +87,20 @@ function tryExtractFromClass(classNode: AstNode): ExtractedTemplate | null {
         const objectArg = args?.[0];
         if (!objectArg || objectArg.type !== 'ObjectExpression') continue;
 
-        const templateValue = findPropertyValue(objectArg.properties as ReadonlyArray<AstNode>, 'template');
-        if (templateValue) {
-            return extractStringValueWithOffset(templateValue);
-        }
+        const templateValue = findPropertyValue(
+            objectArg.properties as ReadonlyArray<AstNode>,
+            'template',
+        );
+        if (templateValue) return extractStringValueWithOffset(templateValue);
     }
     return null;
 }
 
-/**
- * Finds the value expression of a named property in an ObjectExpression.
- */
-function findPropertyValue(properties: ReadonlyArray<AstNode>, keyName: string): AstNode | null {
+/** Finds the value expression of a named property in an `ObjectExpression`. */
+function findPropertyValue(
+    properties: ReadonlyArray<AstNode>,
+    keyName: string,
+): AstNode | null {
     if (!Array.isArray(properties)) return null;
     for (const prop of properties) {
         const key = prop?.key as AstNode | undefined;
@@ -118,40 +113,37 @@ function findPropertyValue(properties: ReadonlyArray<AstNode>, keyName: string):
 }
 
 /**
- * Extracts a string value AND its start offset from a StringLiteral or
- * TemplateLiteral AST node.
- *
- * The startOffset is the position of the *first content character* in the
- * original TypeScript source file — i.e. the position right after the
- * opening quote or backtick.
+ * Returns the textual value of a `StringLiteral` or `TemplateLiteral` along
+ * with its post-quote start offset in the source file.
  */
 function extractStringValueWithOffset(node: AstNode): ExtractedTemplate {
-    if (!node) return { content: '', startOffset: 0 };
+    if (!node) return EMPTY;
 
     if (node.type === 'StringLiteral' || node.type === 'Literal') {
-        // node.start / node.span.start → position of the opening quote in the file
         const span = node.span as { start?: number } | undefined;
-        const nodeStart: number = (node.start as number | undefined) ?? span?.start ?? 0;
+        const nodeStart = (node.start as number | undefined) ?? span?.start ?? 0;
         return {
             content: (node.value as string | undefined) ?? '',
-            startOffset: nodeStart + 1, // +1 to skip the opening ' or "
+            startOffset: nodeStart + 1, // +1 skips the opening ' or "
         };
     }
 
     if (node.type === 'TemplateLiteral') {
         const quasis = (node.quasis as ReadonlyArray<AstNode> | undefined) ?? [];
-        const content = quasis.map((q) => {
-            const quasiValue = q.value as { raw?: string } | undefined;
-            return quasiValue?.raw ?? '';
-        }).join('');
-        // The first quasi's start position points to the opening backtick
+        const content = quasis
+            .map((q) => {
+                const quasiValue = q.value as { raw?: string } | undefined;
+                return quasiValue?.raw ?? '';
+            })
+            .join('');
         const firstSpan = quasis[0]?.span as { start?: number } | undefined;
-        const firstStart: number = (quasis[0]?.start as number | undefined) ?? firstSpan?.start ?? 0;
+        const firstStart =
+            (quasis[0]?.start as number | undefined) ?? firstSpan?.start ?? 0;
         return {
             content,
-            startOffset: firstStart + 1, // +1 to skip the opening `
+            startOffset: firstStart + 1, // +1 skips the opening backtick
         };
     }
 
-    return { content: '', startOffset: 0 };
+    return EMPTY;
 }

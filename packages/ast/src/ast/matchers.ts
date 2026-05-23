@@ -1,318 +1,184 @@
 /**
- * AST Matchers (Zero-Allocation, Pure Functions)
+ * @fileoverview
+ * Zero-allocation AST matchers.
  *
- * PERFORMANCE RULES:
- * - No object creation in hot paths
- * - No array allocations
- * - No string concatenation
- * - Return primitives or pre-existing references only
+ * Pure functions that return primitives or pre-existing AST references —
+ * never allocate per call. Designed to be safe to invoke from within the
+ * single-pass engine's per-node hot path.
  *
- * "Unsafe" suffix convention: May return undefined, caller must handle.
+ * Naming convention:
+ *  - Functions suffixed with `Unsafe` may return `undefined`; callers must
+ *    handle the missing case explicitly.
+ *  - Functions without the suffix return primitives (`boolean`, `string | undefined`).
  */
 
 import type {
-    Decorator,
-    ClassDeclaration,
-    ObjectExpression,
-    Expression,
-    MemberExpression,
-    CallExpression,
-    Identifier,
-    StringLiteral,
     BooleanLiteral,
+    CallExpression,
+    ClassDeclaration,
+    Decorator,
+    Expression,
+    Identifier,
+    MemberExpression,
+    ObjectExpression,
+    StringLiteral,
 } from './types.js';
 
-// ============================================
-// DECORATOR CHECKS (Zero Allocation)
-// ============================================
+// ── Identifier extraction ──────────────────────────────────────────────────
 
 /**
- * Checks if a node has a specific decorator.
- *
- * @returns boolean (primitive, zero allocation)
+ * Returns the name of `node` when it is an `Identifier`, otherwise `undefined`.
+ * Eliminates the `(node as Identifier).name` ceremony that appears at every
+ * caller of the previous matchers.
  */
-export const hasDecorator = (
-    classNode: ClassDeclaration,
-    decoratorName: string
-): boolean => {
+export const getIdentifierName = (node: Expression | undefined): string | undefined => {
+    if (!node || node.type !== 'Identifier') return undefined;
+    return (node as Identifier).name;
+};
+
+// ── Decorator checks ───────────────────────────────────────────────────────
+
+/**
+ * Returns `true` when `classNode` carries a decorator named `decoratorName`.
+ * Zero allocations — iterates the decorator array with an index loop.
+ */
+export const hasDecorator = (classNode: ClassDeclaration, decoratorName: string): boolean => {
     const decorators = classNode.decorators;
     if (!decorators) return false;
-
     for (let i = 0; i < decorators.length; i++) {
-        const decorator = decorators[i];
-        const name = getDecoratorNameUnsafe(decorator);
-        if (name === decoratorName) return true;
+        if (getDecoratorNameUnsafe(decorators[i]) === decoratorName) return true;
     }
-
     return false;
 };
 
 /**
- * Gets decorator name (unsafe: may return undefined).
- *
- * PERFORMANCE: Returns string reference from AST (zero copy).
- * Rules must handle undefined.
+ * Returns the decorator name (`@Foo` → `'Foo'`, `@core.Foo` → `'Foo'`).
+ * Returns `undefined` when the decorator expression is shaped unexpectedly.
  */
 export const getDecoratorNameUnsafe = (decorator: Decorator): string | undefined => {
     const expr = decorator.expression;
-    if (!expr) return undefined;
+    if (!expr || expr.type !== 'CallExpression') return undefined;
 
-    if (expr.type === 'CallExpression') {
-        const callee = expr.callee;
+    const callee = (expr as CallExpression).callee;
 
-        // Simple: @Component
-        if (callee.type === 'Identifier') {
-            return (callee as Identifier).name;
-        }
+    // Simple form: @Component(...)
+    const direct = getIdentifierName(callee);
+    if (direct !== undefined) return direct;
 
-        // Member: @core.Component
-        if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-            const prop = (callee as MemberExpression).property;
-            if (prop.type === 'Identifier') {
-                return prop.name;
-            }
-        }
+    // Member form: @core.Component(...)
+    if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
+        return getIdentifierName((callee as MemberExpression).property);
     }
 
     return undefined;
 };
 
-/**
- * Gets first decorator argument if it's an object literal.
- *
- * PERFORMANCE: Returns AST reference (zero copy).
- */
+/** Returns the first decorator argument when it is an object literal. */
 export const getDecoratorObjectArgUnsafe = (
-    decorator: Decorator
+    decorator: Decorator,
 ): ObjectExpression | undefined => {
     const expr = decorator.expression;
     if (!expr || expr.type !== 'CallExpression') return undefined;
 
-    const args = expr.arguments;
+    const args = (expr as CallExpression).arguments;
     if (!args || args.length === 0) return undefined;
 
     const first = args[0];
     return first.type === 'ObjectExpression' ? (first as ObjectExpression) : undefined;
 };
 
-// ============================================
-// OBJECT PROPERTY LOOKUP (Zero Allocation)
-// ============================================
+// ── Object property lookup ─────────────────────────────────────────────────
 
-/**
- * Checks if object has a property with given key.
- *
- * PERFORMANCE: No allocation, early return.
- */
-export const hasObjectProperty = (
-    objectExpr: ObjectExpression,
-    keyName: string
-): boolean => {
+/** Returns `true` when `objectExpr` declares a property named `keyName`. */
+export const hasObjectProperty = (objectExpr: ObjectExpression, keyName: string): boolean => {
     const properties = objectExpr.properties;
     if (!properties) return false;
-
     for (let i = 0; i < properties.length; i++) {
         const prop = properties[i];
         if (!prop || prop.type === 'SpreadElement') continue;
-
-        const objectProp = prop;
-        const actualKeyName = getKeyNameUnsafe(objectProp.key);
-
-        if (actualKeyName === keyName) return true;
+        if (getKeyNameUnsafe(prop.key) === keyName) return true;
     }
-
     return false;
 };
 
-/**
- * Gets property value by key name (unsafe: may return undefined).
- *
- * PERFORMANCE: Returns AST reference (zero copy).
- */
+/** Returns the value expression of the property named `keyName`, if present. */
 export const getObjectPropertyUnsafe = (
     objectExpr: ObjectExpression,
-    keyName: string
+    keyName: string,
 ): Expression | undefined => {
     const properties = objectExpr.properties;
     if (!properties) return undefined;
-
     for (let i = 0; i < properties.length; i++) {
         const prop = properties[i];
         if (!prop || prop.type === 'SpreadElement') continue;
-
-        const objectProp = prop;
-        const actualKeyName = getKeyNameUnsafe(objectProp.key);
-
-        if (actualKeyName === keyName) {
-            return objectProp.value;
-        }
+        if (getKeyNameUnsafe(prop.key) === keyName) return prop.value;
     }
-
     return undefined;
 };
 
 /**
- * Gets key name from object key (unsafe).
- *
- * PERFORMANCE: Returns string reference from AST.
+ * Returns the textual key of an object-literal entry — handling identifier
+ * keys (`{ foo: … }`) and string-literal keys (`{ "foo": … }`).
  */
 export const getKeyNameUnsafe = (key: Expression): string | undefined => {
     if (!key) return undefined;
-
-    // Identifier: { foo: ... }
-    if (key.type === 'Identifier') return (key as Identifier).name;
-
-    // String literal: { "foo": ... }
+    const ident = getIdentifierName(key);
+    if (ident !== undefined) return ident;
     if (key.type === 'StringLiteral' || key.type === 'Literal') {
         const lit = key as StringLiteral;
         return typeof lit.value === 'string' ? lit.value : undefined;
     }
-
     return undefined;
 };
 
-// ============================================
-// MEMBER EXPRESSION CHECKS
-// ============================================
+// ── Member-expression checks ───────────────────────────────────────────────
 
 /**
- * Checks if member expression matches pattern (e.g., ChangeDetectionStrategy.OnPush).
+ * Returns `true` when `expr` is a member expression of the form
+ * `objectName.propertyName` (or `something.objectName.propertyName`).
  *
- * PERFORMANCE: No allocation, early return.
+ * Used to detect references like `ChangeDetectionStrategy.OnPush`.
  */
 export const matchesMemberExpression = (
     expr: Expression,
     objectName: string,
-    propertyName: string
+    propertyName: string,
 ): boolean => {
     if (!expr) return false;
-
-    if (expr.type !== 'MemberExpression' && expr.type !== 'StaticMemberExpression') {
-        return false;
-    }
+    if (expr.type !== 'MemberExpression' && expr.type !== 'StaticMemberExpression') return false;
 
     const memberExpr = expr as MemberExpression;
 
-    // Check property
-    const prop = memberExpr.property;
-    if (!prop || prop.type !== 'Identifier' || prop.name !== propertyName) {
-        return false;
-    }
+    // property side: must be `Identifier` with matching name.
+    if (getIdentifierName(memberExpr.property) !== propertyName) return false;
 
-    // Check object
+    // object side: simple form (Identifier) or nested member form.
     const obj = memberExpr.object;
     if (!obj) return false;
 
-    // Simple: ChangeDetectionStrategy.OnPush
-    if (obj.type === 'Identifier' && (obj as Identifier).name === objectName) {
-        return true;
-    }
+    if (getIdentifierName(obj) === objectName) return true;
 
-    // Nested: core.ChangeDetectionStrategy.OnPush
-    if ((obj.type === 'MemberExpression' || obj.type === 'StaticMemberExpression') &&
-        (obj as MemberExpression).property.type === 'Identifier' &&
-        (obj as MemberExpression).property.name === objectName) {
-        return true;
+    if (obj.type === 'MemberExpression' || obj.type === 'StaticMemberExpression') {
+        return getIdentifierName((obj as MemberExpression).property) === objectName;
     }
 
     return false;
 };
 
-/**
- * Gets literal string value (unsafe: may return undefined).
- *
- * PERFORMANCE: Returns string reference from AST.
- */
+// ── Literal extraction ─────────────────────────────────────────────────────
+
+/** Returns the literal string value of `node`, if applicable. */
 export const getLiteralStringValueUnsafe = (node: Expression): string | undefined => {
     if (!node) return undefined;
-
-    if (node.type === 'StringLiteral' || node.type === 'Literal') {
-        const value = (node as StringLiteral).value;
-        return typeof value === 'string' ? value : undefined;
-    }
-
-    return undefined;
+    if (node.type !== 'StringLiteral' && node.type !== 'Literal') return undefined;
+    const value = (node as StringLiteral).value;
+    return typeof value === 'string' ? value : undefined;
 };
 
-/**
- * Gets literal boolean value (unsafe: may return undefined).
- *
- * PERFORMANCE: Returns boolean primitive from AST.
- */
+/** Returns the literal boolean value of `node`, if applicable. */
 export const getLiteralBooleanValueUnsafe = (node: Expression): boolean | undefined => {
     if (!node) return undefined;
-
-    if (node.type === 'BooleanLiteral' || node.type === 'Literal') {
-        const value = (node as BooleanLiteral).value;
-        return typeof value === 'boolean' ? value : undefined;
-    }
-
-    return undefined;
-};
-
-/**
- * Checks if expression is an Angular input() signal call.
- */
-export const isInputSignal = (expr: Expression): boolean => {
-    if (!expr || expr.type !== 'CallExpression') return false;
-    const callee = (expr as CallExpression).callee;
-
-    // input()
-    if (callee.type === 'Identifier' && (callee as Identifier).name === 'input') return true;
-
-    // input.required()
-    if (callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression') {
-        const member = callee as MemberExpression;
-        return member.object.type === 'Identifier' &&
-            (member.object as Identifier).name === 'input' &&
-            member.property.type === 'Identifier' &&
-            member.property.name === 'required';
-    }
-
-    return false;
-};
-
-/**
- * Extracts alias from input() signal call if present.
- */
-export const getInputSignalAliasUnsafe = (callExpr: CallExpression): string | undefined => {
-    const callee = callExpr.callee;
-    const args = callExpr.arguments;
-    if (!args || args.length === 0) return undefined;
-
-    const isRequired = callee.type === 'MemberExpression' || callee.type === 'StaticMemberExpression';
-
-    return isRequired
-        ? getRequiredInputAlias(args)
-        : getOptionalInputAlias(args);
-};
-
-/** Extracts alias from input.required({ alias: 'alias' }). */
-const getRequiredInputAlias = (args: ReadonlyArray<Expression>): string | undefined => {
-    const first = args[0];
-    if (!first || first.type !== 'ObjectExpression') return undefined;
-    return getLiteralStringValueUnsafe(
-        getObjectPropertyUnsafe(first as ObjectExpression, 'alias') as Expression,
-    );
-};
-
-/** Extracts alias from input('alias') or input(defaultVal, { alias: 'alias' }). */
-const getOptionalInputAlias = (args: ReadonlyArray<Expression>): string | undefined => {
-    if (args.length === 1) {
-        const first = args[0];
-        if (first.type === 'StringLiteral' || first.type === 'Literal') {
-            return getLiteralStringValueUnsafe(first);
-        }
-    }
-
-    if (args.length >= 2) {
-        const second = args[1];
-        if (second && second.type === 'ObjectExpression') {
-            return getLiteralStringValueUnsafe(
-                getObjectPropertyUnsafe(second as ObjectExpression, 'alias') as Expression,
-            );
-        }
-    }
-
-    return undefined;
+    if (node.type !== 'BooleanLiteral' && node.type !== 'Literal') return undefined;
+    const value = (node as BooleanLiteral).value;
+    return typeof value === 'boolean' ? value : undefined;
 };

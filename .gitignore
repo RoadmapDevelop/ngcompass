@@ -43,4 +43,11 @@ debug-*.ts
 test-output.txt
 packages/*/test-results/
 .test-cache-config/
-.claude/worktrees/
+.claude/
+
+# Local analysis artifacts
+benchmark-results.json
+*-report.json
+*-report.html
+ngcompass-report*.json
+ngcompass-report*.html

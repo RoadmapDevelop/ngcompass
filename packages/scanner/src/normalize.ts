@@ -1,16 +1,18 @@
 /**
  * @fileoverview
- * Provides utilities for the normalization and validation of scanner configurations.
+ * Scanner-options normalization and validation.
  *
- * Ensures that scan options are consistent, paths are resolved, and default
- * behaviors are applied according to the project's architectural standards.
+ * `normalizeOptions` applies defaults and resolves the project root once at
+ * scan kickoff so downstream pipeline stages can treat every field as
+ * present. `validateOptions` flags structural problems before the scan
+ * starts; today it returns plain strings, but each entry already reads
+ * like an error message.
  */
-import path from 'node:path';
-import type { ScanOptions, NormalizedOptions } from './types.js';
 
-/**
- * Default patterns used for file inclusion when none are explicitly provided.
- */
+import path from 'node:path';
+import type { NormalizedOptions, ScanOptions } from './types.js';
+
+/** Default include globs used when the caller doesn't supply any. */
 const DEFAULT_INCLUDE = [
     '**/*.ts',
     '**/*.html',
@@ -21,10 +23,10 @@ const DEFAULT_INCLUDE = [
 ] as const;
 
 /**
- * Normalizes scanner options by applying defaults and resolving paths.
+ * Applies defaults and resolves the project root.
  *
- * @param options - The raw configuration options provided by the caller.
- * @returns A new object containing fully normalized scanner options.
+ * @param options - Raw caller-supplied options.
+ * @returns A fully populated {@link NormalizedOptions}.
  */
 export const normalizeOptions = (options: ScanOptions): NormalizedOptions => ({
     rootDir: path.resolve(options.rootDir),
@@ -37,10 +39,8 @@ export const normalizeOptions = (options: ScanOptions): NormalizedOptions => ({
 });
 
 /**
- * Validates the structural integrity of the provided scanner options.
- *
- * @param options - The options to evaluate.
- * @returns A read-only collection of validation error messages, if any.
+ * Returns a list of structural problems with `options`. An empty array
+ * means the configuration is valid.
  */
 export const validateOptions = (options: ScanOptions): ReadonlyArray<string> => {
     const errors: string[] = [];

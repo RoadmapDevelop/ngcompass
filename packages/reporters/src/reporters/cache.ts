@@ -1,114 +1,141 @@
+/**
+ * @fileoverview
+ * Text reporter for the `ngcompass cache` command group.
+ *
+ * Renders cache-clear outcomes and cache-info statistics. Goes through
+ * `ReporterOutput` instead of writing to `process.stdout` directly so
+ * tests can capture the output deterministically.
+ */
+
 import pc from 'picocolors';
-import type { CacheReporter } from '../types.js';
 import type { CacheInfo } from '@ngcompass/cache';
+import type { CacheReporter } from '../types.js';
+import { processOutput, type ReporterOutput } from '../output.js';
 
-const w = (line = '') => process.stdout.write(`${line}\n`);
-
+/** Human-friendly descriptions of each clearable cache family. */
 const CACHE_META: Record<'ast' | 'config' | 'results', { label: string; desc: string }> = {
     ast:     { label: 'ast',     desc: 'parsed TypeScript & HTML template ASTs' },
     config:  { label: 'config',  desc: 'resolved configuration snapshots' },
     results: { label: 'results', desc: 'previous analysis results' },
 };
 
+/** Column widths for the `ngcompass cache info` table. */
+const INFO_COLUMNS = { type: 18, entries: 14, size: 12 } as const;
+
+/** Byte-size unit ladder for human-friendly formatting. */
+const SIZE_UNITS = ['B', 'KB', 'MB', 'GB'] as const;
+
 export class TextCacheReporter implements CacheReporter {
+    constructor(private readonly out: ReporterOutput = processOutput) {}
+
     renderClearResult(type: 'ast' | 'config' | 'results' | 'all'): void {
         const cleared = type === 'all'
             ? (['ast', 'config', 'results'] as const)
             : ([type] as const);
 
-        const label = type === 'all' ? 'All caches cleared' : `${type} cache cleared`;
+        const headerLabel = type === 'all' ? 'All caches cleared' : `${type} cache cleared`;
 
-        w();
-        w(`  ${pc.green('◆')}  ${pc.bold(pc.green(label))}`);
-        w();
+        this.out.write('');
+        this.out.write(`  ${pc.green('◆')}  ${pc.bold(pc.green(headerLabel))}`);
+        this.out.write('');
 
-        const maxLen = Math.max(...cleared.map(t => CACHE_META[t].label.length));
+        const maxLen = Math.max(...cleared.map((t) => CACHE_META[t].label.length));
         for (const t of cleared) {
-            const { label: tLabel, desc } = CACHE_META[t];
-            w(`     ${pc.dim('○')}  ${pc.cyan(tLabel.padEnd(maxLen))}  ${pc.dim('—')}  ${pc.dim(desc)}`);
+            const { label, desc } = CACHE_META[t];
+            this.out.write(
+                `     ${pc.dim('○')}  ${pc.cyan(label.padEnd(maxLen))}  ${pc.dim('—')}  ${pc.dim(desc)}`,
+            );
         }
-
-        w();
+        this.out.write('');
 
         if (type === 'all') {
-            w(`  ${pc.dim('›')}  ${pc.dim('The next analysis will cold-start and rebuild all cache data.')}`);
+            this.out.write(`  ${pc.dim('›')}  ${pc.dim('The next analysis will cold-start and rebuild all cache data.')}`);
         } else {
             const remaining = (['ast', 'config', 'results'] as const)
-                .filter(t => t !== type)
-                .map(t => pc.cyan(t))
+                .filter((t) => t !== type)
+                .map((t) => pc.cyan(t))
                 .join(pc.dim(', '));
-            w(`  ${pc.dim('›')}  ${pc.dim(`${remaining} ${remaining.includes(',') ? 'caches are' : 'cache is'} untouched.`)}`);
-            w(`  ${pc.dim('›')}  ${pc.dim(type === 'ast'
-                ? 'The next analysis will re-parse all source files.'
-                : type === 'config'
-                ? 'The next analysis will re-resolve your configuration.'
-                : 'The next analysis will re-run all checks from scratch.')}`);
+            this.out.write(
+                `  ${pc.dim('›')}  ${pc.dim(`${remaining} ${remaining.includes(',') ? 'caches are' : 'cache is'} untouched.`)}`,
+            );
+            this.out.write(`  ${pc.dim('›')}  ${pc.dim(rebuildHint(type))}`);
         }
 
-        w(`  ${pc.dim('›')}  ${pc.dim('Tip: use')} ${pc.dim(pc.bold('--force'))} ${pc.dim('on a single run to bypass cache without wiping it.')}`);
-        w();
+        this.out.write(
+            `  ${pc.dim('›')}  ${pc.dim('Tip: use')} ${pc.dim(pc.bold('--force'))} ${pc.dim('on a single run to bypass cache without wiping it.')}`,
+        );
+        this.out.write('');
     }
 
     renderCacheInfo(info: CacheInfo): void {
-        w();
-        w(`  ${pc.bold('Cache')}  ${pc.dim('·')}  ${pc.cyan(`v${info.version}`)}  ${pc.dim('·')}  ${pc.dim(info.location)}`);
-        w();
+        this.out.write('');
+        this.out.write(
+            `  ${pc.bold('Cache')}  ${pc.dim('·')}  ${pc.cyan(`v${info.version}`)}  ${pc.dim('·')}  ${pc.dim(info.location)}`,
+        );
+        this.out.write('');
 
-        const COL = { type: 18, entries: 14, size: 12 };
         const divider = pc.dim(
-            '  ' + '─'.repeat(COL.type + COL.entries + COL.size - 2)
+            '  ' + '─'.repeat(INFO_COLUMNS.type + INFO_COLUMNS.entries + INFO_COLUMNS.size - 2),
         );
 
-        w(
-            '  ' +
-            pc.dim('Type'.padEnd(COL.type)) +
-            pc.dim('Entries'.padEnd(COL.entries)) +
-            pc.dim('Size')
+        this.out.write(
+            '  '
+            + pc.dim('Type'.padEnd(INFO_COLUMNS.type))
+            + pc.dim('Entries'.padEnd(INFO_COLUMNS.entries))
+            + pc.dim('Size'),
         );
-        w(divider);
+        this.out.write(divider);
 
-        this.printInfoRow('AST  (L1 in-memory)', `${info.ast.l1.entries} / ${info.ast.l1.maxEntries}`, info.ast.l1.size, COL);
-        this.printInfoRow('AST  (L2 on-disk)',   String(info.ast.l2.entries),                           info.ast.l2.size, COL);
-        this.printInfoRow('Config',               String(info.config.entries),                           info.config.size, COL);
-        this.printInfoRow('Results',              String(info.results.entries),                          info.results.size, COL);
+        this.printInfoRow('AST  (L1 in-memory)', `${info.ast.l1.entries} / ${info.ast.l1.maxEntries}`, info.ast.l1.size);
+        this.printInfoRow('AST  (L2 on-disk)',   String(info.ast.l2.entries), info.ast.l2.size);
+        this.printInfoRow('Config',              String(info.config.entries), info.config.size);
+        this.printInfoRow('Results',             String(info.results.entries), info.results.size);
 
-        w(divider);
+        this.out.write(divider);
 
         const totalEntries =
             info.ast.l1.entries + info.ast.l2.entries + info.config.entries + info.results.entries;
-        w(
-            '  ' +
-            pc.bold('Total'.padEnd(COL.type)) +
-            pc.bold(String(totalEntries).padEnd(COL.entries)) +
-            pc.bold(this.formatSize(info.totalSize))
+        this.out.write(
+            '  '
+            + pc.bold('Total'.padEnd(INFO_COLUMNS.type))
+            + pc.bold(String(totalEntries).padEnd(INFO_COLUMNS.entries))
+            + pc.bold(formatSize(info.totalSize)),
         );
 
-        w();
-        w(`  ${pc.dim('›')}  ${pc.dim('Run')} ${pc.dim(pc.bold('ngcompass cache clear'))} ${pc.dim('to wipe all cached data.')}`);
-        w();
+        this.out.write('');
+        this.out.write(
+            `  ${pc.dim('›')}  ${pc.dim('Run')} ${pc.dim(pc.bold('ngcompass cache clear'))} ${pc.dim('to wipe all cached data.')}`,
+        );
+        this.out.write('');
     }
 
-    private printInfoRow(
-        type: string,
-        entries: string,
-        sizeBytes: number,
-        col: { type: number; entries: number; size: number },
-    ): void {
+    private printInfoRow(type: string, entries: string, sizeBytes: number): void {
         const isEmpty = sizeBytes === 0 && entries === '0';
         const colorFn = isEmpty ? pc.dim : (s: string) => s;
-        w(
-            '  ' +
-            colorFn(pc.cyan(type.padEnd(col.type))) +
-            colorFn(entries.padEnd(col.entries)) +
-            colorFn(this.formatSize(sizeBytes))
+        this.out.write(
+            '  '
+            + colorFn(pc.cyan(type.padEnd(INFO_COLUMNS.type)))
+            + colorFn(entries.padEnd(INFO_COLUMNS.entries))
+            + colorFn(formatSize(sizeBytes)),
         );
     }
+}
 
-    private formatSize(bytes: number): string {
-        if (bytes === 0) return pc.dim('—');
-        const k = 1024;
-        const sizes = ['B', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+// ── Internal helpers ──────────────────────────────────────────────────────
+
+/** Returns the rebuild-hint line shown after a per-family clear. */
+function rebuildHint(type: 'ast' | 'config' | 'results'): string {
+    switch (type) {
+        case 'ast':     return 'The next analysis will re-parse all source files.';
+        case 'config':  return 'The next analysis will re-resolve your configuration.';
+        case 'results': return 'The next analysis will re-run all checks from scratch.';
     }
+}
+
+/** Formats a byte count as a human-friendly string (`1.23 MB`, `42 B`, …). */
+function formatSize(bytes: number): string {
+    if (bytes === 0) return pc.dim('—');
+    const k = 1024;
+    const i = Math.min(SIZE_UNITS.length - 1, Math.floor(Math.log(bytes) / Math.log(k)));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${SIZE_UNITS[i]}`;
 }

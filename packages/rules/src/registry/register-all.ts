@@ -1,3 +1,17 @@
+/**
+ * @fileoverview
+ * Built-in rule registration.
+ *
+ * Wires every shipped rule into the global registry under its declared
+ * category. The CLI calls `registerAllBuiltinRules()` once at startup;
+ * worker threads (which have their own module instance) call it again
+ * inside their entry point.
+ *
+ * Adding a new built-in rule: import the handler at the top of this file
+ * and add a `registerNewEngineRule(handler, '<category>')` line inside
+ * `registerAllBuiltinRules()`.
+ */
+
 import { registerNewEngineRule } from '../engine/adapter.js';
 
 // Correctness

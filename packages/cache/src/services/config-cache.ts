@@ -1,24 +1,33 @@
-import { ConfigValidationResult } from '@ngcompass/common';
-import { AsyncDriver } from '../drivers/types.js';
+/**
+ * @fileoverview
+ * Config-validation cache.
+ *
+ * Holds the result of `validateConfiguration()` keyed by the composite
+ * fingerprint defined in `key-context.ts`. The driver is typed concretely as
+ * `AsyncDriver<ConfigValidationResult>` so callers no longer rely on a
+ * runtime cast through `unknown`.
+ *
+ * Strategy: persistent disk via the atomic driver.
+ */
 
+import type { ConfigValidationResult } from '@ngcompass/common';
+import type { AsyncDriver } from '../drivers/types.js';
+
+/** Read/write surface exposed to consumers. */
 export interface ConfigCache {
     get: (hash: string) => Promise<ConfigValidationResult | undefined>;
     set: (hash: string, report: ConfigValidationResult) => Promise<void>;
 }
 
 /**
- * Creates a Configuration Cache.
- * Strategy: Persistent Disk (Atomic files).
- * Key: Raw Configuration Hash.
+ * Wraps a typed async driver as a {@link ConfigCache}.
+ *
+ * @param driver - Backing async driver carrying `ConfigValidationResult` payloads.
+ * @returns A thin `ConfigCache` proxy.
  */
-export const createConfigCache = (driver: AsyncDriver<unknown>): ConfigCache => {
-    return {
-        get: async (hash: string): Promise<ConfigValidationResult | undefined> => {
-            return driver.get(hash) as Promise<ConfigValidationResult | undefined>;
-        },
-
-        set: async (hash: string, report: ConfigValidationResult): Promise<void> => {
-            await driver.set(hash, report);
-        }
-    };
-};
+export const createConfigCache = (
+    driver: AsyncDriver<ConfigValidationResult>,
+): ConfigCache => ({
+    get: (hash) => driver.get(hash),
+    set: (hash, report) => driver.set(hash, report),
+});

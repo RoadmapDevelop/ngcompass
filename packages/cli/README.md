@@ -239,6 +239,3 @@ pnpm prerelease:check
 - Template analysis is best-effort for highly dynamic templates.
 - Validate ngcompass against your project before making it a required CI gate.
 
-## License
-
-MIT. See [LICENSE](./LICENSE).

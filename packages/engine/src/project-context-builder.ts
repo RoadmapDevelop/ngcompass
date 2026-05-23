@@ -48,7 +48,7 @@ export function buildProjectContext(
 
     const barrelFiles = detectBarrelFiles(program, projectFileSet);
 
-    const componentGraph = componentFiles ?? buildComponentGraph(projectFileSet);
+    const componentGraph = componentFiles ?? buildComponentGraph(projectFileSet, program);
     const templateToComponent = buildTemplateToComponentMap(componentGraph);
 
     const { ngModuleMap, standaloneComponents, classToFile } =
@@ -68,17 +68,14 @@ export function buildProjectContext(
     return {
         importGraph:        importGraph        as ReadonlyMap<string, ReadonlySet<string>>,
         reverseImportGraph: reverseImportGraph as ReadonlyMap<string, ReadonlySet<string>>,
-        // CTX-004
         ngModuleMap:          ngModuleMap          as ReadonlyMap<string, NgModuleInfo>,
         standaloneComponents: standaloneComponents as ReadonlySet<string>,
         classToFile:          classToFile          as ReadonlyMap<string, string>,
         componentGraph,
         projectFiles:   projectFileSet,
         rootDir,
-        // CTX-002
         barrelFiles:  barrelFiles  as ReadonlySet<string>,
         externalDeps: externalDeps as ReadonlyMap<string, ReadonlySet<string>>,
-        // CTX-003
         templateToComponent: templateToComponent as ReadonlyMap<string, string>,
     };
 }
@@ -248,7 +245,7 @@ function detectBarrelFiles(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODULE SPECIFIER COLLECTION  (CTX-002: full AST walk)
+// MODULE SPECIFIER COLLECTION  (full AST walk)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -258,7 +255,7 @@ function detectBarrelFiles(
  *   - `import … from 'specifier'`          (static import)
  *   - `export … from 'specifier'`          (re-export / barrel)
  *   - `export * from 'specifier'`          (namespace re-export)
- *   - `import('specifier')`               (dynamic import — CTX-002)
+ *   - `import('specifier')`               (dynamic import)
  *
  * Uses a full depth-first AST walk (`ts.forEachChild`) so that dynamic
  * imports inside function bodies, class methods, arrow functions, and
@@ -302,7 +299,7 @@ function collectModuleSpecifiers(sourceFile: ts.SourceFile): string[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXTERNAL PACKAGE NAME EXTRACTION  (CTX-002)
+// EXTERNAL PACKAGE NAME EXTRACTION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
@@ -359,28 +356,34 @@ function normaliseDir(dir: string): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CTX-003: COMPONENT GRAPH DETECTION
+// COMPONENT GRAPH DETECTION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * Builds the component → associated files cluster map from the project file
- * set using Angular naming conventions.
+ * set using Angular naming conventions, falling back to decorator-based
+ * `templateUrl` / `styleUrl` / `styleUrls` extraction when conventions don't
+ * match.
  *
  * Detection rule: a file whose name ends with `.component.ts` is treated as a
- * component class.  Its siblings are discovered by looking for files with the
- * same base name (minus the `.ts` extension) and one of the following suffixes:
- *   - `.html`                 → external template
- *   - `.scss`, `.sass`, `.css`, `.less` → style files
- *   - `.spec.ts`              → test spec
+ * component class.  Its siblings are discovered first by name convention
+ * (same base name plus `.html`, style extension, or `.spec.ts`).  If the
+ * convention check finds nothing and the TypeScript Program is available,
+ * the function reads the `@Component` decorator metadata from the source
+ * file's AST and resolves the URLs relative to the component's directory.
  *
- * All paths in the returned map are absolute.  Only files actually present in
- * `projectFileSet` are recorded — no stat() calls are made.
+ * All paths in the returned map are absolute.  Decorator-resolved paths are
+ * still verified against `projectFileSet` so we never reference a file the
+ * scanner didn't see.
  *
  * Note: components using inline `template: '…'` will appear in the map with
  * `templatePath: undefined`; callers should handle that case by checking
  * `getTemplate(tsPath)` directly.
  */
-function buildComponentGraph(projectFileSet: Set<string>): Map<string, ComponentFiles> {
+function buildComponentGraph(
+    projectFileSet: Set<string>,
+    program: ts.Program,
+): Map<string, ComponentFiles> {
     const graph = new Map<string, ComponentFiles>();
     const styleExts = ['.scss', '.sass', '.css', '.less'];
 
@@ -392,12 +395,22 @@ function buildComponentGraph(projectFileSet: Set<string>): Map<string, Component
         const base = path.basename(file, '.ts');
 
         const htmlPath = path.join(dir, base + '.html');
-        const templatePath = projectFileSet.has(htmlPath) ? htmlPath : undefined;
+        let templatePath: string | undefined = projectFileSet.has(htmlPath) ? htmlPath : undefined;
 
         const stylePaths: string[] = [];
         for (const ext of styleExts) {
             const stylePath = path.join(dir, base + ext);
             if (projectFileSet.has(stylePath)) stylePaths.push(stylePath);
+        }
+
+        if (!templatePath || stylePaths.length === 0) {
+            const decoratorPaths = extractDecoratorAssetPaths(program, file, dir, projectFileSet);
+            if (!templatePath && decoratorPaths.templatePath) {
+                templatePath = decoratorPaths.templatePath;
+            }
+            if (stylePaths.length === 0 && decoratorPaths.stylePaths.length > 0) {
+                stylePaths.push(...decoratorPaths.stylePaths);
+            }
         }
 
         const specCandidate = path.join(dir, base + '.spec.ts');
@@ -407,6 +420,89 @@ function buildComponentGraph(projectFileSet: Set<string>): Map<string, Component
     }
 
     return graph;
+}
+
+/**
+ * Reads `templateUrl` / `styleUrl` / `styleUrls` literals from the first
+ * `@Component` decorator in `componentFile`, resolves them relative to the
+ * component's directory, and verifies each against `projectFileSet`.
+ *
+ * Returns empty values when the file isn't in the Program, has no
+ * `@Component` decorator, or the decorator only uses inline `template:` /
+ * `styles:` properties.
+ */
+function extractDecoratorAssetPaths(
+    program: ts.Program,
+    componentFile: string,
+    dir: string,
+    projectFileSet: Set<string>,
+): { templatePath: string | undefined; stylePaths: string[] } {
+    const sourceFile = program.getSourceFile(componentFile);
+    if (!sourceFile) return { templatePath: undefined, stylePaths: [] };
+
+    const componentArg = findComponentDecoratorArg(sourceFile);
+    if (!componentArg) return { templatePath: undefined, stylePaths: [] };
+
+    let templatePath: string | undefined;
+    const stylePaths: string[] = [];
+
+    for (const prop of componentArg.properties) {
+        if (!ts.isPropertyAssignment(prop) || !ts.isIdentifier(prop.name)) continue;
+
+        const name = prop.name.text;
+        if (name === 'templateUrl') {
+            const literal = getStringLiteralValue(prop.initializer);
+            if (literal) {
+                const resolved = path.resolve(dir, literal);
+                if (projectFileSet.has(resolved)) templatePath = resolved;
+            }
+            continue;
+        }
+
+        if (name === 'styleUrl') {
+            const literal = getStringLiteralValue(prop.initializer);
+            if (literal) {
+                const resolved = path.resolve(dir, literal);
+                if (projectFileSet.has(resolved)) stylePaths.push(resolved);
+            }
+            continue;
+        }
+
+        if (name === 'styleUrls' && ts.isArrayLiteralExpression(prop.initializer)) {
+            for (const element of prop.initializer.elements) {
+                const literal = getStringLiteralValue(element);
+                if (!literal) continue;
+                const resolved = path.resolve(dir, literal);
+                if (projectFileSet.has(resolved)) stylePaths.push(resolved);
+            }
+        }
+    }
+
+    return { templatePath, stylePaths };
+}
+
+function findComponentDecoratorArg(sourceFile: ts.SourceFile): ts.ObjectLiteralExpression | undefined {
+    for (const stmt of sourceFile.statements) {
+        if (!ts.isClassDeclaration(stmt)) continue;
+        const decorators = ts.canHaveDecorators(stmt) ? ts.getDecorators(stmt) : undefined;
+        if (!decorators) continue;
+
+        for (const decorator of decorators) {
+            const expr = decorator.expression;
+            if (!ts.isCallExpression(expr)) continue;
+            if (!ts.isIdentifier(expr.expression) || expr.expression.text !== 'Component') continue;
+
+            const arg = expr.arguments[0];
+            if (arg && ts.isObjectLiteralExpression(arg)) return arg;
+        }
+    }
+    return undefined;
+}
+
+function getStringLiteralValue(node: ts.Expression): string | undefined {
+    if (ts.isStringLiteralLike(node)) return node.text;
+    if (ts.isNoSubstitutionTemplateLiteral(node)) return node.text;
+    return undefined;
 }
 
 /**
@@ -430,7 +526,7 @@ function buildTemplateToComponentMap(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CTX-004: ANGULAR DECORATOR SCANNER
+// ANGULAR DECORATOR SCANNER
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

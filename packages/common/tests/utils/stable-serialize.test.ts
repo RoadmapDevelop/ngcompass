@@ -16,7 +16,7 @@ describe('stableSerialize', () => {
     it('rejects functions as input', () => {
         expect(() => stableSerialize(() => {})).toThrowError(SerializationError);
     });
-    
+
     it('rejects non-finite numbers', () => {
         expect(() => stableSerialize(NaN)).toThrowError(SerializationError);
         expect(() => stableSerialize(Infinity)).toThrowError(SerializationError);
@@ -38,7 +38,7 @@ describe('stableSerialize', () => {
     it('sorts object keys alphabetically', () => {
         const obj1 = { z: 1, a: 2, c: 3 };
         const obj2 = { a: 2, c: 3, z: 1 };
-        
+
         expect(stableSerialize(obj1)).toBe('{"a":2,"c":3,"z":1}');
         expect(stableSerialize(obj1)).toBe(stableSerialize(obj2));
     });
@@ -46,15 +46,15 @@ describe('stableSerialize', () => {
     it('omits undefined object properties safely', () => {
         const obj1 = { a: 1, b: undefined, c: 3 };
         const obj2 = { a: 1, c: 3 };
-        
+
         expect(stableSerialize(obj1)).toBe('{"a":1,"c":3}');
         expect(stableSerialize(obj1)).toBe(stableSerialize(obj2));
     });
 
     it('detects and rejects circular references', () => {
-        const obj: any = { a: 1 };
+        const obj: { a: number; self?: unknown } = { a: 1 };
         obj.self = obj;
-        
+
         expect(() => stableSerialize(obj)).toThrowError(SerializationError);
         expect(() => stableSerialize(obj)).toThrowError(/Circular reference detected/);
     });

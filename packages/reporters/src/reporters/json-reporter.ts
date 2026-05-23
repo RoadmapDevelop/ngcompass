@@ -1,23 +1,35 @@
+/**
+ * @fileoverview
+ * Machine-readable JSON reporter.
+ *
+ * Accumulates results and parse errors across the run, then emits a single
+ * JSON document on `summary()`. The shape is documented in `types.ts`
+ * (`DiagnosticMessage` + `FileDiagnosticResult`) so downstream consumers
+ * (reviewdog, IDEs, dashboards) can rely on a stable contract independent
+ * of the analyzer's internal `RuleResult` shape.
+ */
+
+import type { RuleResult, RuleSeverity } from '@ngcompass/common';
+import { getAnalysisStatus } from '../analysis-status.js';
+import { processOutput, type ReporterOutput } from '../output.js';
+import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
 import type {
-    FileDiagnosticResult,
     DiagnosticMessage,
+    FileDiagnosticResult,
     ParseError,
     Reporter,
     ResultSummary,
 } from '../types.js';
-import type { ReporterOutput } from '../output.js';
-import { processOutput } from '../output.js';
-import { isErrorSeverity, compareByPosition } from '../severity-utils.js';
-import { RuleResult, Severity } from '@ngcompass/common';
-import { getAnalysisStatus } from '../analysis-status.js';
 
 const JSON_SEVERITY_ERROR = 2 as const;
 const JSON_SEVERITY_WARNING = 1 as const;
 
-function toJsonSeverity(severity: Severity): 1 | 2 {
+/** Maps a `RuleSeverity` onto the JSON severity encoding. */
+function toJsonSeverity(severity: RuleSeverity): 1 | 2 {
     return isErrorSeverity(severity) ? JSON_SEVERITY_ERROR : JSON_SEVERITY_WARNING;
 }
 
+/** Groups every failure by file path while preserving emission order. */
 function groupMessagesByFile(results: readonly RuleResult[]): Map<string, DiagnosticMessage[]> {
     const map = new Map<string, DiagnosticMessage[]>();
 
@@ -25,36 +37,38 @@ function groupMessagesByFile(results: readonly RuleResult[]): Map<string, Diagno
         for (const failure of result.failures) {
             const message: DiagnosticMessage = {
                 ruleId: failure.ruleName,
-                severity: toJsonSeverity(failure.severity as Severity),
+                severity: toJsonSeverity(failure.severity),
                 message: failure.message,
                 line: failure.line,
                 column: failure.column,
             };
-
             const existing = map.get(failure.filePath);
-            if (existing) {
-                existing.push(message);
-            } else {
-                map.set(failure.filePath, [message]);
-            }
+            if (existing) existing.push(message);
+            else map.set(failure.filePath, [message]);
         }
     }
-
     return map;
 }
 
-function toFileDiagnosticResult(filePath: string, messages: DiagnosticMessage[]): FileDiagnosticResult {
-    return {
-        filePath,
-        messages,
-        errorCount: messages.filter(m => m.severity === JSON_SEVERITY_ERROR).length,
-        warningCount: messages.filter(m => m.severity === JSON_SEVERITY_WARNING).length,
-    };
+/**
+ * Builds a {@link FileDiagnosticResult} from a path + messages tuple,
+ * counting error/warning totals in a single pass.
+ */
+function toFileDiagnosticResult(
+    filePath: string,
+    messages: DiagnosticMessage[],
+): FileDiagnosticResult {
+    let errorCount = 0;
+    let warningCount = 0;
+    for (const m of messages) {
+        if (m.severity === JSON_SEVERITY_ERROR) errorCount++;
+        else warningCount++;
+    }
+    return { filePath, messages, errorCount, warningCount };
 }
 
 function toJsonOutput(results: readonly RuleResult[]): FileDiagnosticResult[] {
     const byFile = groupMessagesByFile(results);
-
     return Array.from(byFile.entries())
         .sort(([pathA], [pathB]) => pathA.localeCompare(pathB))
         .map(([filePath, messages]) =>
@@ -63,7 +77,9 @@ function toJsonOutput(results: readonly RuleResult[]): FileDiagnosticResult[] {
 }
 
 function countViolations(results: readonly RuleResult[]): number {
-    return results.reduce((count, result) => count + result.failures.length, 0);
+    let count = 0;
+    for (const result of results) count += result.failures.length;
+    return count;
 }
 
 export class JsonReporter implements Reporter {
@@ -104,11 +120,13 @@ export class JsonReporter implements Reporter {
         this.out.error(JSON.stringify({ error: err.message }, null, 2));
     }
 
-    step(_message: string): void {}
-    info(_message: string): void {}
-    debug(_message: string): void {}
-
     parseErrors(errors: ReadonlyArray<ParseError>): void {
         for (const error of errors) this.accumulatedParseErrors.push(error);
     }
+
+    // Progress methods are no-ops for the JSON reporter — output is a single
+    // document emitted on `summary()`.
+    step(_message: string): void {}
+    info(_message: string): void {}
+    debug(_message: string): void {}
 }

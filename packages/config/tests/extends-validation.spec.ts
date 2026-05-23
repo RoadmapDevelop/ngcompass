@@ -31,12 +31,12 @@ describe('Check: Extends Chain Resolution', () => {
      */
     describe('Empty & Missing States', () => {
         it('should return no issues when the extends field is missing', () => {
-            const result = validateExtendsChain({} as ValidatedConfig);
+            const result = validateExtendsChain({} as ValidatedConfig, [], process.cwd());
             expect(result.issues).toHaveLength(0);
         });
 
         it('should return no issues when extends is an empty array', () => {
-            const result = validateExtendsChain(withExtends([]));
+            const result = validateExtendsChain(withExtends([]), [], process.cwd());
             expect(result.issues).toHaveLength(0);
         });
 

@@ -1,20 +1,46 @@
-import cacache from 'cacache';
+/**
+ * @fileoverview
+ * Asynchronous disk storage driver backed by `cacache`.
+ *
+ * Entries are V8-serialized for compact binary on-disk representation.
+ * Deserialization errors (corruption, V8 format change after Node upgrade)
+ * are treated as cache misses and the offending entry is silently removed
+ * so subsequent reads do not keep hitting the same bad blob.
+ *
+ * Timing diagnostics flow through the shared `debug('cache', …)`
+ * channel rather than `process.stdout`, so they respect the project-wide
+ * stderr/`DEBUG` filtering and never appear in normal output.
+ */
+
 import v8 from 'node:v8';
-import { AsyncDriver, DiskDriverConfig } from './types.js';
+import cacache from 'cacache';
+import { debug } from '@ngcompass/common';
 import { getDirectoryStats } from '../utils/fs.js';
+import type { AsyncDriver, DiskDriverConfig } from './types.js';
 
 /**
- * Creates an asynchronous disk storage driver backed by cacache.
- * Uses V8 serialization for high-performance binary storage.
- * Includes resilience against deserialization errors (Try-Catch-Delete).
+ * Returns the `code` property of a thrown value when it looks like a
+ * `NodeJS.ErrnoException`, otherwise `undefined`.
+ */
+const errorCode = (err: unknown): string | undefined => {
+    if (err && typeof err === 'object' && 'code' in err) {
+        const code = (err as { code: unknown }).code;
+        return typeof code === 'string' ? code : undefined;
+    }
+    return undefined;
+};
+
+/**
+ * Builds an async disk driver that supports the standard CRUD interface plus
+ * a `prune` operation that runs cacache's verification pass.
  */
 export const createDiskDriver = <T>(
-    config: DiskDriverConfig
+    config: DiskDriverConfig,
 ): AsyncDriver<T> & { prune: () => Promise<void> } => {
     const cachePath = config.path;
 
     return {
-        get: async (key: string): Promise<T | undefined> => {
+        get: async (key) => {
             try {
                 const tReadStart = performance.now();
                 const result = await cacache.get(cachePath, key);
@@ -24,66 +50,62 @@ export const createDiskDriver = <T>(
                 const deserialized = v8.deserialize(result.data) as T;
                 const tDeserEnd = performance.now();
 
-                // Optional: debug logging for cache driver timing
-                if (process.env.DEBUG_CACHE) {
-                    process.stdout.write(
-                        `[disk-driver] read: ${(tReadEnd - tReadStart).toFixed(2)}ms, deser: ${(tDeserEnd - tDeserStart).toFixed(2)}ms, size: ${(result.data.length / 1024).toFixed(1)}KB\n`
-                    );
-                }
+                debug(
+                    'cache',
+                    `read=${(tReadEnd - tReadStart).toFixed(2)}ms ` +
+                    `deserialize=${(tDeserEnd - tDeserStart).toFixed(2)}ms ` +
+                    `bytes=${result.data.length}`,
+                );
 
                 return deserialized;
-            } catch (err: unknown) {
-                const code = typeof err === 'object' && err !== null && 'code' in err ? (err as { code: unknown }).code : undefined;
+            } catch (err) {
+                if (errorCode(err) === 'ENOENT') return undefined;
 
-                if (code === 'ENOENT') {
-                    return undefined; // Not found
-                }
-
-                // Defensive: If deserialization fails (corruption, version mismatch), 
-                // delete the entry to self-heal.
+                // Deserialization failed (corruption or V8 schema change).
+                // Self-heal by dropping the entry; log so operators can see it.
+                const message = err instanceof Error ? err.message : String(err);
+                debug('cache', `Dropping unreadable entry ${key}: ${message}`);
                 try {
                     await cacache.rm.entry(cachePath, key);
                 } catch {
-                    // Ignore delete errors
+                    // The entry may already have been removed by a parallel get/clear.
                 }
                 return undefined;
             }
         },
 
-        set: async (key: string, value: T): Promise<void> => {
-            // Serialize to Buffer using V8
+        set: async (key, value) => {
             const buffer = v8.serialize(value);
             await cacache.put(cachePath, key, buffer);
         },
 
-        has: async (key: string): Promise<boolean> => {
+        has: async (key) => {
             try {
                 const info = await cacache.get.info(cachePath, key);
-                return !!info;
+                return Boolean(info);
             } catch {
                 return false;
             }
         },
 
-        delete: async (key: string): Promise<void> => {
+        delete: async (key) => {
             await cacache.rm.entry(cachePath, key);
         },
 
-        clear: async (): Promise<void> => {
+        clear: async () => {
             await cacache.rm.all(cachePath);
         },
 
-        prune: async (): Promise<void> => {
-            // cleans up old/unused entries
+        prune: async () => {
+            // cacache.verify walks the content-addressable store, removes
+            // unreferenced blobs, and compacts the index file.
             await cacache.verify(cachePath);
         },
 
         getStats: async () => {
-            // cacache stores content in content-addressable blobs.
-            // Counting entries is hard without listing keys.
-            // Ideally we'd use cacache.ls() but that's slow.
-            // For "size", getting the folder size is accurate enough for user consumption.
+            // Counting entries via cacache.ls() is O(n) and slow for large caches.
+            // Folder-size statistics are accurate enough for user-facing reporting.
             return getDirectoryStats(cachePath);
-        }
+        },
     };
 };

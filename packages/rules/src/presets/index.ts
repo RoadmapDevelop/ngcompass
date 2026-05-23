@@ -1,19 +1,23 @@
 /**
- * Built-in Presets Registry
+ * @fileoverview
+ * Built-in preset registry.
+ *
+ * Maps every shipped preset name to its `PresetConfig` so callers can ask
+ * "is this a built-in preset?" / "give me the rules for `recommended`"
+ * without hand-rolling a switch. References can be written with or
+ * without the `ngcompass:` prefix; both forms resolve to the same entry.
  */
 
-import { PresetConfig, BuiltinPreset } from "@ngcompass/common";
-import { recommendedPreset } from './recommended.js';
-import { strictPreset } from './strict.js';
+import type { BuiltinPreset, PresetConfig } from '@ngcompass/common';
 import { allPreset } from './all.js';
 import { performancePreset } from './performance.js';
 import { reactivityPreset } from './reactivity.js';
+import { recommendedPreset } from './recommended.js';
 import { securityPreset } from './security.js';
 import { ssrPreset } from './ssr.js';
+import { strictPreset } from './strict.js';
 
-/**
- * Registry of built-in presets
- */
+/** Canonical map of preset name → config. */
 export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map([
     ['recommended', recommendedPreset],
     ['strict', strictPreset],
@@ -24,31 +28,23 @@ export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map(
     ['all', allPreset],
 ]);
 
-/**
- * Check if a preset name is a built-in preset
- */
-export const isBuiltinPreset = (name: string): boolean => {
-    const normalized = name.replace(/^ngcompass:/, '') as BuiltinPreset;
-    return builtinPresets.has(normalized);
-};
+/** Strips the `ngcompass:` prefix when present. Idempotent. */
+const stripPrefix = (name: string): BuiltinPreset =>
+    name.replace(/^ngcompass:/, '') as BuiltinPreset;
 
-/**
- * Get a built-in preset by name
- */
-export const getBuiltinPreset = (name: string): PresetConfig | undefined => {
-    const normalized = name.replace(/^ngcompass:/, '') as BuiltinPreset;
-    return builtinPresets.get(normalized);
-};
+/** Returns `true` when `name` (with or without `ngcompass:` prefix) is built-in. */
+export const isBuiltinPreset = (name: string): boolean =>
+    builtinPresets.has(stripPrefix(name));
 
-/**
- * Returns all preset names that include the given rule.
- */
+/** Returns the `PresetConfig` for `name`, or `undefined` when unknown. */
+export const getBuiltinPreset = (name: string): PresetConfig | undefined =>
+    builtinPresets.get(stripPrefix(name));
+
+/** Returns every preset name that lists `ruleName` in its rules block. */
 export function getPresetsForRule(ruleName: string): string[] {
     const result: string[] = [];
     for (const [presetName, preset] of builtinPresets) {
-        if (ruleName in preset.rules) {
-            result.push(presetName);
-        }
+        if (ruleName in preset.rules) result.push(presetName);
     }
     return result;
 }

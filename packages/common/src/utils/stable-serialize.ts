@@ -1,7 +1,8 @@
 /**
- * Stable Serialization Utility
+ * @fileoverview
+ * Deterministic JSON serializer for cache keys and hashes.
  *
- * Produces a deterministic JSON string suitable for use in cache keys and hashes.
+ * Produces a stable JSON string suitable for use in cache keys and hashes.
  *
  * Guarantees:
  *  - Objects: keys sorted alphabetically at every depth level
@@ -17,6 +18,12 @@
  * keys must not affect the resulting string (e.g. batch keys, cache keys).
  */
 
+/**
+ * Error raised when a value cannot be represented as deterministic JSON.
+ *
+ * The `path` records the nested key/index trail to the invalid value so cache
+ * callers can produce actionable diagnostics instead of a generic hash failure.
+ */
 export class SerializationError extends Error {
     constructor(
         message: string,
@@ -50,6 +57,11 @@ export function stableSerialize(
         );
     }
 
+    // Primitive dispatch. Cases that don't match here (i.e. `typeof` is
+    // `'object'`, `'symbol'`, or `'bigint'`) fall through to the blocks
+    // below: `'object'` is handled by the Date/RegExp/Array/object branches
+    // and `'symbol'` / `'bigint'` reach the fallback `JSON.stringify` at
+    // the end.
     switch (typeof value) {
         case 'boolean':
             return value ? 'true' : 'false';
@@ -58,7 +70,7 @@ export function stableSerialize(
             if (!Number.isFinite(value)) {
                 throw new SerializationError(
                     `Non-finite number (${String(value)}) is not a valid hash input`,
-                    _path
+                    _path,
                 );
             }
             return String(value);
@@ -69,7 +81,7 @@ export function stableSerialize(
         case 'function':
             throw new SerializationError(
                 'Functions are not valid hash inputs',
-                _path
+                _path,
             );
     }
 

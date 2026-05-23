@@ -7,26 +7,31 @@
  * analytical state, result aggregation, and caching strategies.
  */
 
-import os from "node:os";
+import { fork } from "node:child_process";
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { fork } from "node:child_process";
+import os from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync } from "node:fs";
 import v8 from "node:v8";
+
+import { CacheContext } from "@ngcompass/cache";
+import { AnalysisResult, Err, Ok, ParserOptions, Result, RuleResult } from "@ngcompass/common";
+import { createInfrastructureError, debug, InfrastructureErrorCollector } from "@ngcompass/common";
+import { ExecutionPlanOutput, groupTasksByFile, Task } from "@ngcompass/planner";
 import pLimit from "p-limit";
 
-import { Task, ExecutionPlanOutput, groupTasksByFile } from "@ngcompass/planner";
-import { CacheContext } from "@ngcompass/cache";
-import { RuleResult, Result, Ok, Err, AnalysisResult, ParserOptions } from "@ngcompass/common";
-import { debug, createInfrastructureError, InfrastructureErrorCollector } from "@ngcompass/common";
-
 import { createAnalysisContext } from "./analysis-context.js";
-import { createTypeAwareAnalysisContext } from "./type-aware-context.js";
-import { runAnalysisParallel } from "./worker-pool.js";
 import { calculateStats } from "./analysis-stats.js";
+import {
+    AnalysisFileProgress,
+    buildFileProgress,
+    isAnalysisFileProgress,
+} from "./progress.js";
 import { executeBatchedTasks } from "./runner.js";
+import { createTypeAwareAnalysisContext, isTsProgramRoot } from "./type-aware-context.js";
+import { runAnalysisParallel } from "./worker-pool.js";
 
 const DEFAULT_TYPE_AWARE_CHUNK_SIZE = 100;
 const DEFAULT_TYPE_AWARE_CONCURRENCY = 1;
@@ -47,16 +52,12 @@ const TYPE_AWARE_CHILD_TIMEOUT_MS = 10 * 60 * 1000;
 const DEPENDENCY_GROUPING_CONCURRENCY = 64;
 const DEPENDENCY_GROUPING_TIMEOUT_MS = 5_000;
 
-export interface AnalysisFileProgress {
-    readonly filePath: string;
-    readonly taskCount: number;
-    readonly issueCount: number;
-    readonly errorCount: number;
-    readonly warningCount: number;
-    readonly duration: number;
-    readonly cached?: boolean;
-    readonly typeAware?: boolean;
-}
+/** Task-count threshold above which the worker pool is used instead of local pLimit. */
+const DEFAULT_PARALLEL_THRESHOLD = 150;
+
+// Re-export `AnalysisFileProgress` so callers that already imported it from
+// `@ngcompass/engine` (which re-exports `* from './orchestrator.js'`) keep working.
+export type { AnalysisFileProgress } from "./progress.js";
 
 interface TypeAwareChunkWork {
     readonly index: number;
@@ -147,7 +148,7 @@ export interface AnalysisOptions {
     /**
      * All files discovered by the scanner for this run.
      *
-     * CTX-001: Forwarded to `createTypeAwareAnalysisContext()` so the
+     * Forwarded to `createTypeAwareAnalysisContext()` so the
      * `ProjectContext` import-graph builder can restrict edges to intra-project
      * imports and correctly populate `ProjectContext.projectFiles`.
      *
@@ -251,7 +252,7 @@ export const runAnalysis = async (
         const cpuCount = os.cpus().length;
         const defaultWorkerCount = Math.max(1, Math.min(4, cpuCount - 1));
         const effectiveMaxWorkers = Math.max(1, Math.min(options.maxWorkers ?? defaultWorkerCount, cpuCount));
-        const parallelThreshold = options.parallelThreshold ?? 150;
+        const parallelThreshold = options.parallelThreshold ?? DEFAULT_PARALLEL_THRESHOLD;
 
         const typeAwareTasks = tasks.filter(t => !!t.needsTypeChecker || !!t.needsProjectContext);
         const workerTasks    = tasks.filter(t => !t.needsTypeChecker  && !t.needsProjectContext);
@@ -367,7 +368,7 @@ const executeTasksLocally = async (
     concurrency: number,
     useTypeAwareContext: boolean,
     errorCollector?: InfrastructureErrorCollector,
-    /** CTX-001: scanner-discovered files forwarded to ProjectContext builder. */
+    /** Scanner-discovered files forwarded to ProjectContext builder. */
     files?: ReadonlyArray<string>,
     parserOptions?: ParserOptions,
     buildProjectContext = true,
@@ -457,18 +458,26 @@ const executeTypeAwareTasks = async (
     const allResults: RuleResult[] = [];
     const limit = pLimit(concurrency);
 
+    // Use the full scanner-discovered file list for ProjectContext construction
+    // when available. `chunk.files` is only the .ts files this chunk runs tasks
+    // for — passing that as projectFileSet causes buildComponentGraph to miss
+    // .html siblings, which silently disables template rules on external
+    // (templateUrl) templates. The TS Program still uses chunk.programRootFiles.
+    const projectFiles = options.files && options.files.length > 0 ? options.files : undefined;
+
     for (const wave of buildTypeAwareChunkWaves(fileEntries, chunkSize, adaptiveChunkCap, concurrency)) {
         const waveResults = await Promise.all(wave.map(chunk => limit(async () => {
             debug("engine", `Type-aware chunk ${chunk.index}: ${chunk.files.length} files, ${chunk.programRootFiles.length} TS roots, ${chunk.tasks.length} tasks`);
+            const filesForContext = projectFiles ?? chunk.files;
             const results = useProcessIsolation
-                ? await executeTypeAwareChunkInChildProcess(chunk.tasks, rootDir, chunk.files, chunk.programRootFiles, chunk.buildProjectContext, fileConcurrency, options, onFileProgress)
+                ? await executeTypeAwareChunkInChildProcess(chunk.tasks, rootDir, filesForContext, chunk.programRootFiles, chunk.buildProjectContext, fileConcurrency, options, onFileProgress)
                 : await executeTasksLocally(
                     chunk.tasks,
                     rootDir,
                     fileConcurrency,
                     true,
                     options.errorCollector,
-                    chunk.files,
+                    filesForContext,
                     options.parserOptions,
                     chunk.buildProjectContext,
                     chunk.programRootFiles,
@@ -635,9 +644,7 @@ const getTypeScriptRootFiles = (tasks: ReadonlyArray<Task>): string[] => {
     const roots = new Set<string>();
     for (const task of tasks) {
         const tsPath = task.inputs.typescript.path;
-        if ((tsPath.endsWith('.ts') || tsPath.endsWith('.tsx')) && !tsPath.endsWith('.d.ts')) {
-            roots.add(tsPath);
-        }
+        if (isTsProgramRoot(tsPath)) roots.add(tsPath);
     }
     return [...roots];
 };
@@ -833,18 +840,6 @@ const resolveTypeAwareWorkerPath = async (): Promise<string | null> => {
     return null;
 };
 
-const isAnalysisFileProgress = (message: unknown): message is AnalysisFileProgress => {
-    if (!message || typeof message !== 'object') return false;
-    const value = message as Partial<AnalysisFileProgress> & { kind?: unknown };
-    return value.kind === 'file-progress' &&
-        typeof value.filePath === 'string' &&
-        typeof value.taskCount === 'number' &&
-        typeof value.issueCount === 'number' &&
-        typeof value.errorCount === 'number' &&
-        typeof value.warningCount === 'number' &&
-        typeof value.duration === 'number';
-};
-
 const isTypeAwareChildComplete = (message: unknown): message is { kind: 'complete'; results: RuleResult[] } => {
     return !!message &&
         typeof message === 'object' &&
@@ -857,34 +852,6 @@ const isTypeAwareChildError = (message: unknown): message is { kind: 'error'; er
         typeof message === 'object' &&
         (message as { kind?: unknown }).kind === 'error' &&
         typeof (message as { error?: unknown }).error === 'string';
-};
-
-const buildFileProgress = (
-    filePath: string,
-    taskCount: number,
-    results: ReadonlyArray<RuleResult>,
-    duration: number,
-    typeAware?: boolean,
-): AnalysisFileProgress => {
-    let errorCount = 0;
-    let warningCount = 0;
-
-    for (const result of results) {
-        for (const failure of result.failures) {
-            if (failure.severity === 'error') errorCount++;
-            else if (failure.severity === 'warn') warningCount++;
-        }
-    }
-
-    return {
-        filePath,
-        taskCount,
-        issueCount: errorCount + warningCount,
-        errorCount,
-        warningCount,
-        duration,
-        typeAware,
-    };
 };
 
 /**

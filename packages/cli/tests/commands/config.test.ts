@@ -70,7 +70,9 @@ describe('Config Command', () => {
 
         await program.parseAsync(['node', 'test', 'config', 'health']);
 
-        expect(mockConsoleError).toHaveBeenCalledWith('Error: Validation Crash');
+        expect(mockConsoleError).toHaveBeenCalled();
+        const errorArg = String(mockConsoleError.mock.calls[0][0]);
+        expect(errorArg).toContain('Validation Crash');
         expect(mockExit).toHaveBeenCalledWith(1);
     });
 });

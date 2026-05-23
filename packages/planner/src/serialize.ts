@@ -1,5 +1,29 @@
-import type { ExecutionPlanOutput, Task, FileAnalysisUnit, RuleTask, FileInput } from "./types.js";
-import { buildIndexes } from "./indexes.js";
+/**
+ * @fileoverview
+ * Compact (de)serializer for `ExecutionPlanOutput`.
+ *
+ * Reduces on-disk plan size by interning every repeated string (rule names,
+ * file paths, content hashes) and every repeated rule-options object so the
+ * serialized blob holds only small numeric IDs per task.
+ *
+ * Compact layout (`CompactPlan`):
+ *   v – schema version: bumped when the tuple layout changes
+ *   r – rule-name table       (id ↔ string)
+ *   o – options table         (id ↔ options object)
+ *   f – file-path table       (id ↔ string)
+ *   h – content-hash table    (id ↔ string)
+ *   t – unit list             (CompactUnit tuples)
+ *
+ * Backward compatibility: each version bump must remain deserializable from
+ * the previous shape; missing trailing tuple entries default to `undefined`
+ * so older cache entries keep working until they are naturally invalidated.
+ */
+
+import { buildIndexes } from './indexes.js';
+import type { ExecutionPlanOutput, FileAnalysisUnit, FileInput, RuleTask, Task } from './types.js';
+
+/** Current schema version. Bump when the tuple shape changes. */
+const CURRENT_VERSION = 2;
 
 type CompactOptionValue = Readonly<Record<string, unknown>>;
 type CompactInput = [fileId: number, hashId: number, needsAstFlag: number];
@@ -12,7 +36,10 @@ type CompactRuleTask = [
     tpl?: CompactInput,
     styles?: CompactInput[],
     spec?: CompactInput,
+    /** 1 when the task needs the TypeScript type-checker. */
     needsTypeChecker?: number,
+    /** 1 when the task needs the project-wide `ProjectContext`. */
+    needsProjectContext?: number,
 ];
 type CompactUnit = [
     fileId: number,
@@ -30,22 +57,21 @@ interface CompactPlan {
     t: CompactUnit[];
 }
 
-/**
- * Serializes ExecutionPlanOutput into a compact format.
- *
- * @param output - Full execution plan output
- * @returns Compact plan representation
- */
+// ── Public API ────────────────────────────────────────────────────────────
+
+/** Encodes `output` as a {@link CompactPlan} suitable for persistent storage. */
 export const serializePlan = (output: ExecutionPlanOutput): CompactPlan => {
     const rules = new StringInterner();
     const files = new StringInterner();
     const hashes = new StringInterner();
     const options = new ReferenceInterner<CompactOptionValue>();
 
-    const units = Object.values(output.plan).map((unit) => serializeUnit(unit, rules, files, hashes, options));
+    const units = Object.values(output.plan).map((unit) =>
+        serializeUnit(unit, rules, files, hashes, options),
+    );
 
     return {
-        v: 1,
+        v: CURRENT_VERSION,
         r: rules.values(),
         o: options.values(),
         f: files.values(),
@@ -54,12 +80,7 @@ export const serializePlan = (output: ExecutionPlanOutput): CompactPlan => {
     };
 };
 
-/**
- * Deserializes CompactPlan back to ExecutionPlanOutput.
- *
- * @param compact - Compact plan representation
- * @returns Fully reconstructed execution plan output
- */
+/** Restores a `CompactPlan` into a full `ExecutionPlanOutput`. */
 export const deserializePlan = (compact: CompactPlan): ExecutionPlanOutput => {
     const { r: rules, o: options, f: files, h: hashes, t: units } = compact;
 
@@ -67,74 +88,38 @@ export const deserializePlan = (compact: CompactPlan): ExecutionPlanOutput => {
     const allTasks: Task[] = [];
 
     for (const unitData of units) {
-        const { filePath, fileType, fileHash, ruleTasks } = deserializeUnit(unitData, rules, files, hashes, options);
-
-        plan[filePath] = {
-            file: { path: filePath, type: fileType, hash: fileHash },
-            tasks: ruleTasks,
-        };
-
-        for (const rt of ruleTasks) {
-            allTasks.push(toTask(filePath, rt));
-        }
+        const { filePath, fileType, fileHash, ruleTasks } = deserializeUnit(
+            unitData, rules, files, hashes, options,
+        );
+        plan[filePath] = { file: { path: filePath, type: fileType, hash: fileHash }, tasks: ruleTasks };
+        for (const rt of ruleTasks) allTasks.push(toTask(filePath, rt));
     }
 
     const indexes = buildIndexes(plan, allTasks);
     return { tasks: allTasks, plan, indexes, skippedTasks: [] };
 };
 
-/**
- * Serializes a single FileAnalysisUnit.
- *
- * @param unit - FileAnalysisUnit
- * @param rules - Rule name interner
- * @param files - File path interner
- * @param hashes - Hash interner
- * @param options - Options interner (reference-based)
- * @returns Compact unit tuple
- */
+// ── Unit (de)serialization ────────────────────────────────────────────────
+
 const serializeUnit = (
     unit: FileAnalysisUnit,
     rules: StringInterner,
     files: StringInterner,
     hashes: StringInterner,
-    options: ReferenceInterner<CompactOptionValue>
+    options: ReferenceInterner<CompactOptionValue>,
 ): CompactUnit => {
     const fileId = files.id(unit.file.path);
     const fileHashId = hashes.idOrMinusOne(unit.file.hash);
-
     const tasks = unit.tasks.map((task) => serializeRuleTask(task, rules, files, hashes, options));
-
     return [fileId, unit.file.type, fileHashId, tasks];
 };
 
-/**
- * Serializes a RuleTask into compact tuple representation.
- *
- * Tuple layout (index → field):
- *   0  ruleId          – StringInterner id for ruleName
- *   1  severity        – RuleSeverity string
- *   2  optId           – ReferenceInterner id for options
- *   3  cacheKeyId      – hash id (or -1)
- *   4  ts              – encoded TypeScript FileInput
- *   5  tpl             – encoded template FileInput (or undefined)
- *   6  styles          – encoded style FileInputs (or undefined)
- *   7  spec            – encoded spec FileInput (or undefined)
- *   8  needsTypeChecker – 1 if the rule requires the TypeChecker, else 0
- *
- * @param task - RuleTask
- * @param rules - Rule name interner
- * @param files - File path interner
- * @param hashes - Hash interner
- * @param options - Options interner
- * @returns Compact task tuple
- */
 const serializeRuleTask = (
     task: RuleTask,
     rules: StringInterner,
     files: StringInterner,
     hashes: StringInterner,
-    options: ReferenceInterner<CompactOptionValue>
+    options: ReferenceInterner<CompactOptionValue>,
 ): CompactRuleTask => {
     const ruleId = rules.id(task.ruleName);
     const optId = options.id(task.options);
@@ -148,38 +133,20 @@ const serializeRuleTask = (
             : undefined;
     const spec = task.inputs.spec ? encodeInput(task.inputs.spec, files, hashes) : undefined;
     const typeCheckerFlag = task.needsTypeChecker ? 1 : 0;
+    const projectContextFlag = task.needsProjectContext ? 1 : 0;
 
-    return [ruleId, task.severity, optId, cacheKeyId, ts, tpl, styles, spec, typeCheckerFlag];
+    return [ruleId, task.severity, optId, cacheKeyId, ts, tpl, styles, spec, typeCheckerFlag, projectContextFlag];
 };
 
-/**
- * Encodes a FileInput as a compact tuple.
- *
- * @param input - FileInput
- * @param files - File path interner
- * @param hashes - Hash interner
- * @returns Compact input tuple [fileId, hashId, needsAstFlag]
- */
-const encodeInput = (input: FileInput, files: StringInterner, hashes: StringInterner): CompactInput => {
-    return [files.id(input.path), hashes.idOrMinusOne(input.hash), input.needsAst ? 1 : 0];
-};
+const encodeInput = (input: FileInput, files: StringInterner, hashes: StringInterner): CompactInput =>
+    [files.id(input.path), hashes.idOrMinusOne(input.hash), input.needsAst ? 1 : 0];
 
-/**
- * Deserializes a compact unit tuple.
- *
- * @param unitData - Compact unit tuple
- * @param rules - Rule names
- * @param files - File paths
- * @param hashes - Hash strings
- * @param options - Options values
- * @returns Reconstructed unit data
- */
 const deserializeUnit = (
     unitData: CompactUnit,
     rules: string[],
     files: string[],
     hashes: string[],
-    options: CompactOptionValue[]
+    options: CompactOptionValue[],
 ): {
     filePath: string;
     fileType: FileAnalysisUnit['file']['type'];
@@ -187,41 +154,33 @@ const deserializeUnit = (
     ruleTasks: RuleTask[];
 } => {
     const [fileId, fileType, fileHashId, tasksData] = unitData;
-
     const filePath = files[fileId];
     const fileHash = decodeHash(fileHashId, hashes);
-
-    const ruleTasks: RuleTask[] = tasksData.map((taskData) =>
-        deserializeRuleTask(taskData, rules, files, hashes, options)
+    const ruleTasks = tasksData.map((taskData) =>
+        deserializeRuleTask(taskData, rules, files, hashes, options),
     );
-
     return { filePath, fileType, fileHash, ruleTasks };
 };
 
 /**
- * Deserializes a compact RuleTask tuple.
- *
- * Element [8] (needsTypeChecker flag) is optional for backward compatibility
- * with v1 entries written before the field was introduced. When absent the
- * flag defaults to false, meaning old cached plans are safe to read — the
- * TypeChecker index will simply be empty for those entries until they are
- * regenerated on the next cold build.
- *
- * @param tData - Compact task tuple
- * @param rules - Rule names
- * @param files - File paths
- * @param hashes - Hash strings
- * @param options - Options values
- * @returns RuleTask
+ * Trailing tuple elements (`needsTypeChecker`, `needsProjectContext`) are
+ * optional for backward compatibility with older entries written before the
+ * flag was added. Missing values default to `undefined` (treated as `false`
+ * by the engine), causing the corresponding capability index to be empty
+ * until the plan is regenerated.
  */
 const deserializeRuleTask = (
     tData: CompactRuleTask,
     rules: string[],
     files: string[],
     hashes: string[],
-    options: CompactOptionValue[]
+    options: CompactOptionValue[],
 ): RuleTask => {
-    const [ruleId, severity, optId, cacheKeyId, tsCompact, tplCompact, stylesCompact, specCompact, typeCheckerFlag] = tData;
+    const [
+        ruleId, severity, optId, cacheKeyId,
+        tsCompact, tplCompact, stylesCompact, specCompact,
+        typeCheckerFlag, projectContextFlag,
+    ] = tData;
 
     const ruleName = rules[ruleId];
     const ruleOptions = options[optId];
@@ -229,64 +188,44 @@ const deserializeRuleTask = (
 
     const inputs: RuleTask['inputs'] = { typescript: decodeInput(tsCompact, files, hashes) };
     if (tplCompact) inputs.template = decodeInput(tplCompact, files, hashes);
-    if (stylesCompact) inputs.styles = stylesCompact.map((styleInput) => decodeInput(styleInput, files, hashes));
+    if (stylesCompact) inputs.styles = stylesCompact.map((s) => decodeInput(s, files, hashes));
     if (specCompact) inputs.spec = decodeInput(specCompact, files, hashes);
 
-    // typeCheckerFlag is 1 when present; absent in pre-fix v1 entries (defaults to false).
-    const needsTypeChecker = typeCheckerFlag === 1 ? true : undefined;
-
-    return { ruleName, severity, options: ruleOptions, cacheKey, inputs, needsTypeChecker };
-};
-
-/**
- * Decodes a compact input tuple into a FileInput.
- *
- * @param d - Compact tuple [fileId, hashId, needsAstFlag]
- * @param files - File paths
- * @param hashes - Hash strings
- * @returns FileInput
- */
-const decodeInput = (d: CompactInput, files: string[], hashes: string[]): FileInput => {
     return {
-        path: files[d[0]],
-        hash: decodeHash(d[1], hashes),
-        needsAst: d[2] === 1,
+        ruleName,
+        severity,
+        options: ruleOptions,
+        cacheKey,
+        inputs,
+        needsTypeChecker: typeCheckerFlag === 1 ? true : undefined,
+        needsProjectContext: projectContextFlag === 1 ? true : undefined,
     };
 };
 
-/**
- * Decodes a hash ID into a string.
- *
- * @param hashId - Hash ID or -1
- * @param hashes - Hash table
- * @returns Hash string or empty
- */
-const decodeHash = (hashId: number, hashes: string[]): string => {
-    return hashId >= 0 ? hashes[hashId] : "";
-};
+const decodeInput = (d: CompactInput, files: string[], hashes: string[]): FileInput => ({
+    path: files[d[0]],
+    hash: decodeHash(d[1], hashes),
+    needsAst: d[2] === 1,
+});
 
-/**
- * Converts a RuleTask to a Task.
- *
- * @param filePath - File path
- * @param ruleTask - RuleTask
- * @returns Task
- */
-const toTask = (filePath: string, ruleTask: RuleTask): Task => {
-    return {
-        taskId: ruleTask.cacheKey,
-        filePath,
-        ruleName: ruleTask.ruleName,
-        severity: ruleTask.severity,
-        options: ruleTask.options,
-        inputs: ruleTask.inputs,
-        needsTypeChecker: ruleTask.needsTypeChecker,
-    };
-};
+const decodeHash = (hashId: number, hashes: string[]): string =>
+    hashId >= 0 ? hashes[hashId] : '';
 
-/**
- * Interns strings and returns stable numeric IDs.
- */
+/** Converts the persisted {@link RuleTask} shape back into the task-centric `Task`. */
+const toTask = (filePath: string, ruleTask: RuleTask): Task => ({
+    taskId: ruleTask.cacheKey,
+    filePath,
+    ruleName: ruleTask.ruleName,
+    severity: ruleTask.severity,
+    options: ruleTask.options,
+    inputs: ruleTask.inputs,
+    needsTypeChecker: ruleTask.needsTypeChecker,
+    needsProjectContext: ruleTask.needsProjectContext,
+});
+
+// ── Interning helpers ─────────────────────────────────────────────────────
+
+/** Interns strings, assigning stable numeric IDs. */
 class StringInterner {
     private readonly map = new Map<string, number>();
     private readonly list: string[] = [];
@@ -294,13 +233,13 @@ class StringInterner {
     public id(value: string): number {
         const existing = this.map.get(value);
         if (existing !== undefined) return existing;
-
         const next = this.list.length;
         this.map.set(value, next);
         this.list.push(value);
         return next;
     }
 
+    /** Returns `-1` for empty strings so callers can store optional hashes compactly. */
     public idOrMinusOne(value: string): number {
         if (!value) return -1;
         return this.id(value);
@@ -311,9 +250,7 @@ class StringInterner {
     }
 }
 
-/**
- * Interns objects by reference identity.
- */
+/** Interns objects by reference identity (shared options dedupe across tasks). */
 class ReferenceInterner<T> {
     private readonly map = new Map<T, number>();
     private readonly list: T[] = [];
@@ -321,7 +258,6 @@ class ReferenceInterner<T> {
     public id(value: T): number {
         const existing = this.map.get(value);
         if (existing !== undefined) return existing;
-
         const next = this.list.length;
         this.map.set(value, next);
         this.list.push(value);
@@ -333,3 +269,5 @@ class ReferenceInterner<T> {
     }
 }
 
+// Exposed for the builder's version-compatibility check.
+export { CURRENT_VERSION as PLAN_SCHEMA_VERSION };

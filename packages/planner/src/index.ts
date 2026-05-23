@@ -1,105 +1,105 @@
 /**
- * Planner Module
+ * @fileoverview
+ * Public entry point for `@ngcompass/planner`.
  *
- * Phase 1.75: Build Execution Map
- * Maps discovered files + resolved rules → executable tasks with indexes
- *
- * @module planner
+ * The planner turns the scanner's file list plus the resolved rule set into
+ * an `ExecutionPlanOutput`: a flat task array, a file-centric plan view, and
+ * pre-computed indexes consumed by the engine. Cache layering, incremental
+ * filtering, and worker-thread orchestration all live inside the builder —
+ * external consumers see only the inputs / outputs surfaced here.
  */
 
-// Main builder
+// ── Core builder ─────────────────────────────────────────────────────────
 export { buildExecutionPlan, getExecutionPlanSummary } from './builder.js';
 
-// Types
+// ── Public types ─────────────────────────────────────────────────────────
 export type {
-    // Phase 1.75
-    ExecutionPlanOutput,
-    ExecutionPlan,
+    CacheFilterStats,
+    CachePruneOptions,
     ExecutionIndexes,
+    ExecutionPlan,
+    ExecutionPlanOptions,
+    ExecutionPlanOutput,
     ExecutionStats,
     FileAnalysisUnit,
     FileInfo,
+    FileInput,
     FileType,
+    IncrementalFilterOptions,
+    IncrementalPlan,
+    ResourceType,
+    Result,
     RuleTask,
     Task,
     TaskInputs,
-    FileInput,
-    ResourceType,
-    ExecutionPlanOptions,
-    Result,
-    // Phase 2.0
-    IncrementalPlan,
-    CacheFilterStats,
-    IncrementalFilterOptions,
-    CachePruneOptions,
 } from './types.js';
 
 export { Ok, Err } from './types.js';
 
-// Utilities
+// ── File-type detection ──────────────────────────────────────────────────
 export {
     detectFileType,
-    isTypeScriptFile,
-    isTemplateFile,
-    isStyleFile,
-    isSpecFile,
     isComponentFile,
+    isSpecFile,
+    isStyleFile,
+    isTemplateFile,
+    isTypeScriptFile,
     getBaseName,
 } from './file-type.js';
 
+// ── Resource discovery ───────────────────────────────────────────────────
 export {
     discoverResources,
-    resourceExists,
+    getSpecFile,
     getStyleFiles,
     getTemplateFile,
-    getSpecFile,
+    resourceExists,
 } from './resources.js';
 
+// ── Task building ────────────────────────────────────────────────────────
 export {
-    shouldApplyRule,
     buildTask,
-    buildTasksForFileTaskCentric as buildTasksForFile, // Backward compat alias
+    /** Backward-compat alias for `buildTasksForFileTaskCentric`. */
+    buildTasksForFileTaskCentric as buildTasksForFile,
     filterRulesByAstRequirement,
     groupRulesByDependencyType,
+    shouldApplyRule,
 } from './task-builder.js';
 
+// ── Hashing primitives ───────────────────────────────────────────────────
 export {
+    calculateFileHash,
     hashFile,
+    hashFileStats,
     hashFiles,
     hashRules,
-    calculateFileHash,
     hashTaskInputs,
-    hashFileStats,
 } from './hashing.js';
 
+// ── Index queries ────────────────────────────────────────────────────────
 export {
     buildIndexes,
     getFilesForRules,
-    getTotalTasks,
     getTasksCountBySeverity,
+    getTotalTasks,
 } from './indexes.js';
 
-// Phase 2.0: Incremental Analysis
+// ── Incremental (cache-driven) filtering ─────────────────────────────────
 export {
-    filterCachedTasks,
     areAllTasksCached,
+    filterCachedTasks,
     getCacheHitRate,
     pruneStaleCache,
 } from './incremental.js';
 
+// ── Utility helpers ──────────────────────────────────────────────────────
 export { groupTasksByFile } from './utils.js';
 
-// ==============================================================================
-// INTEGRATION UTILITIES (Scanner → Planner bridge)
-// ==============================================================================
-
+// ── Scanner ↔ planner bridge ─────────────────────────────────────────────
 export {
-    scanResultToPlanInput,
-    hasScanFiles,
     getScanFileCount,
+    hasScanFiles,
+    scanResultToPlanInput,
 } from './integration.js';
 
-export type {
-    ScanResultBridge,
-    ScanToPlanOptions,
-} from './integration.js';
+export type { ScanResultBridge, ScanToPlanOptions } from './integration.js';

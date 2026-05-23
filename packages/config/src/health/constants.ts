@@ -1,14 +1,18 @@
-export const SEVERITY_LEVELS: Record<string, number> = {
-    info: 0,
-    low: 1,
-    warning: 2,
-    warn: 2,
-    moderate: 2,
-    high: 3,
-    error: 4,
-    critical: 4,
-};
+/**
+ * @fileoverview
+ * Shared constants for the configuration health-check pipeline.
+ *
+ * The accepted rule severity vocabulary is kept in lockstep with the
+ * `SeveritySchema` in `../schemas/schema.ts`. Any change here must be
+ * mirrored there or schema validation and semantic validation will
+ * disagree on what counts as a valid severity.
+ */
 
-export const VALID_SEVERITIES = Object.keys(SEVERITY_LEVELS);
-export const VALID_RULE_SEVERITIES = [...VALID_SEVERITIES, "off"];
-
+/**
+ * Severities accepted by individual rule entries.
+ *
+ * Mirrors the union accepted by `RuleDefinitionSchema` in the Zod schema:
+ * - `'warn'` / `'error'` enable the rule at the given severity.
+ * - `'off'` disables the rule.
+ */
+export const VALID_RULE_SEVERITIES: readonly string[] = ['warn', 'error', 'off'];

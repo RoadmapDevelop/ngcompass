@@ -1,22 +1,40 @@
+/**
+ * @fileoverview
+ * Single-file pack driver: all entries are V8-serialized into one `.pack`
+ * file on disk.
+ *
+ * Compared to cacache (which writes one file per entry) this driver performs
+ * O(1) disk writes per flush regardless of how many entries are pending,
+ * eliminating the N-file bottleneck visible after a large analysis run.
+ *
+ * Trade-off: the pack is held entirely in memory after first access. This
+ * is acceptable for the result cache (~2–10 MB on typical projects) but
+ * unsuitable for AST caches that can grow into the hundreds of megabytes.
+ *
+ * The primary fast path is {@link AsyncDriver.bulkSet}. The single-entry
+ * `set()` still re-serializes and writes the whole pack — use the buffered
+ * upstream path (`ResultCache.setMany` → `flush`) for high-volume writes.
+ */
+
 import fs from 'node:fs/promises';
-import v8 from 'node:v8';
 import path from 'node:path';
-import { AsyncDriver, DriverStats } from './types.js';
+import v8 from 'node:v8';
+import writeFileAtomic from 'write-file-atomic';
+import type { AsyncDriver, DriverStats } from './types.js';
+
+const PACK_SUFFIX = '.pack';
 
 /**
- * A single-file cache driver that stores all entries in one v8-serialized pack.
+ * Builds a packed-file driver bound to `config.path` (the `.pack` suffix is
+ * appended automatically).
  *
- * Compared to cacache (one file per entry), this driver does ONE file write on
- * flush regardless of how many entries are pending — eliminating the N-file write
- * bottleneck that causes a visible delay after analysis completes.
- *
- * Trade-off: the pack file is read entirely into memory on first access.
- * For result caches this is acceptable (~2–10 MB for typical projects).
+ * @param config - Driver configuration; only `path` is used.
+ * @returns An {@link AsyncDriver} with a required `bulkSet` method.
  */
 export const createPackedFileDriver = <T>(config: { path: string }): AsyncDriver<T> & {
     bulkSet(entries: ReadonlyArray<readonly [string, T]>): Promise<void>;
 } => {
-    const filePath = config.path + '.pack';
+    const filePath = config.path + PACK_SUFFIX;
     const map = new Map<string, T>();
     let loaded = false;
 
@@ -28,47 +46,46 @@ export const createPackedFileDriver = <T>(config: { path: string }): AsyncDriver
             const restored = v8.deserialize(buf) as Map<string, T>;
             for (const [k, v] of restored) map.set(k, v);
         } catch {
-            // File doesn't exist yet — start empty
+            // File doesn't exist yet — start empty.
         }
     };
 
     const save = async (): Promise<void> => {
-        const dir = path.dirname(filePath);
-        await fs.mkdir(dir, { recursive: true });
-        const buf = v8.serialize(map);
-        const tmp = filePath + '.tmp';
-        await fs.writeFile(tmp, buf);
-        await fs.rename(tmp, filePath);
+        await fs.mkdir(path.dirname(filePath), { recursive: true });
+        await writeFileAtomic(filePath, v8.serialize(map));
     };
 
     return {
-        get: async (key: string): Promise<T | undefined> => {
+        get: async (key) => {
             await ensureLoaded();
             return map.get(key);
         },
 
-        set: async (key: string, value: T): Promise<void> => {
+        set: async (key, value) => {
+            // Single-entry set rewrites the whole pack. High-volume callers
+            // should use bulkSet (via ResultCache.setMany + flush) instead.
             await ensureLoaded();
             map.set(key, value);
             await save();
         },
 
-        has: async (key: string): Promise<boolean> => {
+        has: async (key) => {
             await ensureLoaded();
             return map.has(key);
         },
 
-        delete: async (key: string): Promise<void> => {
+        delete: async (key) => {
             await ensureLoaded();
             map.delete(key);
             await save();
         },
 
-        clear: async (): Promise<void> => {
+        clear: async () => {
             map.clear();
+            // Mark as loaded so the next operation doesn't try to re-read the
+            // (now-deleted) file off disk.
             loaded = true;
             try { await fs.unlink(filePath); } catch { /* already gone */ }
-            try { await fs.unlink(filePath + '.tmp'); } catch { /* ignore */ }
         },
 
         getStats: async (): Promise<DriverStats> => {
@@ -77,15 +94,13 @@ export const createPackedFileDriver = <T>(config: { path: string }): AsyncDriver
             try {
                 const stat = await fs.stat(filePath);
                 size = stat.size;
-            } catch { /* file not written yet */ }
+            } catch {
+                // File not written yet.
+            }
             return { entries: map.size, size };
         },
 
-        /**
-         * Write many entries in a single I/O operation.
-         * This is the primary fast path used by drainPendingWrites.
-         */
-        bulkSet: async (entries: ReadonlyArray<readonly [string, T]>): Promise<void> => {
+        bulkSet: async (entries) => {
             await ensureLoaded();
             for (const [k, v] of entries) map.set(k, v);
             await save();

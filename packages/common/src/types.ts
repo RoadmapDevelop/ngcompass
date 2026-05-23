@@ -1,5 +1,13 @@
 /**
- * Core type definitions
+ * @fileoverview
+ * Core domain types shared by every package.
+ *
+ * Defines the analysis vocabulary used end-to-end: severity levels, the
+ * functional `Result<T, E>` type, rule configuration shapes, rule metadata,
+ * preset structures, the `RuleContext` passed to every rule handler, the
+ * aggregate `AnalysisResult`, and worker interop messages. Types defined
+ * here are duplicated structurally, not imported, from `@ngcompass/ast`
+ * and `@ngcompass/planner` to avoid circular dependencies.
  */
 
 import type { Program } from "oxc-parser";
@@ -7,42 +15,57 @@ import type { Locator } from "./utils/locator.js";
 import type { ParseError } from "./errors.js";
 
 /**
- * Violation severity levels:
+ * Violation severity levels.
  *
- *   error  — hard-constraint violations that should block CI / fail the run.
- *   warn   — advisory violations surfaced as warnings.
+ *   error - hard-constraint violations that should block CI / fail the run.
+ *   warn  - advisory violations surfaced as warnings.
  */
 export type Severity = 'warn' | 'error';
 
 /**
- * Rule categories for organization
+ * Rule categories used for preset grouping and reporter organization.
+ *
+ * Exposed as an `as const` object (not a TypeScript `enum`) so the values
+ * are tree-shakeable and produce no runtime helper code. The companion
+ * type alias mirrors the way `enum` projects both a value namespace and a
+ * type for consumers that prefer the explicit form.
  */
-export enum RuleCategory {
-    Architecture = 'architecture',
-    Performance = 'performance',
-    SSR = 'ssr',
-    Security = 'security',
-    Accessibility = 'accessibility',
-    Testing = 'testing',
-    CodeSmell = 'code-smell',
-    Reactivity = 'reactivity',
-    BestPractice = 'best-practice',
-}
+export const RuleCategory = {
+    Architecture: 'architecture',
+    Performance: 'performance',
+    SSR: 'ssr',
+    Security: 'security',
+    Accessibility: 'accessibility',
+    Testing: 'testing',
+    CodeSmell: 'code-smell',
+    Reactivity: 'reactivity',
+    BestPractice: 'best-practice',
+} as const;
+
+export type RuleCategory = typeof RuleCategory[keyof typeof RuleCategory];
 
 /**
- * Result type for functional error handling
+ * Functional result container used for expected domain failures.
+ *
+ * `ok` is the discriminant so callers can narrow without exceptions.
  */
 export type Result<T, E = Error> =
     | { readonly ok: true; readonly data: T }
     | { readonly ok: false; readonly error: E };
 
 /**
- * Creates a successful result
+ * Creates a successful functional result.
+ *
+ * @param data - Success payload.
+ * @returns A result tagged with `ok: true`.
  */
 export const Ok = <T>(data: T): Result<T, never> => ({ ok: true, data });
 
 /**
- * Creates a failed result
+ * Creates a failed functional result.
+ *
+ * @param error - Error payload.
+ * @returns A result tagged with `ok: false`.
  */
 export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 
@@ -50,46 +73,31 @@ export const Err = <E>(error: E): Result<never, E> => ({ ok: false, error });
 // RULE CONFIGURATION
 // ==============================================================================
 
-/**
- * Rule severity levels
- */
 export type RuleSeverity = Severity | 'off';
 
-/**
- * Short-hand rule configuration (just severity)
- */
+/** Shorthand rule configuration where the config value is only severity. */
 export type RuleConfigShorthand = RuleSeverity;
 
-/**
- * Full rule configuration (severity + options)
- */
+/** Full rule configuration with severity plus arbitrary rule options. */
 export interface RuleConfigFull {
     readonly severity: RuleSeverity;
     readonly options?: Readonly<Record<string, unknown>>;
 }
 
-/**
- * Rule configuration (either shorthand or full)
- */
+/** Rule configuration accepted in user config and presets. */
 export type RuleConfig = RuleConfigShorthand | RuleConfigFull;
 
-/**
- * Rules object (ruleName → config)
- */
+/** Rule configuration map keyed by rule name. */
 export type RulesConfig = Readonly<Record<string, RuleConfig>>;
 
 // ==============================================================================
 // RULE METADATA
 // ==============================================================================
 
-/**
- * Dependency types for rules
- */
+/** Structural dependency route used to decide which file clusters a rule needs. */
 export type RuleDependencyType = 'standalone' | 'component' | 'styles' | 'imports' | 'spec';
 
-/**
- * AST requirements for a rule
- */
+/** AST and project resources required by a rule. */
 export interface RuleAstRequirements {
     readonly tsAst?: boolean;
     readonly htmlAst?: boolean;
@@ -98,7 +106,7 @@ export interface RuleAstRequirements {
     readonly typeChecker?: boolean;
     /**
      * Set to `true` when the rule needs the project-wide import graph,
-     * component → template mapping, or other cross-file metadata provided
+     * component-to-template mapping, or other cross-file metadata provided
      * by `ProjectContext`.
      *
      * Rules declaring this are routed to the type-aware execution path (main
@@ -109,17 +117,13 @@ export interface RuleAstRequirements {
     readonly projectContext?: boolean;
 }
 
-/**
- * File type patterns a rule applies to
- */
+/** Optional include/exclude file patterns that further narrow rule execution. */
 export interface RuleFilePatterns {
     readonly include?: ReadonlyArray<string>;  // e.g., ["*.component.ts"]
     readonly exclude?: ReadonlyArray<string>;  // e.g., ["*.spec.ts"]
 }
 
-/**
- * Rule metadata (describes rule behavior)
- */
+/** Rule metadata used for registry lookup, routing, presets, and reporters. */
 export interface RuleMetadata {
     readonly name: string;
     readonly description: string;
@@ -129,9 +133,7 @@ export interface RuleMetadata {
     readonly filePatterns?: RuleFilePatterns;
 }
 
-/**
- * Resolved rule (config + metadata)
- */
+/** Rule configuration after presets, overrides, and defaults have resolved. */
 export interface ResolvedRule {
     readonly name: string;
     readonly severity: RuleSeverity;
@@ -139,18 +141,14 @@ export interface ResolvedRule {
     readonly metadata: RuleMetadata;
 }
 
-/**
- * Map of resolved rules
- */
+/** Read-only resolved rule map keyed by rule name. */
 export type ResolvedRulesMap = ReadonlyMap<string, ResolvedRule>;
 
 // ==============================================================================
 // PRESET CONFIGURATION
 // ==============================================================================
 
-/**
- * Preset configuration file structure
- */
+/** Preset definition containing rule defaults and optional preset inheritance. */
 export interface PresetConfig {
     readonly name: string;
     readonly description?: string;
@@ -158,9 +156,7 @@ export interface PresetConfig {
     readonly rules: RulesConfig;
 }
 
-/**
- * Built-in preset names
- */
+/** Built-in preset names accepted by config resolution. */
 export type BuiltinPreset =
     | 'recommended'
     | 'strict'
@@ -170,18 +166,14 @@ export type BuiltinPreset =
     | 'ssr'
     | 'all';
 
-/**
- * Preset reference (builtin or file path)
- */
+/** Preset reference, either a built-in name, package name, or file path. */
 export type PresetReference = string;
 
 // ==============================================================================
 // RESOLUTION RESULT
 // ==============================================================================
 
-/**
- * Rule resolution result
- */
+/** Result of resolving enabled rules from config and presets. */
 export interface RuleResolutionResult {
     readonly rules: ResolvedRulesMap;
     readonly metadata: {
@@ -197,24 +189,22 @@ export interface RuleResolutionResult {
 // RULE REGISTRY ENTRY
 // ==============================================================================
 
-/**
- * Rule registry entry (for looking up metadata)
- */
+/** Registry entry carrying a rule's metadata and default configuration. */
 export interface RuleRegistryEntry {
     readonly name: string;
     readonly metadata: RuleMetadata;
     readonly defaultConfig: RuleConfigFull;
 }
 
-/**
- * Rule registry (ruleName → entry)
- */
+/** Rule registry map keyed by rule name. */
 export type RuleRegistryMap = ReadonlyMap<string, RuleRegistryEntry>;
 
+/** Options that control rule registration collision behavior. */
 export interface RegisterOptions {
     allowOverride?: boolean;
 }
 
+/** Plugin-provided rule registration unit. */
 export interface RulePlugin {
     readonly name: string;
     /**
@@ -228,6 +218,7 @@ export interface RulePlugin {
     readonly manifest?: import('./interfaces.js').PluginManifest;
 }
 
+/** Registry abstraction consumed by the engine without importing concrete rules. */
 export interface RuleRegistry {
     register(plugin: RulePlugin, opts?: RegisterOptions): void;
     get(name: string): unknown;
@@ -277,11 +268,12 @@ export interface RuleFailure {
     /**
      * Optional multi-line code snippet illustrating the correct pattern.
      * Displayed below the fix recommendation when no auto-fix is available.
-     * Use plain TypeScript — no ANSI codes.
+     * Use plain TypeScript; no ANSI codes.
      */
     readonly codeExample?: string;
 }
 
+/** Result emitted by a single rule for one planned task. */
 export interface RuleResult {
     readonly ruleName: string;
     readonly failures: ReadonlyArray<RuleFailure>;
@@ -290,7 +282,7 @@ export interface RuleResult {
 
 // ==============================================================================
 // TEMPLATE / STYLE AST TYPES
-// (Defined here — not imported from @ngcompass/ast — to avoid a circular dep:
+// (Defined here, not imported from @ngcompass/ast, to avoid a circular dep:
 //  @ngcompass/ast already depends on @ngcompass/common)
 // ==============================================================================
 
@@ -324,14 +316,14 @@ export interface TemplateAst {
 export interface StyleAst {
     /** Whether parsing succeeded. */
     readonly ok: boolean;
-    /** Transformed CSS bytes — present when `ok` is `true`. */
+    /** Transformed CSS bytes present when `ok` is `true`. */
     readonly code?: Buffer | Uint8Array;
-    /** Parse/transform error — present when `ok` is `false`. */
+    /** Parse/transform error present when `ok` is `false`. */
     readonly error?: unknown;
 }
 
 // ==============================================================================
-// PROJECT CONTEXT  (CTX-001)
+// PROJECT CONTEXT
 // Shared, read-only, pre-computed project-level metadata passed to rules that
 // declare `requires.projectContext: true`.  Built once per analysis run by
 // `buildProjectContext()` in @ngcompass/engine and threaded into RuleContext
@@ -356,7 +348,7 @@ export interface ComponentFiles {
 
 /**
  * Angular module metadata extracted from `@NgModule` or standalone
- * `@Component` decorators.  Populated by CTX-004; initially empty.
+ * `@Component` decorators. Initially empty when no Angular decorators are detected.
  */
 export interface NgModuleInfo {
     /** Absolute path to the module/component file. */
@@ -384,19 +376,19 @@ export interface NgModuleInfo {
  */
 export interface ProjectContext {
     /**
-     * Forward import graph: absolute file path → set of absolute paths it
+     * Forward import graph: absolute file path to the set of absolute paths it
      * directly imports (intra-project only; external packages excluded).
      */
     readonly importGraph: ReadonlyMap<string, ReadonlySet<string>>;
 
     /**
-     * Reverse import graph: absolute file path → set of absolute paths that
+     * Reverse import graph: absolute file path to the set of absolute paths that
      * directly import it.  Enables "who uses this file?" queries in O(1).
      */
     readonly reverseImportGraph: ReadonlyMap<string, ReadonlySet<string>>;
 
     /**
-     * Angular module / standalone component map.  (CTX-004)
+     * Angular module / standalone component map.
      *
      * Key:   absolute path to the `@NgModule` or standalone `@Component` file.
      * Value: `NgModuleInfo` with declarations, imports, exports, providers.
@@ -407,7 +399,7 @@ export interface ProjectContext {
     readonly ngModuleMap: ReadonlyMap<string, NgModuleInfo>;
 
     /**
-     * Set of absolute file paths for all standalone Angular entities.  (CTX-004)
+     * Set of absolute file paths for all standalone Angular entities.
      *
      * Includes files that contain `@Component({ standalone: true })`,
      * `@Directive({ standalone: true })`, or `@Pipe({ standalone: true })`.
@@ -419,7 +411,7 @@ export interface ProjectContext {
     readonly standaloneComponents: ReadonlySet<string>;
 
     /**
-     * Class name → absolute file path resolver.  (CTX-004)
+     * Class name to absolute file path resolver.
      *
      * Maps the name of every exported class in the project to the absolute
      * path of the file that declares it.  Enables NgModule rules to resolve
@@ -430,7 +422,7 @@ export interface ProjectContext {
      * re-exports through barrel files are not followed.
      *
      * Example:
-     *   `project.classToFile.get('FooComponent')` → `'/src/app/foo/foo.component.ts'`
+     *   `project.classToFile.get('FooComponent')` returns `'/src/app/foo/foo.component.ts'`
      */
     readonly classToFile: ReadonlyMap<string, string>;
 
@@ -449,8 +441,6 @@ export interface ProjectContext {
     /** Root directory of the project (absolute, normalised). */
     readonly rootDir: string;
 
-    // ── CTX-002 additions ────────────────────────────────────────────────────
-
     /**
      * Set of barrel file absolute paths.
      *
@@ -465,26 +455,24 @@ export interface ProjectContext {
     readonly barrelFiles: ReadonlySet<string>;
 
     /**
-     * External dependency map (CTX-002).
+     * External dependency map.
      *
      * Key:   absolute path of the project source file.
      * Value: set of npm package names (scope-aware bare specifiers, e.g.
      *        `'@angular/core'`, `'rxjs'`) imported by that file.
      *
      * Sub-path specifiers are normalised to the package name:
-     *   `'rxjs/operators'`      → `'rxjs'`
-     *   `'@angular/core/rxjs-interop'` → `'@angular/core'`
+     *   `'rxjs/operators'` becomes `'rxjs'`
+     *   `'@angular/core/rxjs-interop'` becomes `'@angular/core'`
      *
      * Relative imports and absolute paths are excluded.
-     * Entries are only present for files that have at least one external dep —
+     * Entries are only present for files that have at least one external dep;
      * files with no external deps simply have no entry in the map.
      */
     readonly externalDeps: ReadonlyMap<string, ReadonlySet<string>>;
 
-    // ── CTX-003 additions ────────────────────────────────────────────────────
-
     /**
-     * Reverse map: absolute template file path → absolute component `.ts` path.
+     * Reverse map from absolute template file path to absolute component `.ts` path.
      *
      * Enables template rules to answer "which component owns this template?"
      * in O(1) without scanning the whole `componentGraph`.
@@ -497,7 +485,7 @@ export interface ProjectContext {
 }
 
 // ==============================================================================
-// COMPONENT ↔ TEMPLATE CROSS-REFERENCE  (CTX-003)
+// COMPONENT ↔ TEMPLATE CROSS-REFERENCE
 // Structural and semantic link between a component class file and its
 // associated template, styles, and spec.  Populated by RuleContextFactory
 // when ProjectContext is available and the file under analysis is a component
@@ -508,9 +496,9 @@ export interface ProjectContext {
  * Cross-reference between an Angular component and its associated files.
  *
  * Attached to `RuleContext.crossRef` for rules running on:
- *   - `.component.ts` files — gives access to `templatePath`, `stylePaths`,
+ *   - `.component.ts` files, giving access to `templatePath`, `stylePaths`,
  *     `specPath`, and `templateReferences` (members used in the template).
- *   - `.component.html` template files — gives access to `componentPath`
+ *   - `.component.html` template files, giving access to `componentPath`
  *     and `publicMembers` (members declared on the component class).
  *
  * `undefined` for all other file types and when `project` is unavailable.
@@ -553,7 +541,7 @@ export interface ComponentCrossRef {
     readonly signalMembers?: ReadonlySet<string>;
 
     /**
-     * Identifiers from the template that reference the component — property
+     * Identifiers from the template that reference the component: property
      * reads, method calls, and event-handler expressions whose implicit
      * receiver is the component instance (`this`).
      *
@@ -585,7 +573,7 @@ export interface RuleContext {
     readonly program?: Program;
     readonly typeChecker?: import('typescript').TypeChecker; // Added for advanced type-aware rules
     /**
-     * Parsed template AST — use `rootNodes` to traverse the Angular HTML tree.
+     * Parsed template AST; use `rootNodes` to traverse the Angular HTML tree.
      * Typed as `TemplateAst` (defined above) to avoid a circular dep on `@ngcompass/ast`.
      */
     readonly template?: TemplateAst;
@@ -600,7 +588,7 @@ export interface RuleContext {
     readonly templateFileContent?: string;
     readonly templateLocator?: Locator;
     /**
-     * Parsed style AST — check `ok` before accessing `code`.
+     * Parsed style AST; check `ok` before accessing `code`.
      * Typed as `StyleAst` (defined above) to avoid a circular dep on `@ngcompass/ast`.
      */
     readonly style?: StyleAst;
@@ -609,13 +597,13 @@ export interface RuleContext {
      * Project-wide cross-file metadata (import graph, component clusters, …).
      *
      * Populated only for rules that declare `requires.projectContext: true`.
-     * `undefined` for all other rules — access is always guarded by an opt-in
+     * `undefined` for all other rules; access is always guarded by an opt-in
      * flag so there is zero overhead on rules that don't need it.
      */
     readonly project?: ProjectContext;
 
     /**
-     * Component ↔ template cross-reference (CTX-003).
+     * Component ↔ template cross-reference.
      *
      * Non-`undefined` when `project` is available **and** the file under
      * analysis is either a `.component.ts` file or its associated template.
@@ -643,7 +631,7 @@ export interface AnalysisResult {
         readonly totalWarnings: number;
         readonly duration: number;
         /**
-         * Fraction of tasks whose results were served from cache (0–1).
+         * Fraction of tasks whose results were served from cache (0 to 1).
          * `undefined` when no cache is in use (e.g. first cold run or worker path).
          * Consumers can display this as a percentage: `(cacheHitRate * 100).toFixed(1)%`.
          */

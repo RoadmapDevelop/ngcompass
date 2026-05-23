@@ -1,7 +1,10 @@
 /**
- * Rule Configuration Normalization
+ * @fileoverview
+ * Rule-config normalization.
  *
- * Pure functions to normalize rule configurations
+ * Pure helpers that expand the shorthand-or-object configuration shape
+ * users write (`'warn'` vs. `{ severity: 'warn', options: {} }`) into the
+ * full `RuleConfigFull` record every downstream consumer expects.
  */
 
 import type { RuleConfig, RuleConfigFull, RuleSeverity } from '@ngcompass/common';

@@ -1,11 +1,18 @@
 /**
- * Reporter contracts and DTOs for ngcompass CLI output.
+ * @fileoverview
+ * Reporter contracts and DTOs.
  *
- * Design goals:
- * - Tool-agnostic contracts (no ESLint coupling).
- * - Explicit, semantic naming.
- * - Composable interfaces (ISP, DIP).
- * - Clear public API documentation.
+ * Defines every public interface a reporter implementation must satisfy:
+ *  - `AnalysisReporter` — surfaces per-run rule results and parse errors.
+ *  - `ProgressReporter` — surfaces step/info/debug events during the run.
+ *  - `Reporter`         — the conjunction expected by the CLI orchestrator.
+ *  - `ConfigReporter`   — config-command output (validate, init, health).
+ *  - `CacheReporter`    — cache-command output.
+ *
+ * Contracts are deliberately tool-agnostic (no ESLint coupling) and built
+ * from the narrowest possible interfaces so callers can depend on
+ * `AnalysisReporter` when they only emit results, without being forced to
+ * implement progress methods that no-op.
  */
 
 import type { ConfigReport, HealthReport, InitResult, RuleResult } from '@ngcompass/common';

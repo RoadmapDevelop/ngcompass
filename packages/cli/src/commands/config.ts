@@ -1,10 +1,32 @@
+/**
+ * @fileoverview
+ * `ngcompass config` command group.
+ *
+ * Currently exposes `config health`, which runs semantic validation against
+ * the active configuration (and optional profile) and renders the result via
+ * the dedicated config reporter.
+ */
+
+import process from 'node:process';
 import { Command } from 'commander';
 import { getConfigReporter } from '@ngcompass/reporters';
 import { CacheContext } from '@ngcompass/cache';
 import { validateConfig } from '@ngcompass/config';
-import { exitWithError } from './exit.js';
+import { exitWithError, printError } from './exit.js';
 
-export function registerConfigCommand(program: Command, cache: CacheContext) {
+interface ConfigHealthOptions {
+    readonly profile?: string;
+    readonly cache?: boolean;
+}
+
+/**
+ * Registers configuration validation commands.
+ *
+ * @param program - Commander root that receives the `config` command group.
+ * @param cache - Shared cache context used by config validation when enabled.
+ * @returns {void}
+ */
+export function registerConfigCommand(program: Command, cache: CacheContext): void {
     const configGroup = program
         .command('config')
         .description('Inspect and validate ngcompass configuration');
@@ -13,9 +35,10 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
         .command('health')
         .description('Run semantic validation checks for the active configuration')
         .option('-p, --profile <name>', 'Configuration profile to validate')
-        .action(async (options) => {
+        .action(async (options: ConfigHealthOptions) => {
             try {
                 const result = await validateConfig({
+                    cwd: process.cwd(),
                     cache: options.cache ? cache : undefined,
                     profile: options.profile
                 });
@@ -27,8 +50,7 @@ export function registerConfigCommand(program: Command, cache: CacheContext) {
                     exitWithError();
                 }
             } catch (error: unknown) {
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                console.error(`Error: ${errorMessage}`);
+                printError('Error', error);
                 exitWithError();
             }
         });

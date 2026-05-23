@@ -1,7 +1,12 @@
 /**
- * Execution Plan Types
+ * @fileoverview
+ * Execution-plan type system.
  *
- * Maps discovered files + resolved rules → executable tasks with indexes.
+ * Maps the planner's external contract — discovered files plus resolved rules
+ * become an `ExecutionPlanOutput` with content-addressed tasks plus
+ * pre-computed indexes. The shape is consumed verbatim by the engine and the
+ * cache layer, so changes here ripple downstream and usually require a
+ * cache-version bump.
  */
 
 import type { CacheContext } from '@ngcompass/cache';
@@ -144,7 +149,7 @@ export interface RuleTask {
     readonly needsTypeChecker?: boolean;
 
     /**
-     * Whether this task requires a pre-computed `ProjectContext` (CTX-001).
+     * Whether this task requires a pre-computed `ProjectContext`.
      * Routed to the type-aware execution path alongside `needsTypeChecker`.
      */
     readonly needsProjectContext?: boolean;
@@ -237,7 +242,7 @@ export interface Task {
     readonly needsTypeChecker?: boolean;
 
     /**
-     * Whether this task requires a pre-computed `ProjectContext` (CTX-001).
+     * Whether this task requires a pre-computed `ProjectContext`.
      *
      * When `true` the task is routed to the type-aware execution path on the
      * main thread (same as `needsTypeChecker`) because `ProjectContext` is

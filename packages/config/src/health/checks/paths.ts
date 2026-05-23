@@ -1,63 +1,75 @@
-import * as fs from "node:fs";
-import { ConfigIssue } from "@ngcompass/common";
-import { MESSAGES } from "../messages.js";
-import { ConfigBlockValidation, ValidatedConfig, ValidationContext } from "../types.js";
-
 /**
- * Constants for path security and validation logic.
- */
-const PATH_RULES = {
-    TRAVERSAL: "..",
-    SENSITIVE_DIRS: ["/etc/", "\\etc\\", "/var/", "\\var\\"],
-    CACHE_ROOT: "node_modules",
-    STANDARD_CACHE_SUBDIR: ".cache"
-} as const;
-
-/**
- * Validates filesystem paths within the configuration to ensure security,
- * existence, and correct permissions.
+ * @fileoverview
+ * Validates filesystem paths declared in the configuration.
  *
- * @param config - The composed configuration object.
- * @param context - Validation context providing abstraction for FS and Path utilities.
- * @param basePath - Structural breadcrumbs for issue reporting.
- * @returns A validation result containing issues related to invalid or insecure paths.
+ * Covers three concerns:
+ *  - Output paths (`outputPath`) — safety, existence, write permission.
+ *  - Cache location (`cache.location`) — must not live inside `node_modules`
+ *    unless under the conventional `node_modules/.cache` subdirectory.
+ *  - Parser options (`parserOptions.project`, `tsconfigRootDir`) — existence.
+ */
+
+import * as fs from 'node:fs';
+import type { ConfigIssue } from '@ngcompass/common';
+import { MESSAGES } from '../messages.js';
+import type { ConfigBlockValidation, ValidatedConfig, ValidationContext } from '../types.js';
+
+const TRAVERSAL_TOKEN = '..';
+const SENSITIVE_DIRS = ['/etc/', '\\etc\\', '/var/', '\\var\\'];
+const PATH_SEPARATOR_RE = /[\\/]/;
+
+/**
+ * Returns `true` when any path segment in `location` is literally `node_modules`.
+ * Avoids false positives for paths that merely contain the substring
+ * (e.g. `/home/me/node_modules-bak/cache`).
+ */
+function containsNodeModulesSegment(location: string): boolean {
+    return location.split(PATH_SEPARATOR_RE).includes('node_modules');
+}
+
+/**
+ * Returns `true` when `location` sits under the conventional
+ * `node_modules/.cache` subtree (path-separator agnostic).
+ */
+function isUnderNodeModulesCache(location: string): boolean {
+    const segments = location.split(PATH_SEPARATOR_RE);
+    const idx = segments.indexOf('node_modules');
+    return idx !== -1 && segments[idx + 1] === '.cache';
+}
+
+/**
+ * Validates filesystem paths in the configuration.
+ *
+ * @param config - Validated configuration.
+ * @param context - Provides `fs`/`path` abstractions for testability.
+ * @param basePath - Path prefix for issue attribution.
+ * @returns {ConfigBlockValidation} Path-related issues.
  */
 export function validatePaths(
     config: ValidatedConfig,
     context: ValidationContext,
-    basePath: (string | number)[] = []
+    basePath: (string | number)[] = [],
 ): ConfigBlockValidation {
     const issues: ConfigIssue[] = [];
+
     const resolveFromCwd = (targetPath: string): string =>
         context.path.isAbsolute(targetPath)
             ? targetPath
-            : context.path.resolve(context.cwd ?? process.cwd(), targetPath);
+            : context.path.resolve(context.cwd, targetPath);
 
-    /**
-     * Integrity: Output Path
-     * Validates that the output directory is secure, exists, and is writable.
-     */
+    // ── outputPath ──────────────────────────────────────────────────────────
     if (config.outputPath) {
         const { outputPath } = config;
-        const path = [...basePath, "outputPath"];
+        const path = [...basePath, 'outputPath'];
 
-        /**
-         * Security: Path Traversal & System Directories
-         * Prevents escaping the project root or writing to sensitive system areas.
-         */
-        if (outputPath.includes(PATH_RULES.TRAVERSAL)) {
+        if (outputPath.includes(TRAVERSAL_TOKEN)) {
             issues.push({ ...MESSAGES.OUTPUT_PATH_TRAVERSAL(outputPath), path });
         }
 
-        const isSystemDir = PATH_RULES.SENSITIVE_DIRS.some(dir => outputPath.includes(dir));
-        if (isSystemDir) {
+        if (SENSITIVE_DIRS.some(dir => outputPath.includes(dir))) {
             issues.push({ ...MESSAGES.OUTPUT_PATH_SYSTEM_DIR(outputPath), path });
         }
 
-        /**
-         * Filesystem: Existence and Permissions
-         * Verifies that the parent directory exists and the process has write access.
-         */
         const dir = context.path.dirname(resolveFromCwd(outputPath));
         if (!context.fs.existsSync(dir)) {
             issues.push({ ...MESSAGES.OUTPUT_PATH_NOT_FOUND(dir), path });
@@ -70,19 +82,13 @@ export function validatePaths(
         }
     }
 
-    /**
-     * Integrity: Cache Configuration
-     * Validates cache location to prevent pollution of node_modules or missing directories.
-     */
-    if (config.cache && typeof config.cache === "object" && config.cache.enabled) {
+    // ── cache.location ──────────────────────────────────────────────────────
+    if (config.cache && typeof config.cache === 'object' && config.cache.enabled) {
         const { location } = config.cache;
-
         if (location) {
-            const path = [...basePath, "cache", "location"];
-            const isInNodeModules = location.includes(PATH_RULES.CACHE_ROOT);
-            const isStandardCache = location.includes(`${PATH_RULES.CACHE_ROOT}/${PATH_RULES.STANDARD_CACHE_SUBDIR}`);
+            const path = [...basePath, 'cache', 'location'];
 
-            if (isInNodeModules && !isStandardCache) {
+            if (containsNodeModulesSegment(location) && !isUnderNodeModulesCache(location)) {
                 issues.push({ ...MESSAGES.CACHE_IN_NODE_MODULES(location), path });
             }
 
@@ -93,28 +99,28 @@ export function validatePaths(
         }
     }
 
-    /**
-     * Integrity: Parser Options
-     * Ensures that TypeScript-specific project files and root directories exist.
-     */
+    // ── parserOptions ───────────────────────────────────────────────────────
     if (config.parserOptions) {
         const { project, tsconfigRootDir } = config.parserOptions;
 
-        const resolvedProject = project ? resolveFromCwd(project) : undefined;
-        const resolvedTsconfigRootDir = tsconfigRootDir ? resolveFromCwd(tsconfigRootDir) : undefined;
-
-        if (resolvedProject && !context.fs.existsSync(resolvedProject)) {
-            issues.push({
-                ...MESSAGES.TSCONFIG_PROJECT_NOT_FOUND(project!),
-                path: [...basePath, "parserOptions", "project"]
-            });
+        if (project) {
+            const resolved = resolveFromCwd(project);
+            if (!context.fs.existsSync(resolved)) {
+                issues.push({
+                    ...MESSAGES.TSCONFIG_PROJECT_NOT_FOUND(project),
+                    path: [...basePath, 'parserOptions', 'project'],
+                });
+            }
         }
 
-        if (resolvedTsconfigRootDir && !context.fs.existsSync(resolvedTsconfigRootDir)) {
-            issues.push({
-                ...MESSAGES.TSCONFIG_ROOT_NOT_FOUND(tsconfigRootDir!),
-                path: [...basePath, "parserOptions", "tsconfigRootDir"]
-            });
+        if (tsconfigRootDir) {
+            const resolved = resolveFromCwd(tsconfigRootDir);
+            if (!context.fs.existsSync(resolved)) {
+                issues.push({
+                    ...MESSAGES.TSCONFIG_ROOT_NOT_FOUND(tsconfigRootDir),
+                    path: [...basePath, 'parserOptions', 'tsconfigRootDir'],
+                });
+            }
         }
     }
 

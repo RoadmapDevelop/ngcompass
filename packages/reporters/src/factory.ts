@@ -1,15 +1,35 @@
+/**
+ * @fileoverview
+ * Reporter factories used by the CLI.
+ *
+ * `getReporter(format)` returns a `Reporter` that combines a base
+ * analysis reporter (`ConsoleReporter` / `JsonReporter` / etc.) with an
+ * always-stderr progress channel so users see live status updates even when
+ * the primary output is machine-readable. `getConfigReporter` /
+ * `getCacheReporter` / `getRulesReporter` are simpler one-shot factories
+ * for the corresponding command groups.
+ */
+
 import process from 'node:process';
-import pc from 'picocolors';
-import { ConsoleReporter } from './reporters/console-reporter.js';
-import { JsonReporter } from './reporters/json-reporter.js';
-import { HtmlReporter } from './reporters/html-reporter.js';
-import { SarifReporter } from './reporters/sarif-reporter.js';
-import { TextConfigReporter } from './reporters/config.js';
-import { TextCacheReporter } from './reporters/cache.js';
-import { RulesReporter, type RulesReporterOptions } from './reporters/rules-reporter.js';
-import type { Reporter, ConfigReporter, CacheReporter, ReporterFormat, ConsoleReporterOptions, ResultSummary, ParseError } from './types.js';
 import type { RuleResult } from '@ngcompass/common';
+import pc from 'picocolors';
 import { getAnalysisStatus } from './analysis-status.js';
+import { TextCacheReporter } from './reporters/cache.js';
+import { TextConfigReporter } from './reporters/config.js';
+import { ConsoleReporter } from './reporters/console-reporter.js';
+import { HtmlReporter } from './reporters/html-reporter.js';
+import { JsonReporter } from './reporters/json-reporter.js';
+import { RulesReporter, type RulesReporterOptions } from './reporters/rules-reporter.js';
+import { SarifReporter } from './reporters/sarif-reporter.js';
+import type {
+    CacheReporter,
+    ConfigReporter,
+    ConsoleReporterOptions,
+    ParseError,
+    Reporter,
+    ReporterFormat,
+    ResultSummary,
+} from './types.js';
 
 class CompoundReporter implements Reporter {
     private readonly progress: ConsoleReporter;

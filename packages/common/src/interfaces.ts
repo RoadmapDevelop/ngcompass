@@ -1,48 +1,54 @@
-import { Severity } from './types.js';
-import type { RuleConfig } from './types.js';
+/**
+ * @fileoverview
+ * Configuration-facing interfaces for the analyzer.
+ *
+ * Models the user-authored `AnalyzerConfig` shape, the normalized runtime
+ * configuration consumed by downstream packages, plugin manifest metadata,
+ * telemetry events, and validation reports. These contracts belong in
+ * `common` because config, CLI, reporters, and engine all need the same
+ * vocabulary without introducing cross-package dependencies.
+ */
+
+import type { Severity, RuleConfig } from './types.js';
 
 // ============================================================
-// PLUGIN MANIFEST (RFC §7.6)
+// PLUGIN MANIFEST
 // ============================================================
 
 /**
- * Optional manifest that a plugin can export alongside its rules.
+ * Optional manifest exported by external rule plugins.
  *
- * When present the engine validates:
- *  - That the current tool version satisfies engineVersionRange
- *  - That required capabilities (typeInfo, templateAST) are available
- *
- * Plugins without a manifest are loaded with a deprecation warning.
- * Enforcement (hard error on missing manifest) is reserved for the next major.
+ * The plugin loader uses this to reject incompatible packages before rule
+ * registration and to detect expensive capabilities such as type information
+ * or template AST access.
  */
 export interface PluginManifest {
-    /** Package name (must match the plugin's npm package name) */
+    /** Package name, normally matching the plugin's npm package name. */
     readonly name: string;
-    /** Plugin semver version (e.g. "2.1.0") */
+    /** Plugin package version. */
     readonly version: string;
-    /** Engine API semver version this plugin was built against */
+    /** Engine API version the plugin was built against. */
     readonly apiVersion: string;
-    /**
-     * Semver range of ngcompass versions this plugin is compatible with.
-     * Examples: ">=1.0.0 <2.0.0",  "^1.2.0",  "*"
-     */
+    /** Semver range of `ngcompass` versions compatible with this plugin. */
     readonly engineVersionRange: string;
-    /** Optional capability declarations */
+    /** Optional capability declarations used by routing and validation. */
     readonly capabilities?: {
-        /** Plugin uses the TypeScript type-checker (expensive) */
+        /** Plugin uses the TypeScript type-checker. */
         readonly requiresTypeInfo?: boolean;
-        /** Plugin needs the full HTML template AST */
+        /** Plugin needs the parsed Angular template AST. */
         readonly requiresTemplateAST?: boolean;
-        /** Plugin needs the CSS/SCSS AST */
+        /** Plugin needs the parsed CSS/SCSS AST. */
         readonly requiresCssAST?: boolean;
     };
 }
 
 // ============================================================
-// TELEMETRY CONFIGURATION (RFC §7.7)
+// TELEMETRY CONFIGURATION
 // ============================================================
 
-/** Minimal telemetry event shape used in config (avoids circular dep with core) */
+/**
+ * Minimal telemetry event shape shared by config and pipeline packages.
+ */
 export interface TelemetryEventBase {
     readonly phase: 'config' | 'planner' | 'engine';
     readonly operation: string;
@@ -52,30 +58,24 @@ export interface TelemetryEventBase {
     readonly metadata?: Readonly<Record<string, string | number | boolean>>;
 }
 
+/**
+ * User-configurable telemetry sink.
+ */
 export interface TelemetryConfig {
-    /** Whether telemetry collection is active (default: false) */
+    /** Whether telemetry collection is active. */
     enabled?: boolean;
-    /**
-     * Called synchronously for every emitted event.
-     * Use this to pipe events to a file, stdout, or an external collector.
-     */
+    /** Synchronous callback invoked for every emitted telemetry event. */
     onEvent?: (event: TelemetryEventBase) => void;
 }
 
-
-
-/**
- * Reporting output formats
- */
+/** Reporter output formats supported by the CLI. */
 export type OutputFormat = 'json' | 'text' | 'sarif' | 'html';
 
-/**
- * Severity level that triggers failure in CI/build
- */
+/** Severity level that triggers a non-zero exit in CI/build. */
 export type FailSeverity = Severity;
 
 /**
- * TypeScript parser options
+ * TypeScript parser options accepted from user configuration.
  */
 export interface ParserOptions {
     project?: string;
@@ -85,7 +85,7 @@ export interface ParserOptions {
 }
 
 /**
- * Cache configuration options
+ * Cache options after user config is parsed but before normalization.
  */
 export interface CacheOptions {
     enabled?: boolean;
@@ -95,123 +95,77 @@ export interface CacheOptions {
 }
 
 /**
- * Configuration override for specific files
- * Rules in overrides are merged with global rules
+ * Rule overrides for a specific file set.
  */
 export interface ConfigOverride {
     files: string | string[];
-    rules?: Record<string, RuleConfig | Severity | 'off'>;
+    rules?: Record<string, RuleConfig>;
 }
 
 /**
- * Profile-specific configuration (dev/ci)
- * Profiles can override most settings except nested profiles
+ * Profile-specific configuration such as `dev` or `ci`.
  */
 export type ProfileConfig = Partial<Omit<AnalyzerConfig, 'profiles'>>;
 
 /**
- * Main analyzer configuration interface
- * Supports extends, rules, overrides, profiles, and more
+ * User-authored analyzer configuration.
+ *
+ * This interface intentionally mirrors the public config file shape, so most
+ * fields remain optional until the config package validates and normalizes
+ * them into `NormalizedAnalyzerConfig`.
  */
 export interface AnalyzerConfig {
-    /**
-     * Extend from other configuration presets
-     */
+    /** Preset names, npm package names, or paths to extend. */
     extends?: string | string[];
 
-    /**
-     * Files to include in analysis
-     */
+    /** File globs included in analysis. */
     include?: string[];
 
-    /**
-     * Files to exclude from analysis
-     */
+    /** File globs excluded from analysis. */
     exclude?: string[];
 
-    /**
-     * Maximum number of worker threads for parallel analysis
-     */
+    /** Maximum number of worker threads for parallel analysis. */
     maxWorkers?: number;
 
-    /**
-     * Cache configuration
-     */
+    /** Cache toggle or cache configuration object. */
     cache?: boolean | CacheOptions;
 
-    /**
-     * Output format for reports
-     */
+    /** Reporter output format. */
     outputFormat?: OutputFormat;
 
-    /**
-     * Output file path for report
-     */
+    /** Optional output file path for machine-readable reports. */
     outputPath?: string;
 
-    /**
-     * Severity level that causes non-zero exit code
-     */
+    /** Severity level that causes a non-zero exit code. */
     failOnSeverity?: FailSeverity;
 
-    /**
-     * Maximum number of violations allowed before failing
-     */
+    /** Maximum warning count allowed before failing. */
     maxWarnings?: number;
 
-    /**
-     * Additional patterns to ignore
-     */
+    /** Additional ignore patterns applied during file discovery. */
     ignorePatterns?: string[];
 
-    /**
-     * External rule plugins to load.
-     * Each entry is a package name or file path that exports a RulePlugin or RulePlugin[].
-     * Example: ['@my-org/ngcompass-rules', './tools/local-rules']
-     */
+    /** External rule plugins to load by package name or file path. */
     plugins?: string[];
 
-    /**
-     * Rule configuration
-     */
-    rules?: Record<string, RuleConfig | Severity | 'off'>;
+    /** Rule configuration keyed by rule name. */
+    rules?: Record<string, RuleConfig>;
 
-    /**
-     * Per-file rule overrides
-     */
+    /** Per-file rule overrides merged with global rule settings. */
     overrides?: ConfigOverride[];
 
-    /**
-     * TypeScript parser configuration
-     */
+    /** TypeScript parser configuration. */
     parserOptions?: ParserOptions;
 
-    /**
-     * Environment-specific profiles
-     */
+    /** Environment-specific profile overrides. */
     profiles?: Record<string, ProfileConfig>;
 
-    /**
-     * Structured telemetry collection.
-     * Disabled by default — enabling it adds a small per-event overhead.
-     */
+    /** Structured telemetry collection settings. */
     telemetry?: TelemetryConfig;
-
-    /**
-     * Engine execution thresholds.
-     * Override the built-in defaults for parallelism decisions.
-     */
-    engine?: {
-        /**
-         * Number of tasks above which the worker pool is used instead of
-         * local pLimit execution.  Default: 150.
-         */
-        parallelThreshold?: number;
-    };
 }
 
 /**
- * Structured configuration issue
+ * One validation issue discovered while reading or normalizing config.
  */
 export interface ConfigIssue {
     readonly code: string;
@@ -225,7 +179,7 @@ export interface ConfigIssue {
 }
 
 /**
- * Health report for configuration validation
+ * Health report emitted by configuration validation.
  */
 export interface HealthReport {
     valid: boolean;
@@ -233,13 +187,11 @@ export interface HealthReport {
     config?: unknown;
 }
 
-/**
- * Configuration Report (alias for HealthReport)
- */
+/** Configuration report alias used by reporter APIs. */
 export type ConfigReport = HealthReport;
 
 /**
- * Result of the configuration initialization
+ * Result of initializing a new configuration file.
  */
 export interface InitResult {
     success: boolean;
@@ -247,41 +199,32 @@ export interface InitResult {
     alreadyExists?: boolean;
 }
 
+/**
+ * Fully-normalized analyzer configuration consumed by planner and engine.
+ */
 export interface NormalizedAnalyzerConfig extends Omit<AnalyzerConfig, 'cache' | 'maxWorkers' | 'outputFormat' | 'failOnSeverity' | 'maxWarnings' | 'rules'> {
-    /**
-     * Cache configuration.
-     * Guaranteed to be a full object, never boolean.
-     */
+    /** Cache configuration, guaranteed to be a full object. */
     cache: Required<CacheOptions>;
 
-    /**
-     * Maximum number of worker threads.
-     * Defaults to (CPUs - 1) or 1.
-     */
+    /** Maximum number of worker threads. */
     maxWorkers: number;
 
-    /**
-     * Reporting format.
-     */
+    /** Reporting format. */
     outputFormat: OutputFormat;
 
-    /**
-     * Severity level for non-zero exit code.
-     */
+    /** Severity level for non-zero exit code. */
     failOnSeverity: FailSeverity;
 
-    /**
-     * Max allowed warnings.
-     */
+    /** Maximum allowed warnings. */
     maxWarnings: number;
 
-    /**
-     * Resolved rule configuration.
-     */
-    rules: Record<string, RuleConfig | Severity | 'off'>;
+    /** Resolved rule configuration keyed by rule name. */
+    rules: Record<string, RuleConfig>;
 }
 
-
+/**
+ * Combined result of config normalization and validation reporting.
+ */
 export interface ConfigValidationResult {
     config?: NormalizedAnalyzerConfig;
     report: HealthReport;

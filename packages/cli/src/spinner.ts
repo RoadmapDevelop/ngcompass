@@ -1,8 +1,21 @@
+/**
+ * @fileoverview
+ * Minimal braille-frame spinner used by the analyze command to show progress
+ * without pulling in a heavier dependency.
+ *
+ * Falls back gracefully on non-TTY streams (CI logs) by emitting one
+ * stable line per `start()` call and printing subsequent `writeLine` events
+ * as plain lines. Manages cursor visibility via raw ANSI sequences.
+ */
+
 import pc from 'picocolors';
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;
 
+/**
+ * Renders a lightweight in-place progress indicator for interactive output.
+ */
 export class Spinner {
     private timer: NodeJS.Timeout | null = null;
     private frameIndex = 0;

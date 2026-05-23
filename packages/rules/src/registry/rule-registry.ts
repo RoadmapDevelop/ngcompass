@@ -1,11 +1,14 @@
 /**
- * RuleRegistry — Plugin Boundary
+ * @fileoverview
+ * `RuleRegistry` — the package's plugin boundary.
  *
- * Replaces the mutable bare Map in adapter.ts with a class that:
- *  - Throws on duplicate registration (prevents silent stomping)
- *  - Exposes a controlled surface for plugin authors
- *  - Provides a global singleton for CLI / built-in usage
- *  - Provides a reset helper for isolated test runs
+ * Owns every registered rule handler plus the optional metadata overrides
+ * a plugin can attach. The global singleton (`getGlobalRegistry()`) backs
+ * both the built-in rules registered via `registerAllBuiltinRules()` and
+ * the plugins loaded through `@ngcompass/config`'s `loadPlugins()`.
+ *
+ * Worker threads have their own module instance — they must call
+ * `registerAllBuiltinRules()` themselves to populate their registry.
  *
  * Plugin authors export an array of RulePlugin objects from their package.
  * The plugin-loader reads the config `plugins` array and calls registry.register()
@@ -41,6 +44,13 @@ import { RuleMetadata, RuleRegistryEntry } from '@ngcompass/common';
 import { RECOMMENDATIONS } from '../recommendations.js';
 import { getPresetsForRule } from '../presets/index.js';
 import { allPreset } from '../presets/all.js';
+
+/**
+ * Default per-rule config returned by `getRegistryEntry` when a rule has
+ * no preset entry. Kept as a module-level constant so the shape can be
+ * extended in one place rather than at every call site.
+ */
+const DEFAULT_RULE_CONFIG = { severity: 'warn' as const, options: {} };
 
 // ============================================
 // PUBLIC TYPES
@@ -150,9 +160,9 @@ export class RuleRegistry {
         const overrides = this._meta.get(name) ?? {};
         return {
             name,
-            description: overrides.description || `Rule: ${name}`,
-            category: overrides.category || 'general',
-            dependencyType: overrides.dependencyType || 'standalone',
+            description: overrides.description ?? `Rule: ${name}`,
+            category: overrides.category ?? 'general',
+            dependencyType: overrides.dependencyType ?? 'standalone',
             requires: { tsAst: true, ...overrides.requires },
             filePatterns: overrides.filePatterns,
         };
@@ -165,11 +175,7 @@ export class RuleRegistry {
     getRegistryEntry(name: string): RuleRegistryEntry | undefined {
         const metadata = this.getMetadata(name);
         if (!metadata) return undefined;
-        return {
-            name,
-            metadata,
-            defaultConfig: { severity: 'warn', options: {} },
-        };
+        return { name, metadata, defaultConfig: DEFAULT_RULE_CONFIG };
     }
 
     /**

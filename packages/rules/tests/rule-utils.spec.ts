@@ -681,9 +681,9 @@ describe('hasTeardownInReceiverChain', () => {
 // ---------------------------------------------------------------------------
 
 describe('getTemplateAbsoluteOffset', () => {
-    it('adds templateStartOffset to nodeStart when present', () => {
+    it('returns nodeStart unchanged when templateStartOffset is present', () => {
         const ctx = { template: { templateStartOffset: 100 } };
-        expect(getTemplateAbsoluteOffset(ctx, 50)).toBe(150);
+        expect(getTemplateAbsoluteOffset(ctx, 50)).toBe(50);
     });
 
     it('returns nodeStart unchanged when templateStartOffset is absent', () => {

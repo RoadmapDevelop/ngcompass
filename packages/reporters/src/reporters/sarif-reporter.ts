@@ -1,11 +1,19 @@
+/**
+ * @fileoverview
+ * SARIF 2.1.0 reporter for IDE / GitHub Code Scanning integrations.
+ *
+ * Buffers results across the run and emits a single SARIF document on
+ * `summary()`. Schema reference:
+ * https://json.schemastore.org/sarif-2.1.0.json
+ */
+
 import path from 'node:path';
 import process from 'node:process';
-import type { RuleResult, RuleFailure, RuleSeverity } from '@ngcompass/common';
-import type { ParseError, Reporter, ResultSummary } from '../types.js';
-import type { ReporterOutput } from '../output.js';
-import { processOutput } from '../output.js';
-import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
+import type { RuleFailure, RuleResult, RuleSeverity } from '@ngcompass/common';
 import { getAnalysisStatus } from '../analysis-status.js';
+import { processOutput, type ReporterOutput } from '../output.js';
+import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
+import type { ParseError, Reporter, ResultSummary } from '../types.js';
 
 const SARIF_SCHEMA = 'https://json.schemastore.org/sarif-2.1.0.json';
 const SARIF_VERSION = '2.1.0';

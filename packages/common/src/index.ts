@@ -1,10 +1,18 @@
 /**
- * @angular-analyzer/common
+ * @fileoverview
+ * Public entry point for `@ngcompass/common`.
  *
- * Common types, interfaces, and utilities shared across all packages
+ * Re-exports the shared domain types, interfaces, errors, logger, and
+ * serialization helpers consumed by every other package in the monorepo.
+ * This barrel is intentionally dependency-light because `common` sits at
+ * the innermost architecture layer and must never import sibling packages.
+ *
+ * Every re-export uses the explicit `.js` extension required by
+ * `module: "Node16"` so the package builds the same way for both
+ * CommonJS and ESM consumers.
  */
 
-export * from './constants';
+export * from './constants.js';
 export {
     InitResult,
     NormalizedAnalyzerConfig,
@@ -17,14 +25,15 @@ export {
     HealthReport,
     AnalyzerConfig,
     PluginManifest,
+    ProfileConfig,
     TelemetryConfig,
     TelemetryEventBase,
     ConfigOverride,
     ParserOptions,
 } from './interfaces.js';
-export * from './errors';
-export * from './types';
-export * from './ast/utils';
-export * from './logger';
-export * from './utils/stable-serialize';
-export * from './utils/locator';
+export * from './errors.js';
+export * from './types.js';
+export * from './ast/utils.js';
+export * from './logger.js';
+export * from './utils/stable-serialize.js';
+export * from './utils/locator.js';

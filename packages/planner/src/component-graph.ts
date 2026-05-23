@@ -1,51 +1,22 @@
+/**
+ * @fileoverview
+ * Component dependency graph.
+ *
+ * Builds a one-pass map from each `*.component.ts` file to its associated
+ * template, styles, and spec files. The graph populates with directory-grouped
+ * data in `O(N)` so the task-builder can later answer "what resources does
+ * component X own?" in `O(1)` without re-scanning the filesystem.
+ *
+ * Convention discovery is tried first; when the conventional filenames are
+ * absent the builder falls back to regex-based extraction of `templateUrl` /
+ * `styleUrls` references from the decorator (see `decorator-references.ts`).
+ */
+
 import * as path from 'node:path';
-import { readFile } from 'node:fs/promises';
-import { FileType } from './types.js';
+import { extractStyleUrls, extractTemplateUrl } from './decorator-references.js';
+import type { FileType } from './types.js';
 
-const TEMPLATE_URL_RE = /templateUrl\s*:\s*['"`]([^'"`\n]+)['"`]/;
-const STYLE_URL_RE = /\bstyleUrl(?!s)\s*:\s*['"`]([^'"`\n]+)['"`]/;
-const STYLE_URLS_RE = /\bstyleUrls\s*:\s*\[([^\]]+)\]/;
-const STYLE_STR_RE = /['"`]([^'"`\n]+\.(?:css|scss|sass|less))['"`]/g;
-
-async function extractTemplateUrl(tsPath: string, dir: string, fileSet: Set<string>): Promise<string | undefined> {
-    try {
-        const content = await readFile(tsPath, 'utf-8');
-        const match = TEMPLATE_URL_RE.exec(content);
-        if (!match) return undefined;
-        const resolved = path.resolve(dir, match[1]);
-        return fileSet.has(resolved) ? resolved : undefined;
-    } catch {
-        return undefined;
-    }
-}
-
-async function extractStyleUrls(tsPath: string, dir: string, fileSet: Set<string>): Promise<string[]> {
-    try {
-        const content = await readFile(tsPath, 'utf-8');
-        const results: string[] = [];
-
-        const singleMatch = STYLE_URL_RE.exec(content);
-        if (singleMatch) {
-            const resolved = path.resolve(dir, singleMatch[1]);
-            if (fileSet.has(resolved)) results.push(resolved);
-        }
-
-        const arrayMatch = STYLE_URLS_RE.exec(content);
-        if (arrayMatch) {
-            STYLE_STR_RE.lastIndex = 0;
-            let m: RegExpExecArray | null;
-            while ((m = STYLE_STR_RE.exec(arrayMatch[1])) !== null) {
-                const resolved = path.resolve(dir, m[1]);
-                if (fileSet.has(resolved)) results.push(resolved);
-            }
-        }
-
-        return results;
-    } catch {
-        return [];
-    }
-}
-
+/** One component cluster: the TypeScript file and its associated resources. */
 export interface ComponentNode {
     tsPath: string;
     templatePath?: string;
@@ -55,93 +26,102 @@ export interface ComponentNode {
 }
 
 /**
- * A graph of component dependencies (template, styles, specs).
- * Built in a single pass to avoid repeated directory scans.
+ * Single-pass map from component `*.component.ts` paths to their cluster
+ * resources. Used by the task-builder to avoid repeated directory scans.
  */
 export class ComponentDependencyGraph {
-    private graph = new Map<string, ComponentNode>();
+    private readonly graph = new Map<string, ComponentNode>();
 
     /**
-     * Builds the graph from a list of files.
-     * O(N) complexity where N is the number of files.
-     * Falls back to decorator-based templateUrl/styleUrls extraction when
-     * convention-based discovery finds no template or styles.
+     * Rebuilds the graph from the given list of project files.
+     *
+     * Falls back to decorator-based `templateUrl` / `styleUrls` extraction
+     * when convention-based filenames aren't present in the directory.
      */
     async build(files: ReadonlyArray<string>): Promise<void> {
         this.graph.clear();
         const fileSet = new Set(files);
 
-        // 1. Group files by directory (O(N))
+        // 1. Group files by directory in O(N).
         const byDirectory = new Map<string, string[]>();
-
         for (const file of files) {
             const dir = path.dirname(file);
             const existing = byDirectory.get(dir);
-            if (existing) {
-                existing.push(file);
-            } else {
-                byDirectory.set(dir, [file]);
-            }
+            if (existing) existing.push(file);
+            else byDirectory.set(dir, [file]);
         }
 
-        // 2. Build graph (O(N))
+        // 2. Build a node per `*.component.ts`.
         for (const [dir, dirFiles] of byDirectory) {
-            // Optimization: Set for O(1) existence checks within directory
             const dirFileSet = new Set(dirFiles);
-            const components = dirFiles.filter(f => f.endsWith('.component.ts'));
+            const components = dirFiles.filter((f) => f.endsWith('.component.ts'));
 
             for (const comp of components) {
                 const baseName = path.basename(comp, '.component.ts');
                 const baseNamePath = path.join(dir, baseName);
 
-                // Template: convention first, then templateUrl decorator fallback
-                const templateCandidates = [
-                    `${baseNamePath}.component.html`,
-                    `${baseNamePath}.html`,
-                ];
-                let templatePath = templateCandidates.find(t => dirFileSet.has(t));
-                if (!templatePath) {
-                    templatePath = await extractTemplateUrl(comp, dir, fileSet);
-                }
+                const templatePath = await resolveTemplate(comp, dir, baseNamePath, dirFileSet, fileSet);
+                const stylePaths = await resolveStyles(comp, dir, baseNamePath, dirFiles, fileSet);
+                const specPath = resolveSpec(baseNamePath, dirFileSet);
 
-                // Styles: convention first, then styleUrls/styleUrl decorator fallback
-                let stylePaths = dirFiles.filter(f => {
-                    if (!f.startsWith(baseNamePath)) return false;
-                    const ext = path.extname(f);
-                    if (f === `${baseNamePath}.component${ext}` || f === `${baseNamePath}${ext}`) {
-                        return /\.(css|scss|sass|less)$/.test(ext);
-                    }
-                    return false;
-                });
-                if (stylePaths.length === 0) {
-                    stylePaths = await extractStyleUrls(comp, dir, fileSet);
-                }
-
-                const specPath = dirFileSet.has(`${baseNamePath}.component.spec.ts`)
-                    ? `${baseNamePath}.component.spec.ts`
-                    : dirFileSet.has(`${baseNamePath}.spec.ts`)
-                        ? `${baseNamePath}.spec.ts`
-                        : undefined;
-
-                const node: ComponentNode = {
+                this.graph.set(comp, {
                     tsPath: comp,
                     templatePath,
                     stylePaths,
                     specPath,
                     type: 'component',
-                };
-
-                this.graph.set(comp, node);
+                });
             }
         }
     }
 
     /**
-     * Gets resources for a given component file.
-     * O(1) lookup.
+     * Returns the cluster resources for the given `*.component.ts` path, or
+     * `undefined` if the component is not in the graph.
      */
     getResources(tsPath: string): ComponentNode | undefined {
         return this.graph.get(tsPath);
     }
 }
 
+// ── Internal resolvers ────────────────────────────────────────────────────
+
+/** Resolves a component's template via convention, then decorator fallback. */
+async function resolveTemplate(
+    comp: string,
+    dir: string,
+    baseNamePath: string,
+    dirFileSet: Set<string>,
+    fileSet: Set<string>,
+): Promise<string | undefined> {
+    const candidates = [`${baseNamePath}.component.html`, `${baseNamePath}.html`];
+    const convention = candidates.find((t) => dirFileSet.has(t));
+    if (convention) return convention;
+    return extractTemplateUrl(comp, dir, fileSet);
+}
+
+/** Resolves a component's style files via convention, then decorator fallback. */
+async function resolveStyles(
+    comp: string,
+    dir: string,
+    baseNamePath: string,
+    dirFiles: string[],
+    fileSet: Set<string>,
+): Promise<string[]> {
+    const conventional = dirFiles.filter((f) => {
+        if (!f.startsWith(baseNamePath)) return false;
+        const ext = path.extname(f);
+        if (f === `${baseNamePath}.component${ext}` || f === `${baseNamePath}${ext}`) {
+            return /\.(css|scss|sass|less)$/.test(ext);
+        }
+        return false;
+    });
+    if (conventional.length > 0) return conventional;
+    return extractStyleUrls(comp, dir, fileSet);
+}
+
+/** Resolves a component's spec via conventional filenames. */
+function resolveSpec(baseNamePath: string, dirFileSet: Set<string>): string | undefined {
+    const candidates = [`${baseNamePath}.component.spec.ts`, `${baseNamePath}.spec.ts`];
+    return candidates.find((c) => dirFileSet.has(c));
+}
