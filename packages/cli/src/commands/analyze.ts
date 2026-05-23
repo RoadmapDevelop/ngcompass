@@ -15,7 +15,7 @@
 import { Command, Option } from 'commander';
 import path from 'node:path';
 import pc from 'picocolors';
-import { type NormalizedAnalyzerConfig, AnalysisResult, DEFAULT_INCLUDE_PATTERNS, ResolvedRulesMap, RuleResult, type ParseError, type ParserOptions } from '@ngcompass/common';
+import { DEFAULT_INCLUDE_PATTERNS, type AnalysisResult, type NormalizedAnalyzerConfig, type ResolvedRulesMap, type RuleResult, type ParserOptions } from '@ngcompass/common';
 import { getReporter, type ReporterFormat, type Reporter, type ResultSummary } from '@ngcompass/reporters';
 import process from 'node:process';
 import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
@@ -45,7 +45,7 @@ interface EffectivePerformanceOptions extends PerformanceModeOptions {
     maxWorkers: number;
 }
 
-const PERFORMANCE_MODE_PRESETS: Record<PerformanceMode, PerformanceModeOptions> = {
+const PERFORMANCE_MODE_PRESETS: Readonly<Record<PerformanceMode, PerformanceModeOptions>> = {
     eco: {
         typeAwareConcurrency: 1,
         typeAwareFileConcurrency: 1,
@@ -69,9 +69,12 @@ const PERFORMANCE_MODE_PRESETS: Record<PerformanceMode, PerformanceModeOptions> 
     },
 };
 
-const PERFORMANCE_MODES = Object.keys(PERFORMANCE_MODE_PRESETS) as PerformanceMode[];
-const TYPE_AWARE_ISOLATION_MODES: TypeAwareIsolation[] = ['auto', 'process', 'off'];
-const TYPE_AWARE_CHUNK_STRATEGIES: TypeAwareChunkStrategy[] = ['dependency', 'simple'];
+const PERFORMANCE_MODES: readonly PerformanceMode[] = ['eco', 'balanced', 'turbo'];
+const PERFORMANCE_MODE_VALUES = new Set<string>(PERFORMANCE_MODES);
+const TYPE_AWARE_ISOLATION_MODES: readonly TypeAwareIsolation[] = ['auto', 'process', 'off'];
+const TYPE_AWARE_ISOLATION_VALUES = new Set<string>(TYPE_AWARE_ISOLATION_MODES);
+const TYPE_AWARE_CHUNK_STRATEGIES: readonly TypeAwareChunkStrategy[] = ['dependency', 'simple'];
+const TYPE_AWARE_CHUNK_STRATEGY_VALUES = new Set<string>(TYPE_AWARE_CHUNK_STRATEGIES);
 
 interface AnalyzeOptions {
     profile?: string;
@@ -106,13 +109,25 @@ function parsePositiveIntegerOption(value: string | undefined, optionName: strin
     return parsed;
 }
 
+function isPerformanceMode(value: string): value is PerformanceMode {
+    return PERFORMANCE_MODE_VALUES.has(value);
+}
+
+function isTypeAwareIsolation(value: string): value is TypeAwareIsolation {
+    return TYPE_AWARE_ISOLATION_VALUES.has(value);
+}
+
+function isTypeAwareChunkStrategy(value: string): value is TypeAwareChunkStrategy {
+    return TYPE_AWARE_CHUNK_STRATEGY_VALUES.has(value);
+}
+
 function parsePerformanceMode(value: string | undefined): PerformanceMode {
     const mode = value ?? 'balanced';
-    if (!PERFORMANCE_MODES.includes(mode as PerformanceMode)) {
+    if (!isPerformanceMode(mode)) {
         throw new Error(`Invalid performance mode "${mode}". Expected one of: ${PERFORMANCE_MODES.join(', ')}.`);
     }
 
-    return mode as PerformanceMode;
+    return mode;
 }
 
 function parseTypeAwareIsolation(value: string | undefined): TypeAwareIsolation | undefined {
@@ -120,11 +135,11 @@ function parseTypeAwareIsolation(value: string | undefined): TypeAwareIsolation 
         return undefined;
     }
 
-    if (!TYPE_AWARE_ISOLATION_MODES.includes(value as TypeAwareIsolation)) {
+    if (!isTypeAwareIsolation(value)) {
         throw new Error(`Invalid --type-aware-isolation "${value}". Expected one of: ${TYPE_AWARE_ISOLATION_MODES.join(', ')}.`);
     }
 
-    return value as TypeAwareIsolation;
+    return value;
 }
 
 function parseTypeAwareChunkStrategy(value: string | undefined): TypeAwareChunkStrategy | undefined {
@@ -132,11 +147,15 @@ function parseTypeAwareChunkStrategy(value: string | undefined): TypeAwareChunkS
         return undefined;
     }
 
-    if (!TYPE_AWARE_CHUNK_STRATEGIES.includes(value as TypeAwareChunkStrategy)) {
+    if (!isTypeAwareChunkStrategy(value)) {
         throw new Error(`Invalid --type-aware-chunk-strategy "${value}". Expected one of: ${TYPE_AWARE_CHUNK_STRATEGIES.join(', ')}.`);
     }
 
-    return value as TypeAwareChunkStrategy;
+    return value;
+}
+
+function toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
 }
 
 function resolvePerformanceOptions(
@@ -246,7 +265,11 @@ interface FilePhaseAccumulator {
     duration: number;
 }
 
-function createFileProgressLogger(plan: ExecutionPlanOutput, writeLine: (line: string) => void, cwd: string) {
+function createFileProgressLogger(
+    plan: ExecutionPlanOutput,
+    writeLine: (line: string) => void,
+    cwd: string,
+): (event: AnalysisFileProgress) => void {
     const syntaxExpected = new Map<string, number>();
     const typeAwareExpected = new Map<string, number>();
 
@@ -341,7 +364,14 @@ function createFileProgressLogger(plan: ExecutionPlanOutput, writeLine: (line: s
     };
 }
 
-export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
+/**
+ * Registers the `analyze` command and wires the full analysis pipeline.
+ *
+ * @param program - Commander root that receives the subcommand.
+ * @param cache - Shared cache context created by the binary.
+ * @returns {void}
+ */
+export function registerAnalyzeCommand(program: Command, cache: CacheContext): void {
     program
         .command('analyze')
         .description('Analyze your project and report rule violations and architecture risks')
@@ -402,7 +432,7 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (!plan) { exitCode = 1; return; }
 
                 // 5. Run Analysis
-                const progressStream = (reporterFormat === 'console' ? process.stdout : process.stderr) as NodeJS.WriteStream;
+                const progressStream = reporterFormat === 'console' ? process.stdout : process.stderr;
                 const spinner = new Spinner(progressStream);
                 const totalChecks = plan.tasks.length + (plan.skippedTasks?.length ?? 0);
                 const mode = getAnalyzeMode(options);
@@ -440,8 +470,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                     reporter.summary(summary);
                 }
 
-                reporter.parseErrors(analysis.parseErrors as ParseError[]);
-                reporter.report(analysis.results as RuleResult[]);
+                reporter.parseErrors(analysis.parseErrors);
+                reporter.report(analysis.results);
 
                 if (reporterFormat !== 'console') {
                     reporter.step('❯ Writing report...');
@@ -456,8 +486,8 @@ export function registerAnalyzeCommand(program: Command, cache: CacheContext) {
                 if (shouldFailAnalysis(config, analysis.stats)) {
                     exitCode = 1;
                 }
-            } catch (error) {
-                reporter.error(error as Error);
+            } catch (error: unknown) {
+                reporter.error(toError(error));
                 exitCode = 1;
             } finally {
                 if (activeCache && activeCache !== cache) {
@@ -515,7 +545,7 @@ async function discoverFilesStep(
     options: AnalyzeOptions,
     cache: CacheContext | undefined,
     reporter: Reporter
-): Promise<string[] | null> {
+): Promise<ReadonlyArray<string> | null> {
     const tStart = performance.now();
     reporter.step('❯ Discovering files...');
 
@@ -537,7 +567,7 @@ async function discoverFilesStep(
 
     reporter.info(`❯ Found ${scanResult.data.files.length} files in ${(performance.now() - tStart).toFixed(0)}ms`);
     reporter.debug(`File discovery: ${(performance.now() - tStart).toFixed(2)}ms`);
-    return scanResult.data.files as string[];
+    return scanResult.data.files;
 }
 
 async function resolveRulesStep(
@@ -574,7 +604,7 @@ async function resolveRulesStep(
 }
 
 async function buildPlanStep(
-    files: string[],
+    files: ReadonlyArray<string>,
     rules: ResolvedRulesMap,
     cache: CacheContext | undefined,
     options: AnalyzeOptions,

@@ -13,7 +13,13 @@ import { getRuleListEntries, isBuiltinPreset } from '@ngcompass/rules';
 import pc from 'picocolors';
 import { exitWithError, printError } from './exit.js';
 
-export function registerRulesCommand(program: Command) {
+/**
+ * Registers the rule catalog command.
+ *
+ * @param program - Commander root that receives the `rules` command.
+ * @returns {void}
+ */
+export function registerRulesCommand(program: Command): void {
     program
         .command('rules [ruleName]')
         .description('Browse available rules or inspect details for a specific rule')

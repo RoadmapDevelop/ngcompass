@@ -14,8 +14,14 @@ import { registerCacheCommand } from './cache.js';
 import { registerRulesCommand } from './rules.js';
 import { CacheContext } from '@ngcompass/cache';
 
-
-export function registerCommands(program: Command, cache: CacheContext) {
+/**
+ * Registers every CLI command against a Commander root.
+ *
+ * @param program - Commander root configured by the binary.
+ * @param cache - Shared cache context passed to commands that need cache access.
+ * @returns {void}
+ */
+export function registerCommands(program: Command, cache: CacheContext): void {
     registerInitCommand(program, cache);
     registerAnalyzeCommand(program, cache);
     registerConfigCommand(program, cache);

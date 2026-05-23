@@ -19,7 +19,11 @@ export class AnalyzerError extends Error {
     constructor(message: string, public readonly code?: string) {
         super(message);
         this.name = 'AnalyzerError';
-        Error.captureStackTrace(this, this.constructor);
+        // `Error.captureStackTrace` is V8-only. Guard the call so non-V8
+        // runtimes (Bun, Deno's node-compat) don't throw on module load.
+        if (typeof Error.captureStackTrace === 'function') {
+            Error.captureStackTrace(this, this.constructor);
+        }
     }
 }
 

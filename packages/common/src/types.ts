@@ -22,18 +22,27 @@ import type { ParseError } from "./errors.js";
  */
 export type Severity = 'warn' | 'error';
 
-/** Rule categories used for preset grouping and reporter organization. */
-export enum RuleCategory {
-    Architecture = 'architecture',
-    Performance = 'performance',
-    SSR = 'ssr',
-    Security = 'security',
-    Accessibility = 'accessibility',
-    Testing = 'testing',
-    CodeSmell = 'code-smell',
-    Reactivity = 'reactivity',
-    BestPractice = 'best-practice',
-}
+/**
+ * Rule categories used for preset grouping and reporter organization.
+ *
+ * Exposed as an `as const` object (not a TypeScript `enum`) so the values
+ * are tree-shakeable and produce no runtime helper code. The companion
+ * type alias mirrors the way `enum` projects both a value namespace and a
+ * type for consumers that prefer the explicit form.
+ */
+export const RuleCategory = {
+    Architecture: 'architecture',
+    Performance: 'performance',
+    SSR: 'ssr',
+    Security: 'security',
+    Accessibility: 'accessibility',
+    Testing: 'testing',
+    CodeSmell: 'code-smell',
+    Reactivity: 'reactivity',
+    BestPractice: 'best-practice',
+} as const;
+
+export type RuleCategory = typeof RuleCategory[keyof typeof RuleCategory];
 
 /**
  * Functional result container used for expected domain failures.

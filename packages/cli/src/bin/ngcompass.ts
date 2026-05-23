@@ -37,8 +37,8 @@ const gracefulShutdown = async (
                 setTimeout(resolve, FLUSH_TIMEOUT_MS).unref()
             );
             await Promise.race([cache.flush(), flushTimeout]);
-        } catch {
-            // Best-effort flush — do not block shutdown on failure.
+        } catch (error: unknown) {
+            printError('[ngcompass] Cache flush failed during shutdown', error);
         }
     }
 
@@ -70,7 +70,12 @@ const isBannerSuppressedFormat = (format: unknown): boolean => {
     return format === 'json' || format === 'sarif' || format === 'html' || format === 'ui';
 };
 
-export async function run() {
+/**
+ * Boots the CLI process and dispatches the requested command.
+ *
+ * @returns {Promise<void>} Resolves only when the command printed help without exiting.
+ */
+export async function run(): Promise<void> {
     const program = new Command();
 
     program

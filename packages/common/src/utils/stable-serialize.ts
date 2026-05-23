@@ -57,6 +57,11 @@ export function stableSerialize(
         );
     }
 
+    // Primitive dispatch. Cases that don't match here (i.e. `typeof` is
+    // `'object'`, `'symbol'`, or `'bigint'`) fall through to the blocks
+    // below: `'object'` is handled by the Date/RegExp/Array/object branches
+    // and `'symbol'` / `'bigint'` reach the fallback `JSON.stringify` at
+    // the end.
     switch (typeof value) {
         case 'boolean':
             return value ? 'true' : 'false';
@@ -65,7 +70,7 @@ export function stableSerialize(
             if (!Number.isFinite(value)) {
                 throw new SerializationError(
                     `Non-finite number (${String(value)}) is not a valid hash input`,
-                    _path
+                    _path,
                 );
             }
             return String(value);
@@ -76,7 +81,7 @@ export function stableSerialize(
         case 'function':
             throw new SerializationError(
                 'Functions are not valid hash inputs',
-                _path
+                _path,
             );
     }
 
