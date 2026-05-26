@@ -2,7 +2,10 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { initConfig } from '../src/actions/init.js';
+import {
+  detectAngularWorkspaceIncludes,
+  initConfig,
+} from '../src/actions/init.js';
 
 const createdDirs: string[] = [];
 
@@ -53,5 +56,57 @@ export default defineConfig({
   },
 });
 `);
+  });
+
+  it('scopes generated config to Angular workspace source roots', async () => {
+    const cwd = await makeWorkspace();
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify(
+        {
+          version: 1,
+          projects: {
+            app: { sourceRoot: 'src' },
+            admin: { sourceRoot: 'projects/admin/src' },
+            shared: { root: 'projects/shared' },
+          },
+        },
+        null,
+        2
+      )
+    );
+
+    const result = await initConfig({ cwd });
+    const configPath = path.join(cwd, 'ngcompass.config.ts');
+    const content = await fs.readFile(configPath, 'utf-8');
+
+    expect(result.success).toBe(true);
+    expect(content).toContain("    'projects/admin/src/**/*.ts',");
+    expect(content).toContain("    'projects/admin/src/**/*.html',");
+    expect(content).toContain("    'projects/shared/**/*.ts',");
+    expect(content).toContain("    'projects/shared/**/*.html',");
+    expect(content).toContain("    'src/**/*.ts',");
+    expect(content).toContain("    'src/**/*.html',");
+    expect(content).not.toContain("    '**/*.ts',");
+  });
+
+  it('returns Angular source root include patterns in stable order', async () => {
+    const cwd = await makeWorkspace();
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify({
+        projects: {
+          zed: { sourceRoot: 'projects/zed/src' },
+          app: { sourceRoot: 'src' },
+        },
+      })
+    );
+
+    await expect(detectAngularWorkspaceIncludes(cwd)).resolves.toEqual([
+      'projects/zed/src/**/*.ts',
+      'projects/zed/src/**/*.html',
+      'src/**/*.ts',
+      'src/**/*.html',
+    ]);
   });
 });

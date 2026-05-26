@@ -84,7 +84,11 @@ export const runAnalysisParallel = async (
     chunkResults = await Promise.all(promises);
   } catch (e) {
     await Promise.allSettled(workers.map((w) => w.terminate()));
-    throw e;
+    debug(
+      'workers',
+      `Worker execution failed, retrying locally with one file batch at a time: ${formatError(e)}`
+    );
+    return runLocalFallback(tasks, rootDir, startTime, 1, onFileProgress);
   }
 
   const successful = chunkResults.flat();
@@ -225,6 +229,10 @@ const resolveWorkerPath = async (): Promise<string | null> => {
   ];
   return candidates.find((c) => existsSync(c)) ?? null;
 };
+
+function formatError(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const distributeTasks = (
   tasks: ReadonlyArray<Task>,

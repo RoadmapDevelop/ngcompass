@@ -45,11 +45,11 @@ const PERFORMANCE_MODE_PRESETS: Readonly<
     typeAwareChunkStrategy: 'dependency',
   },
   balanced: {
-    typeAwareConcurrency: 2,
-    typeAwareFileConcurrency: 2,
-    typeAwareChunkSize: 300,
+    typeAwareConcurrency: 1,
+    typeAwareFileConcurrency: 1,
+    typeAwareChunkSize: 150,
     typeAwareIsolation: 'auto',
-    typeAwareChunkStrategy: 'simple',
+    typeAwareChunkStrategy: 'dependency',
   },
   turbo: {
     typeAwareConcurrency: 2,

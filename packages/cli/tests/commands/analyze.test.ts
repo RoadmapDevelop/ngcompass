@@ -411,11 +411,11 @@ describe('Analyze Command', () => {
       expect.anything(),
       expect.objectContaining({
         maxWorkers: 4,
-        typeAwareChunkSize: 300,
-        typeAwareConcurrency: 2,
-        typeAwareFileConcurrency: 2,
+        typeAwareChunkSize: 150,
+        typeAwareConcurrency: 1,
+        typeAwareFileConcurrency: 1,
         typeAwareIsolation: 'auto',
-        typeAwareChunkStrategy: 'simple',
+        typeAwareChunkStrategy: 'dependency',
       })
     );
   });

@@ -56,7 +56,7 @@ const HIGH_HEAP_PRESSURE_RATIO = 0.88;
 const CRITICAL_HEAP_PRESSURE_RATIO = 0.94;
 const LOW_HEAP_PRESSURE_RATIO = 0.35;
 const ADAPTIVE_GROWTH_STREAK = 3;
-const ISOLATED_TYPE_AWARE_FILE_COUNT = 500;
+const ISOLATED_TYPE_AWARE_FILE_COUNT = 150;
 const TYPE_AWARE_CHILD_TIMEOUT_MS = 10 * 60 * 1000;
 const DEPENDENCY_GROUPING_CONCURRENCY = 64;
 const DEPENDENCY_GROUPING_TIMEOUT_MS = 5_000;
@@ -474,7 +474,10 @@ const executeTypeAwareTasks = async (
             'engine',
             `Type-aware chunk ${chunk.index}: ${chunk.files.length} files, ${chunk.programRootFiles.length} TS roots, ${chunk.tasks.length} tasks`
           );
-          const filesForContext = projectFiles ?? chunk.files;
+          const filesForContext = resolveTypeAwareContextFiles(
+            projectFiles,
+            chunk
+          );
           const results = useProcessIsolation
             ? await executeTypeAwareChunkInChildProcess(
                 chunk.tasks,
@@ -520,6 +523,14 @@ const runGarbageCollectionHint = (): void => {
   if (typeof maybeGc === 'function') {
     maybeGc();
   }
+};
+
+const resolveTypeAwareContextFiles = (
+  projectFiles: ReadonlyArray<string> | undefined,
+  chunk: TypeAwareChunkWork
+): ReadonlyArray<string> => {
+  if (chunk.buildProjectContext && projectFiles) return projectFiles;
+  return chunk.files;
 };
 
 const getTypeAwareConcurrency = (
