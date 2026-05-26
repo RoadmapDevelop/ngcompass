@@ -1,94 +1,60 @@
 {
-    "$schema": "https://turbo.build/schema.json",
-    "remoteCache": {
-        "enabled": true
-    },
-    "globalDependencies": [
-        ".swcrc",
-        "tsup.config.ts",
+  "$schema": "https://turbo.build/schema.json",
+  "remoteCache": {
+    "enabled": true
+  },
+  "globalDependencies": [".swcrc", "tsup.config.ts", "tsconfig.json"],
+  "globalEnv": ["NODE_ENV", "BENCHMARK"],
+  "dangerouslyDisablePackageManagerCheck": false,
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".turbo/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "package.json",
         "tsconfig.json"
-    ],
-    "globalEnv": [
-        "NODE_ENV",
-        "BENCHMARK"
-    ],
-    "dangerouslyDisablePackageManagerCheck": false,
-    "tasks": {
-        "build": {
-            "dependsOn": [
-                "^build"
-            ],
-            "outputs": [
-                "dist/**",
-                ".turbo/**"
-            ],
-            "inputs": [
-                "src/**/*.ts",
-                "src/**/*.tsx",
-                "package.json",
-                "tsconfig.json"
-            ],
-            "outputLogs": "new-only",
-            "env": [
-                "NODE_ENV"
-            ]
-        },
-        "build:prod": {
-            "dependsOn": [
-                "^build:prod"
-            ],
-            "outputs": [
-                "dist/**"
-            ],
-            "inputs": [
-                "src/**/*.ts",
-                "src/**/*.tsx",
-                "package.json",
-                "tsconfig.json"
-            ],
-            "outputLogs": "new-only",
-            "env": [
-                "NODE_ENV"
-            ]
-        },
-        "typecheck": {
-            "dependsOn": [
-                "^build"
-            ],
-            "outputs": [],
-            "inputs": [
-                "src/**/*.ts",
-                "src/**/*.tsx",
-                "tsconfig.json"
-            ],
-            "outputLogs": "errors-only"
-        },
-        "test": {
-            "dependsOn": [
-                "^build"
-            ],
-            "outputs": [
-                "coverage/**"
-            ],
-            "inputs": [
-                "src/**/*.ts",
-                "tests/**/*.ts",
-                "**/*.test.ts"
-            ],
-            "outputLogs": "new-only"
-        },
-        "test:watch": {
-            "cache": false,
-            "persistent": true
-        },
-        "dev": {
-            "cache": false,
-            "persistent": true
-        },
-        "clean": {
-            "cache": false
-        }
+      ],
+      "outputLogs": "new-only",
+      "env": ["NODE_ENV"]
     },
-    "ui": "tui",
-    "cacheDir": ".turbo/cache"
+    "build:prod": {
+      "dependsOn": ["^build:prod"],
+      "outputs": ["dist/**"],
+      "inputs": [
+        "src/**/*.ts",
+        "src/**/*.tsx",
+        "package.json",
+        "tsconfig.json"
+      ],
+      "outputLogs": "new-only",
+      "env": ["NODE_ENV"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": [],
+      "inputs": ["src/**/*.ts", "src/**/*.tsx", "tsconfig.json"],
+      "outputLogs": "errors-only"
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"],
+      "inputs": ["src/**/*.ts", "tests/**/*.ts", "**/*.test.ts"],
+      "outputLogs": "new-only"
+    },
+    "test:watch": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "clean": {
+      "cache": false
+    }
+  },
+  "ui": "tui",
+  "cacheDir": ".turbo/cache"
 }

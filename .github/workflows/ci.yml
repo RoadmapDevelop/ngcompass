@@ -23,7 +23,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { fetch-depth: 2 }
 
-      - uses: pnpm/action-setup@v4    # reads packageManager from package.json
+      - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4
         with:
@@ -45,18 +45,18 @@ jobs:
           SMOKE_DIR="$RUNNER_TEMP/ngcompass-smoke"
           mkdir -p "$PACKS_DIR" "$SMOKE_DIR"
 
-          # Pack every workspace package so npm can resolve inter-package deps locally
+
           for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
                      packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
             (cd "$pkg" && pnpm pack --pack-destination "$PACKS_DIR")
           done
 
-          # Install all tarballs together — npm resolves workspace deps from this set
+
           cd "$SMOKE_DIR"
           npm init -y
           npm install --no-save "$PACKS_DIR"/*.tgz
 
-          # Persist the bin dir across steps via GITHUB_PATH
+
           echo "$SMOKE_DIR/node_modules/.bin" >> "$GITHUB_PATH"
 
       - name: Verify ngcompass CLI commands
@@ -100,7 +100,7 @@ jobs:
           INIT_DIR="$RUNNER_TEMP/ngcompass-init-test"
           mkdir -p "$INIT_DIR"
           ngcompass init --cwd "$INIT_DIR"
-          # Confirm a config file was created
+
           shopt -s nullglob
           config_files=(
             "$INIT_DIR"/.ngcompassrc*
@@ -210,11 +210,11 @@ jobs:
       - name: Verify exit codes
         shell: bash
         run: |
-          # Known-good command must exit 0
+
           ngcompass --version
           [ $? -eq 0 ] || (echo "ERROR: --version exited non-zero" && exit 1)
 
-          # Unknown command must exit non-zero
+
           if ngcompass __unknown_command__ 2>/dev/null; then
             echo "ERROR: unknown command exited 0"
             exit 1
@@ -242,7 +242,7 @@ jobs:
           node scripts/check-coverage.js
 
       - name: Security audit
-        # --prod scopes audit to runtime dependencies only (devDep vulns don't ship to users)
+
         if: matrix.os == 'ubuntu-latest' && matrix.node == '20.19.x'
         run: pnpm audit --audit-level high --prod
 

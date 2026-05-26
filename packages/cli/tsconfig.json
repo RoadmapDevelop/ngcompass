@@ -7,7 +7,7 @@
     "incremental": false,
     "moduleResolution": "bundler",
     "module": "esnext",
-    "types": ["vitest/globals" , "node"],
+    "types": ["vitest/globals", "node"],
     "skipLibCheck": true,
     "lib": ["ESNext"]
   },

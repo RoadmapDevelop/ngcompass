@@ -1,43 +1,3 @@
-/**
- * @fileoverview
- * `RuleRegistry` — the package's plugin boundary.
- *
- * Owns every registered rule handler plus the optional metadata overrides
- * a plugin can attach. The global singleton (`getGlobalRegistry()`) backs
- * both the built-in rules registered via `registerAllBuiltinRules()` and
- * the plugins loaded through `@ngcompass/config`'s `loadPlugins()`.
- *
- * Worker threads have their own module instance — they must call
- * `registerAllBuiltinRules()` themselves to populate their registry.
- *
- * Plugin authors export an array of RulePlugin objects from their package.
- * The plugin-loader reads the config `plugins` array and calls registry.register()
- * for each plugin — no core files need to be modified.
- *
- * Example plugin package:
- * ```ts
- * // my-org-rules/src/index.ts
- * import type { RulePlugin } from '@ngcompass/rules';
- * import { createComponentRule } from '@ngcompass/engine';
- *
- * const noBareSelectorRule: RulePlugin = {
- *   name: 'my-org/no-bare-selectors',
- *   handler: createComponentRule('my-org/no-bare-selectors', (node, ctx) => { ... }),
- *   meta: { category: 'style', dependencyType: 'component' },
- * };
- *
- * export default [noBareSelectorRule];
- * ```
- *
- * ngcompass.config.ts:
- * ```ts
- * export default {
- *   plugins: ['my-org-rules'],
- *   rules: { 'my-org/no-bare-selectors': 'high' },
- * };
- * ```
- */
-
 import type { PluginManifest, RuleListEntry } from '@ngcompass/common';
 import type { RuleHandler } from '@ngcompass/engine';
 import { RuleMetadata, RuleRegistryEntry } from '@ngcompass/common';
@@ -45,243 +5,139 @@ import { RECOMMENDATIONS } from '../recommendations.js';
 import { getPresetsForRule } from '../presets/index.js';
 import { allPreset } from '../presets/all.js';
 
-/**
- * Default per-rule config returned by `getRegistryEntry` when a rule has
- * no preset entry. Kept as a module-level constant so the shape can be
- * extended in one place rather than at every call site.
- */
 const DEFAULT_RULE_CONFIG = { severity: 'warn' as const, options: {} };
 
-// ============================================
-// PUBLIC TYPES
-// ============================================
-
-/**
- * A plugin descriptor — the unit external rule authors export.
- */
 export interface RulePlugin {
-    /** Globally unique rule name. Use namespacing: 'my-org/rule-name' */
-    readonly name: string;
-    /** The rule handler (created via createComponentRule, createDecoratedPropertyRule, etc.) */
-    readonly handler: RuleHandler<unknown>;
-    /** Optional metadata overrides (category, description, dependencyType, etc.) */
-    readonly meta?: Partial<RuleMetadata>;
-    /** Optional manifest (RFC §7.6) */
-    readonly manifest?: PluginManifest;
+  readonly name: string;
+
+  readonly handler: RuleHandler<unknown>;
+
+  readonly meta?: Partial<RuleMetadata>;
+
+  readonly manifest?: PluginManifest;
 }
 
-/**
- * Options controlling registration behaviour.
- */
 export interface RegisterOptions {
-    /**
-     * Allow overwriting an existing rule with the same name.
-     * Default: false — throws on duplicate to prevent silent errors.
-     */
-    allowOverride?: boolean;
+  allowOverride?: boolean;
 }
 
-// ============================================
-// REGISTRY CLASS
-// ============================================
-
-/**
- * Central registry for rule handlers.
- *
- * Responsibilities:
- *  - Store handler instances keyed by rule name
- *  - Prevent accidental duplicate registration
- *  - Expose read-only views for the engine and adapter
- */
 export class RuleRegistry {
-    private readonly _handlers = new Map<string, RuleHandler<unknown>>();
-    private readonly _meta = new Map<string, Partial<RuleMetadata>>();
+  private readonly _handlers = new Map<string, RuleHandler<unknown>>();
+  private readonly _meta = new Map<string, Partial<RuleMetadata>>();
 
-    /**
-     * Registers a rule plugin.
-     *
-     * @throws {Error} if the rule name is already registered and allowOverride is false
-     */
-    register(plugin: RulePlugin, opts: RegisterOptions = {}): void {
-        if (this._handlers.has(plugin.name) && !opts.allowOverride) {
-            throw new Error(
-                `[ngcompass] Rule "${plugin.name}" is already registered. ` +
-                `Use allowOverride: true to replace an existing rule intentionally.`
-            );
-        }
-        this._handlers.set(plugin.name, plugin.handler);
-        if (plugin.meta) {
-            this._meta.set(plugin.name, plugin.meta);
-        }
+  register(plugin: RulePlugin, opts: RegisterOptions = {}): void {
+    if (this._handlers.has(plugin.name) && !opts.allowOverride) {
+      throw new Error(
+        `[ngcompass] Rule "${plugin.name}" is already registered. ` +
+          `Use allowOverride: true to replace an existing rule intentionally.`
+      );
     }
+    this._handlers.set(plugin.name, plugin.handler);
+    if (plugin.meta) {
+      this._meta.set(plugin.name, plugin.meta);
+    }
+  }
 
-    /**
-     * Returns the handler for a rule name, or undefined if not registered.
-     */
-    get(name: string): RuleHandler<unknown> | undefined {
-        return this._handlers.get(name);
-    }
+  get(name: string): RuleHandler<unknown> | undefined {
+    return this._handlers.get(name);
+  }
 
-    /**
-     * Returns true if a rule with this name is registered.
-     */
-    has(name: string): boolean {
-        return this._handlers.has(name);
-    }
+  has(name: string): boolean {
+    return this._handlers.has(name);
+  }
 
-    /**
-     * Returns all registered rule names.
-     */
-    getRuleNames(): ReadonlyArray<string> {
-        return Array.from(this._handlers.keys());
-    }
+  getRuleNames(): ReadonlyArray<string> {
+    return Array.from(this._handlers.keys());
+  }
 
-    /**
-     * Returns the full handler map (read-only view).
-     * Used by the engine adapter for batched execution.
-     */
-    getAll(): ReadonlyMap<string, RuleHandler<unknown>> {
-        return this._handlers;
-    }
+  getAll(): ReadonlyMap<string, RuleHandler<unknown>> {
+    return this._handlers;
+  }
 
-    /**
-     * Returns metadata overrides for a rule name, if any.
-     */
-    getMeta(name: string): Partial<RuleMetadata> | undefined {
-        return this._meta.get(name);
-    }
+  getMeta(name: string): Partial<RuleMetadata> | undefined {
+    return this._meta.get(name);
+  }
 
-    /**
-     * Returns resolved RuleMetadata for a rule name.
-     * Fills in defaults for fields not specified in the plugin's meta.
-     */
-    getMetadata(name: string): RuleMetadata | undefined {
-        if (!this._handlers.has(name)) return undefined;
-        const overrides = this._meta.get(name) ?? {};
-        return {
-            name,
-            description: overrides.description ?? `Rule: ${name}`,
-            category: overrides.category ?? 'general',
-            dependencyType: overrides.dependencyType ?? 'standalone',
-            requires: { tsAst: true, ...overrides.requires },
-            filePatterns: overrides.filePatterns,
-        };
-    }
+  getMetadata(name: string): RuleMetadata | undefined {
+    if (!this._handlers.has(name)) return undefined;
+    const overrides = this._meta.get(name) ?? {};
+    return {
+      name,
+      description: overrides.description ?? `Rule: ${name}`,
+      category: overrides.category ?? 'general',
+      dependencyType: overrides.dependencyType ?? 'standalone',
+      requires: { tsAst: true, ...overrides.requires },
+      filePatterns: overrides.filePatterns,
+    };
+  }
 
-    /**
-     * Returns a full RuleRegistryEntry (metadata + default config).
-     * Used for backward compatibility with the legacy registry API.
-     */
-    getRegistryEntry(name: string): RuleRegistryEntry | undefined {
-        const metadata = this.getMetadata(name);
-        if (!metadata) return undefined;
-        return { name, metadata, defaultConfig: DEFAULT_RULE_CONFIG };
-    }
+  getRegistryEntry(name: string): RuleRegistryEntry | undefined {
+    const metadata = this.getMetadata(name);
+    if (!metadata) return undefined;
+    return { name, metadata, defaultConfig: DEFAULT_RULE_CONFIG };
+  }
 
-    /**
-     * Returns a ReadonlyMap compatible with the legacy RuleRegistry type.
-     */
-    toReadonlyMap(): ReadonlyMap<string, RuleRegistryEntry> {
-        const map = new Map<string, RuleRegistryEntry>();
-        for (const name of this._handlers.keys()) {
-            const entry = this.getRegistryEntry(name);
-            if (entry) map.set(name, entry);
-        }
-        return map;
+  toReadonlyMap(): ReadonlyMap<string, RuleRegistryEntry> {
+    const map = new Map<string, RuleRegistryEntry>();
+    for (const name of this._handlers.keys()) {
+      const entry = this.getRegistryEntry(name);
+      if (entry) map.set(name, entry);
     }
+    return map;
+  }
 
-    /**
-     * Total number of registered rules.
-     */
-    get size(): number {
-        return this._handlers.size;
-    }
+  get size(): number {
+    return this._handlers.size;
+  }
 }
 
-// ============================================
-// GLOBAL SINGLETON
-// ============================================
-
-/**
- * The single shared registry instance used by the CLI and built-in rules.
- *
- * Worker threads must call registerAllBuiltinRules() to populate their own
- * in-process registry (they do not share memory with the main thread).
- */
 let _globalRegistry: RuleRegistry | null = null;
 
-/**
- * Returns the global registry, creating it on first call.
- */
 export const getGlobalRegistry = (): RuleRegistry => {
-    if (!_globalRegistry) {
-        _globalRegistry = new RuleRegistry();
-    }
-    return _globalRegistry;
+  if (!_globalRegistry) {
+    _globalRegistry = new RuleRegistry();
+  }
+  return _globalRegistry;
 };
 
-/**
- * Resets the global registry to a fresh empty instance.
- *
- * FOR TESTS ONLY — never call this in production code.
- * Allows isolated unit tests that register their own rules without
- * interfering with the global built-in rules.
- */
 export const resetGlobalRegistry = (): void => {
-    _globalRegistry = null;
+  _globalRegistry = null;
 };
 
-// ============================================
-// CONVENIENCE FUNCTIONS (delegate to global)
-// ============================================
-
-/**
- * Check if a rule exists in the global registry.
- */
 export const isKnownRule = (name: string): boolean => {
-    return getGlobalRegistry().has(name);
+  return getGlobalRegistry().has(name);
 };
 
-/**
- * Get rule metadata by name from the global registry.
- */
 export const getRuleMetadata = (name: string): RuleMetadata | undefined => {
-    return getGlobalRegistry().getMetadata(name);
+  return getGlobalRegistry().getMetadata(name);
 };
 
-/**
- * Get all registered rule names from the global registry.
- */
 export const getAllRuleNames = (): ReadonlyArray<string> => {
-    return getGlobalRegistry().getRuleNames();
+  return getGlobalRegistry().getRuleNames();
 };
 
-/**
- * Backward-compatible accessor for the legacy `ruleRegistry` constant.
- * Returns a ReadonlyMap<string, RuleRegistryEntry> view of the global registry.
- */
-export const getRuleRegistryMap = (): ReadonlyMap<string, RuleRegistryEntry> => {
-    return getGlobalRegistry().toReadonlyMap();
+export const getRuleRegistryMap = (): ReadonlyMap<
+  string,
+  RuleRegistryEntry
+> => {
+  return getGlobalRegistry().toReadonlyMap();
 };
 
-/**
- * Returns all registered rules as RuleListEntry objects.
- * Used by the `compass rules` CLI command.
- */
 export function getRuleListEntries(): RuleListEntry[] {
-    const registry = getGlobalRegistry();
-    const entries: RuleListEntry[] = [];
+  const registry = getGlobalRegistry();
+  const entries: RuleListEntry[] = [];
 
-    for (const name of registry.getRuleNames()) {
-        const meta = registry.getMetadata(name);
-        entries.push({
-            name,
-            description: RECOMMENDATIONS[name] ?? meta?.description ?? `Rule: ${name}`,
-            domain: meta?.category ?? 'general',
-            severity: (allPreset.rules as Record<string, string>)[name] ?? 'warn',
-            presets: getPresetsForRule(name),
-        });
-    }
+  for (const name of registry.getRuleNames()) {
+    const meta = registry.getMetadata(name);
+    entries.push({
+      name,
+      description:
+        RECOMMENDATIONS[name] ?? meta?.description ?? `Rule: ${name}`,
+      domain: meta?.category ?? 'general',
+      severity: (allPreset.rules as Record<string, string>)[name] ?? 'warn',
+      presets: getPresetsForRule(name),
+    });
+  }
 
-    return entries;
+  return entries;
 }

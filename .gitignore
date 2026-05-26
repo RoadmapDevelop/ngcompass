@@ -1,15 +1,15 @@
-# Dependencies
+
 node_modules
 .pnpm-store
 
-# Build outputs
+
 dist
 *.tsbuildinfo
 
-# Testing
+
 coverage
 
-# IDE
+
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
@@ -18,25 +18,25 @@ coverage
 *.swo
 *~
 
-# OS
+
 .DS_Store
 Thumbs.db
 
-# Logs
+
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Cache
+
 .cache
 .eslintcache
 
-# Turbo
+
 .turbo
 
-# Debug artifacts
+
 tmp/
 debug-*.js
 debug-*.ts
@@ -45,7 +45,7 @@ packages/*/test-results/
 .test-cache-config/
 .claude/
 
-# Local analysis artifacts
+
 benchmark-results.json
 *-report.json
 *-report.html

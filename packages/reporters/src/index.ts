@@ -1,14 +1,3 @@
-/**
- * @fileoverview
- * Public entry point for `@ngcompass/reporters`.
- *
- * Surfaces the reporter contracts, the `getReporter` / `getConfigReporter`
- * / `getCacheReporter` factories, the output abstraction (`ReporterOutput`
- * + `processOutput` + `createTestOutput`), the code-frame renderer, and
- * every concrete reporter implementation. Consumers (CLI) typically use
- * only the factories.
- */
-
 export * from './types.js';
 export * from './factory.js';
 export * from './output.js';

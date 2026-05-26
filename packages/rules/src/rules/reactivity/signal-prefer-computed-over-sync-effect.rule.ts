@@ -1,106 +1,251 @@
-import { RuleFailure, RuleContext } from "@ngcompass/common";
-import { CallExpression } from "@ngcompass/ast";
+import ts from 'typescript';
+import { CallExpression } from '@ngcompass/ast';
+import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createCallExpressionRule } from '@ngcompass/engine';
-import { RECOMMENDATIONS } from "../../recommendations";
+import { RECOMMENDATIONS } from '../../recommendations';
 import {
-    AstNode,
-    MaybeAstNode,
-    unwrapNode,
-    isMemberExpressionLike,
-    getStaticPropertyName,
-    getTsSymbolAtNode,
-    getCalleeName,
-    childNodes,
-    isCalleeNamed,
-    getCallbackArg,
-    getFunctionBody,
-    getNodeStart
-} from "../../rule-utils";
+  AstNode,
+  ensureRuleSourceFile,
+  getNodeStart,
+  isCalleeNamed,
+} from '../../rule-utils';
 
-const WRITE_METHODS = new Set(['set', 'update', 'mutate']);
-const ASYNC_METHODS = new Set(['setTimeout', 'setInterval', 'queueMicrotask', 'requestAnimationFrame', 'then', 'catch', 'finally', 'subscribe']);
-const LINKED_SIGNAL_METHOD = 'linkedSignal';
+const RULE_NAME = 'signal-prefer-computed-over-sync-effect';
 
-function isSignalWrite(node: MaybeAstNode): boolean {
-    const call = unwrapNode(node);
-    if (!call || call.type !== 'CallExpression') return false;
-    const callee = unwrapNode(call.callee);
-    return isMemberExpressionLike(callee) && WRITE_METHODS.has(getStaticPropertyName(callee) || '');
+const GLOBAL_ASYNC_NAMES = new Set([
+  'setTimeout',
+  'setInterval',
+  'queueMicrotask',
+  'requestAnimationFrame',
+]);
+
+const PROMISE_INSTANCE_METHODS = new Set(['then', 'catch', 'finally']);
+
+const SIGNAL_WRITE_METHODS = new Set(['set', 'update', 'mutate']);
+
+interface EffectShape {
+  readonly hasSignalRead: boolean;
+  readonly hasSignalWrite: boolean;
+  readonly hasAsync: boolean;
+  readonly hasLinkedSignal: boolean;
+  readonly firstWrite?: ts.Node;
 }
 
-function isSignalRead(node: MaybeAstNode, context: RuleContext, inEffect: boolean): boolean {
-    const call = unwrapNode(node);
-    if (!call || call.type !== 'CallExpression' || (Array.isArray(call.arguments) && call.arguments.length > 0)) return false;
-
-    const callee = unwrapNode(call.callee);
-    if (!callee) return false;
-
-    if (context.typeChecker) {
-        try {
-            const sym = getTsSymbolAtNode(callee, context);
-            if (sym) {
-                const type = context.typeChecker.getTypeOfSymbolAtLocation(sym, sym.valueDeclaration!);
-                if (type && context.typeChecker.typeToString(type).includes('Signal')) return true;
-            }
-        } catch {
-            // Fall back to heuristic detection when type-checker lookup fails.
-        }
-    }
-
-    if (isMemberExpressionLike(callee)) return unwrapNode(callee.object)?.type === 'ThisExpression';
-    return inEffect && callee.type === 'Identifier';
-}
-
-function analyzeEffect(root: AstNode, context: RuleContext): { hasRead: boolean; hasWrite: boolean; hasAsync: boolean; hasLinked: boolean; firstWrite: AstNode | null } {
-    const res = { hasRead: false, hasWrite: false, hasAsync: false, hasLinked: false, firstWrite: null as AstNode | null };
-    const stack: AstNode[] = [root];
-
-    while (stack.length) {
-        const node = unwrapNode(stack.pop());
-        if (!node) continue;
-
-        if (node.type === 'AwaitExpression' || node.type === 'YieldExpression') res.hasAsync = true;
-        if (node.type === 'CallExpression') {
-            const name = getCalleeName(node);
-            if (name && ASYNC_METHODS.has(name)) res.hasAsync = true;
-            if (name === LINKED_SIGNAL_METHOD) res.hasLinked = true;
-
-            if (isSignalWrite(node)) {
-                res.hasWrite = true;
-                if (!res.firstWrite) res.firstWrite = node;
-            } else if (isSignalRead(node, context, true)) {
-                res.hasRead = true;
-            }
-        }
-        for (const child of childNodes(node)) stack.push(child);
-    }
-    return res;
+interface Ctx {
+  readonly typeChecker: ts.TypeChecker;
+  readonly angularTypes: NonNullable<RuleContext['angularTypes']>;
 }
 
 export const signalPreferComputedRule = createCallExpressionRule(
-    'signal-prefer-computed-over-sync-effect',
-    (node: CallExpression, context: RuleContext): RuleFailure | null => {
-        const astNode = node as unknown as AstNode;
-        if (!isCalleeNamed(astNode.callee, 'effect')) return null;
+  RULE_NAME,
+  (node: CallExpression, context: RuleContext): RuleFailure | null => {
+    const call = node as unknown as AstNode;
+    if (!isCalleeNamed(call.callee, 'effect')) return null;
 
-        const callback = getCallbackArg(astNode);
-        const body = callback ? getFunctionBody(callback) : null;
-        if (!body) return null;
+    const { typeChecker, angularTypes } = context;
+    if (!typeChecker || !angularTypes) return null;
 
-        const { hasRead, hasWrite, hasAsync, hasLinked, firstWrite } = analyzeEffect(body, context);
-        if (!hasWrite || !hasRead || hasAsync || hasLinked) return null;
+    const tsCall = findTsCallAtPosition(context, getNodeStart(call));
+    if (!tsCall) return null;
 
-        const { line, column } = context.locator.location(getNodeStart(firstWrite || astNode));
-        return {
-            filePath: context.filePath,
-            ruleName: 'signal-prefer-computed-over-sync-effect',
-            message: 'This effect reads reactive values and writes derived state, which adds extra reactive cycles.',
-            line,
-            column,
-            severity: 'warn',
-            fix: RECOMMENDATIONS['signal-prefer-computed-over-sync-effect'],
-        };
-    },
-    { requires: { typeChecker: true } }
+    const callback = tsCall.arguments[0];
+    if (
+      !callback ||
+      !(ts.isArrowFunction(callback) || ts.isFunctionExpression(callback))
+    ) {
+      return null;
+    }
+
+    const shape = analyzeEffectBody(callback.body, {
+      typeChecker,
+      angularTypes,
+    });
+    if (!shape.hasSignalRead || !shape.hasSignalWrite) return null;
+    if (shape.hasAsync || shape.hasLinkedSignal) return null;
+
+    const anchor = shape.firstWrite ?? tsCall;
+    const { line, column } = context.locator.location(anchor.getStart());
+    return {
+      filePath: context.filePath,
+      ruleName: RULE_NAME,
+      message:
+        'This effect reads reactive values and writes derived state, which adds extra reactive cycles.',
+      line,
+      column,
+      severity: 'warn',
+      fix: RECOMMENDATIONS[RULE_NAME],
+    };
+  },
+  { requires: { typeChecker: true } }
 );
 
+function analyzeEffectBody(node: ts.Node, ctx: Ctx): EffectShape {
+  let hasSignalRead = false;
+  let hasSignalWrite = false;
+  let hasAsync = false;
+  let hasLinkedSignal = false;
+  let firstWrite: ts.Node | undefined;
+
+  const visit = (n: ts.Node): void => {
+    if (hasAsync && hasLinkedSignal && hasSignalRead && hasSignalWrite) return;
+
+    if (
+      n.kind === ts.SyntaxKind.AwaitExpression ||
+      n.kind === ts.SyntaxKind.YieldExpression
+    ) {
+      hasAsync = true;
+    }
+
+    if (ts.isCallExpression(n)) {
+      classifyCall(n, ctx, {
+        onSignalRead: () => {
+          hasSignalRead = true;
+        },
+        onSignalWrite: () => {
+          hasSignalWrite = true;
+          firstWrite ??= n;
+        },
+        onAsync: () => {
+          hasAsync = true;
+        },
+        onLinkedSignal: () => {
+          hasLinkedSignal = true;
+        },
+      });
+    }
+
+    ts.forEachChild(n, visit);
+  };
+
+  visit(node);
+  return {
+    hasSignalRead,
+    hasSignalWrite,
+    hasAsync,
+    hasLinkedSignal,
+    firstWrite,
+  };
+}
+
+interface CallHandlers {
+  readonly onSignalRead: () => void;
+  readonly onSignalWrite: () => void;
+  readonly onAsync: () => void;
+  readonly onLinkedSignal: () => void;
+}
+
+function classifyCall(
+  call: ts.CallExpression,
+  ctx: Ctx,
+  h: CallHandlers
+): void {
+  if (ts.isPropertyAccessExpression(call.expression)) {
+    const method = call.expression.name.text;
+    const receiver = call.expression.expression;
+    const receiverType = ctx.typeChecker.getTypeAtLocation(receiver);
+
+    if (
+      SIGNAL_WRITE_METHODS.has(method) &&
+      ctx.angularTypes.isWritableSignal(receiverType)
+    ) {
+      h.onSignalWrite();
+      return;
+    }
+
+    if (
+      method === 'subscribe' &&
+      (ctx.angularTypes.isObservable(receiverType) ||
+        ctx.angularTypes.isSubjectLike(receiverType))
+    ) {
+      h.onAsync();
+      return;
+    }
+
+    if (PROMISE_INSTANCE_METHODS.has(method) && isPromiseType(receiverType)) {
+      h.onAsync();
+      return;
+    }
+
+    return;
+  }
+
+  if (ts.isIdentifier(call.expression)) {
+    const name = call.expression.text;
+
+    if (name === 'linkedSignal') {
+      h.onLinkedSignal();
+      return;
+    }
+
+    if (
+      GLOBAL_ASYNC_NAMES.has(name) &&
+      isGlobalLibSymbol(call.expression, ctx.typeChecker)
+    ) {
+      h.onAsync();
+      return;
+    }
+
+    if (
+      call.arguments.length === 0 &&
+      isSignalTypedCallee(call.expression, ctx)
+    ) {
+      h.onSignalRead();
+    }
+  }
+}
+
+function isSignalTypedCallee(id: ts.Identifier, ctx: Ctx): boolean {
+  const symbol = ctx.typeChecker.getSymbolAtLocation(id);
+  if (!symbol) return false;
+  const decl = symbol.valueDeclaration ?? symbol.declarations?.[0];
+  if (!decl) return false;
+  const type = ctx.typeChecker.getTypeOfSymbolAtLocation(symbol, decl);
+  return ctx.angularTypes.isSignal(type);
+}
+
+function isPromiseType(type: ts.Type): boolean {
+  const symbol = type.aliasSymbol ?? type.symbol;
+  if (!symbol || symbol.name !== 'Promise') return false;
+  return isFromTypeScriptLib(symbol);
+}
+
+function isGlobalLibSymbol(
+  id: ts.Identifier,
+  typeChecker: ts.TypeChecker
+): boolean {
+  const symbol = typeChecker.getSymbolAtLocation(id);
+  if (!symbol) return false;
+  return isFromTypeScriptLib(symbol);
+}
+
+const TS_LIB_PATH_MARKER = '/typescript/lib/lib.';
+
+function isFromTypeScriptLib(symbol: ts.Symbol): boolean {
+  const declarations = symbol.getDeclarations();
+  if (!declarations) return false;
+  for (const decl of declarations) {
+    const file = decl.getSourceFile().fileName.replace(/\\/g, '/');
+    if (file.includes(TS_LIB_PATH_MARKER)) return true;
+  }
+  return false;
+}
+
+function findTsCallAtPosition(
+  context: RuleContext,
+  position: number
+): ts.CallExpression | undefined {
+  const sourceFile = ensureRuleSourceFile(context);
+  if (!sourceFile) return undefined;
+
+  let result: ts.CallExpression | undefined;
+  const visit = (node: ts.Node): void => {
+    if (result) return;
+    if (ts.isCallExpression(node) && node.getStart() === position) {
+      result = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return result;
+}

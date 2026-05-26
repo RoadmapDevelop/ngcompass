@@ -1,86 +1,68 @@
-/**
- * @fileoverview
- * Rule recommendations and inline code examples.
- *
- * The two exported tables are keyed by rule name and surfaced by reporters
- * (Console, HTML) below the violation message. Recommendation entries must
- * match the `ruleName` field on `RuleFailure` exactly — including the
- * subtype suffixes some rules emit (e.g. `template-trackby-required` emits
- * `template-trackby-required-for-ngfor` for ngFor-specific findings, so
- * both keys live here).
- */
 export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
-    'prefer-on-push-component-change-detection':
-        'Add `changeDetection: ChangeDetectionStrategy.OnPush` to the component metadata.',
-    'template-no-call-expression':
-        'Move the value to a pipe, computed signal, or cached component property.',
-    'rxjs-no-subscribe-in-component':
-        'Use `toSignal()` or the `async` pipe for view state; add `takeUntilDestroyed()` for long-lived imperative subscriptions.',
-    'template-trackby-required':
-        'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
-    'template-trackby-required-for-ngfor':
-        'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
-    'template-no-object-literal-binding':
-        'Move the object to a component property, signal, computed value, or pure pipe.',
-    'template-no-array-literal-binding':
-        'Move the array to a component property, signal, computed value, or pure pipe.',
-    'toSignal-require-initialValue':
-        'Pass `{ initialValue }` or `{ requireSync: true }` so the signal has a stable type.',
-    'rxjs-avoid-subject-as-event-bus':
-        'Use `signal()` for component UI state; move complex async pipelines into a service.',
-    'signal-no-side-effects-in-computed':
-        'Move side effects to an `effect()` or method, and keep `computed()` pure.',
-    'signal-no-writes-in-computed':
-        'Move `.set()` or `.update()` calls to an `effect()` or event handler.',
-    'prefer-inject-over-constructor-di':
-        'Replace constructor parameters with field initializers that call `inject()`.',
-    'component-no-manual-detect-changes':
-        'Use signals, `async` pipe, or input-driven state instead of calling `detectChanges()` or `markForCheck()`.',
-    'rxjs-require-takeUntilDestroyed':
-        'Add `takeUntilDestroyed()` or another teardown operator before `subscribe()`.',
-    'template-no-async-pipe-duplication':
-        'Store the async value once with `@if (... | async; as value)` or a view-model signal.',
-    'rxjs-prefer-toSignal-for-template-state':
-        'Convert template-used observables to `toSignal()` and read them as signals in the template.',
-    'signal-effect-must-be-destroy-scoped':
-        'Create the effect in an injection context or pass an explicit `{ injector }`.',
-    'signal-no-effect-in-constructor':
-        'Move the `effect()` call to a field initializer.',
-    'signal-prefer-computed-over-sync-effect':
-        'Replace the write-producing `effect()` with a `computed()` signal.',
-    'signal-avoid-untracked-overuse':
-        'Remove `untracked()` unless the dependency must be intentionally ignored.',
-    'template-prefer-control-flow':
-        'Replace the legacy directive with the matching `@if`, `@for`, or `@switch` block.',
-    'signal-prefer-input-signal':
-        'Replace `@Input()` with `input()` or `input.required()`.',
-    'signal-prefer-output-function':
-        'Replace `@Output() EventEmitter` with `output<T>()`.',
-    'no-bypass-sanitization':
-        'Use Angular sanitization or a trusted server-side sanitizer instead of `bypassSecurityTrust*`.',
-    'rxjs-no-nested-subscribe':
-        'Flatten the stream with `switchMap`, `mergeMap`, `concatMap`, or `exhaustMap`.',
-    'no-document-access':
-        'Inject `DOCUMENT` or move browser-only DOM work into `afterNextRender()`.',
-    'template-no-unsafe-bindings':
-        'Sanitize the value before binding, or replace the raw HTML binding with structured template content.',
-    'signal-prefer-model':
-        'Replace the `@Input()` / `@Output()Change` pair with `model()`.',
-    'prefer-after-render-over-after-view-init':
-        'Move browser-only DOM access into `afterNextRender()`.',
-    'spec-no-focused-test':
-        'Replace focused or disabled test helpers with normal `describe` and `it` calls.',
+  'prefer-on-push-component-change-detection':
+    'Add `changeDetection: ChangeDetectionStrategy.OnPush` to the component metadata.',
+  'template-no-call-expression':
+    'Move the value to a pipe, computed signal, or cached component property.',
+  'rxjs-no-subscribe-in-component':
+    'Use `toSignal()` or the `async` pipe for view state; add `takeUntilDestroyed()` for long-lived imperative subscriptions.',
+  'template-trackby-required':
+    'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
+  'template-trackby-required-for-ngfor':
+    'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
+  'template-no-object-literal-binding':
+    'Move the object to a component property, signal, computed value, or pure pipe.',
+  'template-no-array-literal-binding':
+    'Move the array to a component property, signal, computed value, or pure pipe.',
+  'toSignal-require-initialValue':
+    'Pass `{ initialValue }` or `{ requireSync: true }` so the signal has a stable type.',
+  'rxjs-avoid-subject-as-event-bus':
+    'Use `signal()` for component UI state; move complex async pipelines into a service.',
+  'signal-no-side-effects-in-computed':
+    'Move side effects to an `effect()` or method, and keep `computed()` pure.',
+  'signal-no-writes-in-computed':
+    'Move `.set()` or `.update()` calls to an `effect()` or event handler.',
+  'prefer-inject-over-constructor-di':
+    'Replace constructor parameters with field initializers that call `inject()`.',
+  'component-no-manual-detect-changes':
+    'Use signals, `async` pipe, or input-driven state instead of calling `detectChanges()` or `markForCheck()`.',
+  'rxjs-require-takeUntilDestroyed':
+    'Add `takeUntilDestroyed()` or another teardown operator before `subscribe()`.',
+  'template-no-async-pipe-duplication':
+    'Store the async value once with `@if (... | async; as value)` or a view-model signal.',
+  'rxjs-prefer-toSignal-for-template-state':
+    'Convert template-used observables to `toSignal()` and read them as signals in the template.',
+  'signal-effect-must-be-destroy-scoped':
+    'Create the effect in an injection context or pass an explicit `{ injector }`.',
+  'signal-no-effect-in-constructor':
+    'Move the `effect()` call to a field initializer.',
+  'signal-prefer-computed-over-sync-effect':
+    'Replace the write-producing `effect()` with a `computed()` signal.',
+  'signal-avoid-untracked-overuse':
+    'Remove `untracked()` unless the dependency must be intentionally ignored.',
+  'template-prefer-control-flow':
+    'Replace the legacy directive with the matching `@if`, `@for`, or `@switch` block.',
+  'signal-prefer-input-signal':
+    'Replace `@Input()` with `input()` or `input.required()`.',
+  'signal-prefer-output-function':
+    'Replace `@Output() EventEmitter` with `output<T>()`.',
+  'no-bypass-sanitization':
+    'Use Angular sanitization or a trusted server-side sanitizer instead of `bypassSecurityTrust*`.',
+  'rxjs-no-nested-subscribe':
+    'Flatten the stream with `switchMap`, `mergeMap`, `concatMap`, or `exhaustMap`.',
+  'no-document-access':
+    'Inject `DOCUMENT` or move browser-only DOM work into `afterNextRender()`.',
+  'template-no-unsafe-bindings':
+    'Sanitize the value before binding, or replace the raw HTML binding with structured template content.',
+  'signal-prefer-model':
+    'Replace the `@Input()` / `@Output()Change` pair with `model()`.',
+  'prefer-after-render-over-after-view-init':
+    'Move browser-only DOM access into `afterNextRender()`.',
+  'spec-no-focused-test':
+    'Replace focused or disabled test helpers with normal `describe` and `it` calls.',
 };
 
-/**
- * Optional before/after code examples for rules that have no auto-fix.
- *
- * Keys must match the ruleName field on RuleFailure exactly.
- * Values are plain multi-line TypeScript strings — no ANSI codes.
- * The reporter renders them in a styled block below the fix recommendation.
- */
 export const CODE_EXAMPLES: Readonly<Record<string, string>> = {
-    'prefer-on-push-component-change-detection': `// Before:
+  'prefer-on-push-component-change-detection': `// Before:
 @Component({ selector: 'app-foo', template: '...' })
 export class FooComponent { }
 
@@ -92,7 +74,7 @@ export class FooComponent { }
 })
 export class FooComponent { }`,
 
-    'rxjs-no-subscribe-in-component': `// Reactive state (data derived from a stream) → use toSignal() or async pipe:
+  'rxjs-no-subscribe-in-component': `// Reactive state (data derived from a stream) → use toSignal() or async pipe:
 // Before:
 ngOnInit() { this.data$.subscribe(val => this.value = val); }
 // After:
@@ -108,7 +90,7 @@ onSave() {
     .subscribe(res => this.notify(res));
 }`,
 
-    'rxjs-avoid-subject-as-event-bus': `// Case A — UI state: replace with signal()
+  'rxjs-avoid-subject-as-event-bus': `// Case A — UI state: replace with signal()
 // Before:
 private loading$ = new Subject<boolean>();
 // After:
@@ -124,14 +106,14 @@ ngOnInit() { this.search$.pipe(debounceTime(300), switchMap(...)).subscribe(...)
 // Note: @Input() setter bridges are intentionally exempt:
 // @Input() set query(v: string) { this.search$.next(v); }  ← allowed`,
 
-    'prefer-inject-over-constructor-di': `// Before:
+  'prefer-inject-over-constructor-di': `// Before:
 constructor(private http: HttpClient, private router: Router) { }
 
 // After:
 private http = inject(HttpClient);
 private router = inject(Router);`,
 
-    'component-no-manual-detect-changes': `// Before:
+  'component-no-manual-detect-changes': `// Before:
 this.cdr.detectChanges();
 this.cdr.markForCheck();
 
@@ -140,7 +122,7 @@ this.cdr.markForCheck();
 count = signal(0);
 // Template automatically updates when signal changes`,
 
-    'rxjs-require-takeUntilDestroyed': `// Before:
+  'rxjs-require-takeUntilDestroyed': `// Before:
 this.data$.subscribe(val => this.process(val));
 
 // After:
@@ -148,7 +130,7 @@ this.data$.pipe(
   takeUntilDestroyed(this.destroyRef)
 ).subscribe(val => this.process(val));`,
 
-    'template-no-async-pipe-duplication': `// Before:
+  'template-no-async-pipe-duplication': `// Before:
 <div>{{ user$ | async }}</div>
 <span>{{ user$ | async }}</span>
 
@@ -158,7 +140,7 @@ this.data$.pipe(
   <span>{{ user }}</span>
 }`,
 
-    'signal-no-side-effects-in-computed': `// Before:
+  'signal-no-side-effects-in-computed': `// Before:
 total = computed(() => {
   this.logger.log('computing');  // side effect!
   return this.price() * this.qty();
@@ -167,7 +149,7 @@ total = computed(() => {
 // After:
 total = computed(() => this.price() * this.qty());`,
 
-    'signal-no-writes-in-computed': `// Before:
+  'signal-no-writes-in-computed': `// Before:
 derived = computed(() => {
   const val = this.source();
   this.other.set(val * 2);  // write inside computed!
@@ -179,7 +161,7 @@ derived = computed(() => this.source());
 // Use effect() for the write:
 syncEffect = effect(() => this.other.set(this.source() * 2));`,
 
-    'signal-effect-must-be-destroy-scoped': `// Before:
+  'signal-effect-must-be-destroy-scoped': `// Before:
 ngAfterViewInit() {
   effect(() => console.log(this.count()));  // no injection context!
 }
@@ -192,7 +174,7 @@ ngAfterViewInit() {
   effect(() => console.log(this.count()), { injector: this.injector });
 }`,
 
-    'signal-no-effect-in-constructor': `// Before:
+  'signal-no-effect-in-constructor': `// Before:
 constructor() {
   effect(() => console.log(this.count()));
 }
@@ -200,7 +182,7 @@ constructor() {
 // After:
 logEffect = effect(() => console.log(this.count()));`,
 
-    'signal-prefer-computed-over-sync-effect': `// Before:
+  'signal-prefer-computed-over-sync-effect': `// Before:
 logEffect = effect(() => {
   const total = this.price() * this.qty();
   this.total.set(total);
@@ -209,13 +191,13 @@ logEffect = effect(() => {
 // After:
 total = computed(() => this.price() * this.qty());`,
 
-    'toSignal-require-initialValue': `// Before:
+  'toSignal-require-initialValue': `// Before:
 data = toSignal(this.data$);  // Signal<T | undefined>
 
 // After:
 data = toSignal(this.data$, { initialValue: [] });  // Signal<T>`,
 
-    'template-no-call-expression': `// Before:
+  'template-no-call-expression': `// Before:
 <div>{{ getLabel(item) }}</div>
 
 // After (option A - pipe):
@@ -224,21 +206,21 @@ data = toSignal(this.data$, { initialValue: [] });  // Signal<T>`,
 // After (option B - signal):
 label = computed(() => this.getLabel(this.item()));`,
 
-    'template-no-object-literal-binding': `// Before:
+  'template-no-object-literal-binding': `// Before:
 <app-child [config]="{ color: 'red', size: 10 }"></app-child>
 
 // After:
 childConfig = signal({ color: 'red', size: 10 });
 // template: <app-child [config]="childConfig()"></app-child>`,
 
-    'template-no-array-literal-binding': `// Before:
+  'template-no-array-literal-binding': `// Before:
 <app-child [items]="[1, 2, 3]"></app-child>
 
 // After:
 items = signal([1, 2, 3]);
 // template: <app-child [items]="items()"></app-child>`,
 
-    'template-trackby-required-for-ngfor': `// Before:
+  'template-trackby-required-for-ngfor': `// Before:
 <div *ngFor="let item of items">{{ item.name }}</div>
 
 // After:
@@ -249,7 +231,7 @@ items = signal([1, 2, 3]);
   <div>{{ item.name }}</div>
 }`,
 
-    'rxjs-prefer-toSignal-for-template-state': `// Before:
+  'rxjs-prefer-toSignal-for-template-state': `// Before:
 data$ = this.http.get('/api/data').pipe(shareReplay(1));
 // template: {{ data$ | async }}
 
@@ -257,7 +239,7 @@ data$ = this.http.get('/api/data').pipe(shareReplay(1));
 data = toSignal(this.http.get('/api/data'), { initialValue: null });
 // template: {{ data() }}`,
 
-    'signal-avoid-untracked-overuse': `// Acceptable:
+  'signal-avoid-untracked-overuse': `// Acceptable:
 effect(() => {
   const value = this.count();
   untracked(() => this.analytics.track(value));
@@ -266,7 +248,7 @@ effect(() => {
 // Questionable (review if untracked is needed):
 const val = untracked(() => this.count());`,
 
-    'template-prefer-control-flow': `// Before:
+  'template-prefer-control-flow': `// Before:
 <div *ngIf="isLoggedIn">Welcome</div>
 <li *ngFor="let item of items; trackBy: trackById">{{ item.name }}</li>
 
@@ -274,7 +256,7 @@ const val = untracked(() => this.count());`,
 @if (isLoggedIn) { <div>Welcome</div> }
 @for (item of items; track item.id) { <li>{{ item.name }}</li> }`,
 
-    'signal-prefer-input-signal': `// Before:
+  'signal-prefer-input-signal': `// Before:
 @Input() title: string = '';
 @Input() required count!: number;
 
@@ -282,13 +264,13 @@ const val = untracked(() => this.count());`,
 title = input('');
 count = input.required<number>();`,
 
-    'signal-prefer-output-function': `// Before:
+  'signal-prefer-output-function': `// Before:
 @Output() selected = new EventEmitter<Item>();
 
 // After:
 selected = output<Item>();`,
 
-    'rxjs-no-nested-subscribe': `// Before:
+  'rxjs-no-nested-subscribe': `// Before:
 this.user$.subscribe(user => {
   this.posts$.subscribe(posts => {
     this.render(user, posts);
@@ -300,7 +282,7 @@ this.user$.pipe(
   switchMap(user => this.posts$.pipe(map(posts => ({ user, posts }))))
 ).subscribe(({ user, posts }) => this.render(user, posts));`,
 
-    'no-document-access': `// Before:
+  'no-document-access': `// Before:
 ngOnInit() {
   document.title = this.title;
 }
@@ -314,7 +296,7 @@ afterNextRenderEffect = afterNextRender(() => {
   document.title = this.title;
 });`,
 
-    'signal-prefer-model': `// Before:
+  'signal-prefer-model': `// Before:
 @Input() value: string = '';
 @Output() valueChange = new EventEmitter<string>();
 
@@ -322,7 +304,7 @@ afterNextRenderEffect = afterNextRender(() => {
 value = model('');
 // Parent template: <app-input [(value)]="parentValue" />`,
 
-    'prefer-after-render-over-after-view-init': `// Before:
+  'prefer-after-render-over-after-view-init': `// Before:
 ngAfterViewInit() {
   this.el.nativeElement.focus();
 }
@@ -334,7 +316,7 @@ constructor() {
   });
 }`,
 
-    'spec-no-focused-test': `// Before (focused — skips all other tests):
+  'spec-no-focused-test': `// Before (focused — skips all other tests):
 fdescribe('MyComponent', () => {
   fit('should render', () => { ... });
 });

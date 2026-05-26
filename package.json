@@ -3,9 +3,7 @@
   "version": "0.1.6-beta",
   "private": true,
   "description": "Angular static analysis tool for architecture, performance, SSR, and code quality",
-
   "homepage": "https://www.ngcompass.dev",
-
   "type": "module",
   "packageManager": "pnpm@10.33.0",
   "scripts": {
@@ -54,8 +52,17 @@
   },
   "pnpm": {
     "supportedArchitectures": {
-      "os": ["linux", "darwin", "win32", "current"],
-      "cpu": ["x64", "arm64", "current"]
+      "os": [
+        "linux",
+        "darwin",
+        "win32",
+        "current"
+      ],
+      "cpu": [
+        "x64",
+        "arm64",
+        "current"
+      ]
     },
     "overrides": {
       "picomatch": ">=4.0.4"

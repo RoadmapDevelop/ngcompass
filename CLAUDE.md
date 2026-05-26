@@ -46,18 +46,18 @@ pnpm clean
 
 Turborepo monorepo using pnpm workspaces. All packages are under `packages/`. Build order is enforced by Turbo through `^build` dependencies. The root `package.json` is `private: true`.
 
-| Package | Name on npm | Role |
-|---|---|---|
-| `packages/cli` | `ngcompass` | Binary entry point, command registration, analysis orchestration |
-| `packages/config` | `@ngcompass/config` | Config discovery (lilconfig/jiti), validation, normalization, plugin loading |
-| `packages/scanner` | `@ngcompass/scanner` | File discovery via git or glob, file-list cache |
-| `packages/rules` | `@ngcompass/rules` | All built-in rules, presets, `RuleRegistry`, `resolveRules` |
-| `packages/planner` | `@ngcompass/planner` | Task graph construction, content-addressed task IDs, incremental filtering |
-| `packages/engine` | `@ngcompass/engine` | Single-pass AST execution, worker pool, type-aware chunking, `RuleContextFactory` |
-| `packages/ast` | `@ngcompass/ast` | Oxc TypeScript parser, Angular HTML parser, CSS parser, node stream types |
-| `packages/cache` | `@ngcompass/cache` | Multi-layer cache (config, file, plan, result, analysis, AST, meta, source) |
-| `packages/reporters` | `@ngcompass/reporters` | Console, JSON, SARIF, HTML reporters |
-| `packages/common` | `@ngcompass/common` | Shared domain types (`RuleContext`, `RuleResult`, `AnalysisResult`, `Task`, etc.) |
+| Package              | Name on npm            | Role                                                                              |
+| -------------------- | ---------------------- | --------------------------------------------------------------------------------- |
+| `packages/cli`       | `ngcompass`            | Binary entry point, command registration, analysis orchestration                  |
+| `packages/config`    | `@ngcompass/config`    | Config discovery (lilconfig/jiti), validation, normalization, plugin loading      |
+| `packages/scanner`   | `@ngcompass/scanner`   | File discovery via git or glob, file-list cache                                   |
+| `packages/rules`     | `@ngcompass/rules`     | All built-in rules, presets, `RuleRegistry`, `resolveRules`                       |
+| `packages/planner`   | `@ngcompass/planner`   | Task graph construction, content-addressed task IDs, incremental filtering        |
+| `packages/engine`    | `@ngcompass/engine`    | Single-pass AST execution, worker pool, type-aware chunking, `RuleContextFactory` |
+| `packages/ast`       | `@ngcompass/ast`       | Oxc TypeScript parser, Angular HTML parser, CSS parser, node stream types         |
+| `packages/cache`     | `@ngcompass/cache`     | Multi-layer cache (config, file, plan, result, analysis, AST, meta, source)       |
+| `packages/reporters` | `@ngcompass/reporters` | Console, JSON, SARIF, HTML reporters                                              |
+| `packages/common`    | `@ngcompass/common`    | Shared domain types (`RuleContext`, `RuleResult`, `AnalysisResult`, `Task`, etc.) |
 
 `packages/site` is the documentation website and is not published to npm.
 
@@ -92,9 +92,9 @@ Rules are passive observers — they receive pre-filtered stream nodes. They mus
 
 ```ts
 interface RuleHandler<TNode> {
-    readonly name: string;
-    readonly streamType: StreamType;
-    handle(node: TNode, context: RuleContext): RuleFailure[];
+  readonly name: string;
+  readonly streamType: StreamType;
+  handle(node: TNode, context: RuleContext): RuleFailure[];
 }
 ```
 
@@ -117,6 +117,7 @@ To test a rule, construct a minimal `RuleContext` stub and call the handler dire
 ## Cache Invalidation
 
 The cache is content-addressed at multiple levels. If you change:
+
 - A rule's logic or options → task IDs for that rule change automatically (options are hashed into the task ID).
 - `packages/common` types (e.g. `RuleResult` shape) → bump `CACHE_SCHEMA_VERSION` in `@ngcompass/cache` to invalidate persisted results.
 - The planner's task-building logic → bump `PLAN_CACHE_VERSION`.
@@ -133,6 +134,7 @@ pnpm release:beta
 ```
 
 Verify after publish:
+
 ```bash
 npm view ngcompass dist-tags
 # Expected: { beta: 'x.y.z-beta', latest: 'x.y.z-beta' }
@@ -154,30 +156,32 @@ These standards exist because this codebase is performance-sensitive and parses 
 
 ## Type Discipline
 
-| Rule | Rationale |
-|---|---|
-| **Never use `any`.** Use `unknown` if the type is truly unknown, then narrow with type guards. | `any` silently disables the entire type system at that point and propagates. |
-| **Never use `as` casts** unless narrowing from `unknown` after a runtime check, or asserting `as const`. Prefer type guards. | `as` is a lie to the compiler. Type guards are checked. |
-| **Prefer `interface` for object shapes, `type` for unions/intersections/utility types.** | Interfaces are extensible and produce better errors; `type` aliases handle everything else. |
-| **Use `readonly` on every array and object field that is not mutated after construction.** | Immutability is enforceable in TypeScript and prevents whole classes of bugs. |
-| **No optional parameters with side-effect defaults.** Pass explicit values from callers. | Hidden defaults make call sites unreadable and behavior surprising. |
-| **No `Record<string, any>` or `object` as a parameter type.** Define a real interface. | These types accept anything and assert nothing. |
-| **Function return types must be explicit** for any exported function. Inferred returns are fine for local helpers. | Public API stability requires explicit contracts. |
+| Rule                                                                                                                         | Rationale                                                                                   |
+| ---------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **Never use `any`.** Use `unknown` if the type is truly unknown, then narrow with type guards.                               | `any` silently disables the entire type system at that point and propagates.                |
+| **Never use `as` casts** unless narrowing from `unknown` after a runtime check, or asserting `as const`. Prefer type guards. | `as` is a lie to the compiler. Type guards are checked.                                     |
+| **Prefer `interface` for object shapes, `type` for unions/intersections/utility types.**                                     | Interfaces are extensible and produce better errors; `type` aliases handle everything else. |
+| **Use `readonly` on every array and object field that is not mutated after construction.**                                   | Immutability is enforceable in TypeScript and prevents whole classes of bugs.               |
+| **No optional parameters with side-effect defaults.** Pass explicit values from callers.                                     | Hidden defaults make call sites unreadable and behavior surprising.                         |
+| **No `Record<string, any>` or `object` as a parameter type.** Define a real interface.                                       | These types accept anything and assert nothing.                                             |
+| **Function return types must be explicit** for any exported function. Inferred returns are fine for local helpers.           | Public API stability requires explicit contracts.                                           |
 
 ## Error Handling
 
 ```ts
 // ❌ Do not throw for domain errors
 function loadConfig(path: string): NormalizedAnalyzerConfig {
-    if (!exists(path)) throw new Error('config not found');
-    // ...
+  if (!exists(path)) throw new Error('config not found');
+  // ...
 }
 
 // ✅ Return a Result<T>
-function loadConfig(path: string): Result<NormalizedAnalyzerConfig, ConfigError> {
-    if (!exists(path)) return err({ kind: 'ConfigNotFound', path });
-    // ...
-    return ok(normalized);
+function loadConfig(
+  path: string
+): Result<NormalizedAnalyzerConfig, ConfigError> {
+  if (!exists(path)) return err({ kind: 'ConfigNotFound', path });
+  // ...
+  return ok(normalized);
 }
 ```
 
@@ -190,19 +194,19 @@ function loadConfig(path: string): Result<NormalizedAnalyzerConfig, ConfigError>
 
 These apply to the engine, planner, single-pass traversal, and rule handlers. Code that runs once at startup can be more relaxed.
 
-| Rule | Why |
-|---|---|
-| **No allocations inside AST traversal callbacks.** Reuse arrays, avoid `.map`/`.filter`/`.reduce` chains that build intermediate arrays in the visitor dispatch. | Single-pass engine visits millions of nodes; per-node allocations dominate the profile. |
-| **Avoid `Object.keys`/`Object.values`/`Object.entries`** inside hot loops. Iterate known properties directly. | These create intermediate arrays and copy keys. |
-| **Cache regex objects at module scope.** Never construct `new RegExp` per call in a rule handler. | Regex compilation is expensive. |
-| **Use `Map` for keyed lookups by string,** not plain objects. | `Map` has predictable O(1) and supports clear without recreation. |
-| **Bounded caches must have eviction.** When adding any cache, use `CACHE_LIMIT` constants and clear on overflow (see `rxjs-no-subscribe-in-component.rule.ts:19`). | Unbounded caches in long-running CI processes leak memory. |
-| **Never call `JSON.parse`/`JSON.stringify` in a rule handler.** Inputs are already typed; serialization belongs at cache boundaries only. | These are surprisingly expensive at scale. |
-| **Use `for` loops over `forEach`/`for...of`** when iterating arrays in hot paths. | V8 optimizes classical `for` more aggressively. Reserve `forEach`/`for...of` for code where readability matters and perf doesn't. |
+| Rule                                                                                                                                                               | Why                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| **No allocations inside AST traversal callbacks.** Reuse arrays, avoid `.map`/`.filter`/`.reduce` chains that build intermediate arrays in the visitor dispatch.   | Single-pass engine visits millions of nodes; per-node allocations dominate the profile.                                           |
+| **Avoid `Object.keys`/`Object.values`/`Object.entries`** inside hot loops. Iterate known properties directly.                                                      | These create intermediate arrays and copy keys.                                                                                   |
+| **Cache regex objects at module scope.** Never construct `new RegExp` per call in a rule handler.                                                                  | Regex compilation is expensive.                                                                                                   |
+| **Use `Map` for keyed lookups by string,** not plain objects.                                                                                                      | `Map` has predictable O(1) and supports clear without recreation.                                                                 |
+| **Bounded caches must have eviction.** When adding any cache, use `CACHE_LIMIT` constants and clear on overflow (see `rxjs-no-subscribe-in-component.rule.ts:19`). | Unbounded caches in long-running CI processes leak memory.                                                                        |
+| **Never call `JSON.parse`/`JSON.stringify` in a rule handler.** Inputs are already typed; serialization belongs at cache boundaries only.                          | These are surprisingly expensive at scale.                                                                                        |
+| **Use `for` loops over `forEach`/`for...of`** when iterating arrays in hot paths.                                                                                  | V8 optimizes classical `for` more aggressively. Reserve `forEach`/`for...of` for code where readability matters and perf doesn't. |
 
 ## Clean Code (Project-Specific)
 
-- **Function size**: aim for ≤30 lines of executable code (excluding comments/blank lines). If longer, the function is doing multiple things — extract.
+- **Function size**: aim for ≤30 lines of executable code (excluding blank lines). If longer, the function is doing multiple things — extract.
 - **Cyclomatic complexity ≤10** per function. Replace nested conditionals with early returns or lookup tables.
 - **Pure functions by default.** Side effects (cache writes, file I/O, logging) should live at orchestration layers (commands, engine runner), not inside rules, planners, or pure transformations.
 - **Naming**:
@@ -237,30 +241,20 @@ rules / cache / ast
 common (pure types, no logic)
 ```
 
-| Forbidden | Reason |
-|---|---|
-| `@ngcompass/common` importing from any other package | Common is the foundation — circular imports kill the build |
-| `@ngcompass/engine` importing concrete rules | Rules are plugins; engine must not know what they are |
-| `@ngcompass/rules` importing from `@ngcompass/planner` or `@ngcompass/cli` | Rules are domain; planner is workflow |
-| Reporters reading the filesystem directly | Reporters receive `AnalysisResult` — they don't go fetch data |
-| Anything outside CLI calling `process.exit` | Only the CLI decides exit codes |
+| Forbidden                                                                  | Reason                                                        |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `@ngcompass/common` importing from any other package                       | Common is the foundation — circular imports kill the build    |
+| `@ngcompass/engine` importing concrete rules                               | Rules are plugins; engine must not know what they are         |
+| `@ngcompass/rules` importing from `@ngcompass/planner` or `@ngcompass/cli` | Rules are domain; planner is workflow                         |
+| Reporters reading the filesystem directly                                  | Reporters receive `AnalysisResult` — they don't go fetch data |
+| Anything outside CLI calling `process.exit`                                | Only the CLI decides exit codes                               |
 
-## Comments
+## No Comments In Code
 
-This codebase uses comments deliberately. The existing convention:
-
-- **`@fileoverview` JSDoc block at the top of each module** explaining what the file does and why it exists. See `packages/engine/src/rule-handler.ts` for the canonical example.
-- **Formal file documentation is required for both new and existing source files.** New files must be created with full formal comments from the start. Existing files must be upgraded to this standard whenever they are touched or included in a documentation pass.
-- **Use the formal JSDoc style of mature static-analysis projects such as ESLint's `config-loader.js`:** concise `@fileoverview`, section banners for major module regions when helpful, documented typedefs/interfaces, and precise JSDoc blocks for functions, classes, class fields, and methods.
-- **JSDoc on every exported function/class/interface** with `@param`, `@returns`, and a `@example` when the API is non-obvious.
-- **Document important internal helpers too** when they encode cache behavior, parser behavior, file discovery, import resolution, worker orchestration, or other non-obvious analyzer mechanics. Include `@throws` for intentional exceptions and clear return descriptions, including `@returns {void}` where that makes control flow explicit.
-- **Inline comments only for the WHY**, never the WHAT.
-  - ❌ `// Loop through files` (the loop is right there)
-  - ✅ `// Skip .d.ts files because they pollute the rule.run() invariant count`
-- **Mark non-obvious performance choices.** E.g., `// Hoisted out of the visitor callback to avoid per-node allocation`.
-- **No TODO comments without an issue link.** Either fix it or file it.
-- **No author/date comments.** Git blame and history are authoritative.
-- **No commented-out code.** Delete it.
+- **Code comments are forbidden** in source, test, script, and configuration files. Do not add JSDoc, `@fileoverview` blocks, block comments, line comments, section banners, TODO comments, commented-out code, or disable comments.
+- **Remove existing comments from any code file you modify.** When touching a source, test, script, or configuration file, erase comments from that entire file in the same change.
+- **Use code structure instead of comments.** If something needs explanation, improve names, extraction, types, or control flow until the code explains itself.
+- **Markdown prose is exempt.** Documentation files may use normal prose, but embedded code examples should still avoid comments.
 
 ## Node.js Specifics
 
@@ -296,11 +290,11 @@ This codebase uses comments deliberately. The existing convention:
 - **Don't add abstractions before they're needed.** Three similar lines is better than a premature helper. Wait for the fourth occurrence.
 - **Don't add defensive checks for impossible states.** If a value is typed `string`, don't check `if (typeof x !== 'string')` — TypeScript already guarantees it.
 - **Don't wrap working code in try/catch "just in case."** Each try/catch must catch a specific, documented failure mode.
-- **Don't add `// eslint-disable` or `// @ts-ignore` comments** without a clear inline explanation of why the linter is wrong.
+- **Don't add disable comments.** Fix the issue or adjust configuration instead.
 - **Don't refactor unrelated code in a feature PR.** Refactors get their own PRs so reviewers can evaluate them independently.
 - **Don't add new dependencies casually.** Every new npm package is a supply-chain risk. Justify it. Prefer Node built-ins or existing dependencies.
 - **Don't generate code that compiles but is unused.** Dead exports, unused parameters, no-op functions — all forbidden by the strict TypeScript config and will fail typecheck.
-- **Don't generate comments that restate the code.** If the code is unclear, fix the code, not the comments.
+- **Don't add explanatory code comments.** Improve the code until the explanation is unnecessary.
 - **Don't write functions longer than ~50 lines** without extracting helpers. Long functions hide bugs.
 
 ## When in Doubt

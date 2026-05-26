@@ -74,19 +74,19 @@ pnpm --filter @ngcompass/rules vitest run src/rules/reactivity/rxjs-no-subscribe
 
 ## Repository Map
 
-| Package | Responsibility |
-|---|---|
-| `packages/cli` | CLI binary, command parsing, orchestration, process exit policy |
-| `packages/config` | Config discovery, loading, validation, normalization, profiles |
-| `packages/scanner` | Git/glob file discovery and file-list caching |
-| `packages/rules` | Built-in rules, presets, rule registry, rule resolution |
-| `packages/planner` | Execution plans, task IDs, incremental task filtering |
-| `packages/engine` | Analysis execution, AST stream handling, worker pool, type-aware chunks |
-| `packages/ast` | TypeScript, Angular HTML, and CSS parsing helpers |
-| `packages/cache` | Memory and disk cache layers |
-| `packages/reporters` | Console, JSON, SARIF, HTML, and UI report rendering |
-| `packages/common` | Shared domain types and utilities |
-| `packages/site` | Documentation site only |
+| Package              | Responsibility                                                          |
+| -------------------- | ----------------------------------------------------------------------- |
+| `packages/cli`       | CLI binary, command parsing, orchestration, process exit policy         |
+| `packages/config`    | Config discovery, loading, validation, normalization, profiles          |
+| `packages/scanner`   | Git/glob file discovery and file-list caching                           |
+| `packages/rules`     | Built-in rules, presets, rule registry, rule resolution                 |
+| `packages/planner`   | Execution plans, task IDs, incremental task filtering                   |
+| `packages/engine`    | Analysis execution, AST stream handling, worker pool, type-aware chunks |
+| `packages/ast`       | TypeScript, Angular HTML, and CSS parsing helpers                       |
+| `packages/cache`     | Memory and disk cache layers                                            |
+| `packages/reporters` | Console, JSON, SARIF, HTML, and UI report rendering                     |
+| `packages/common`    | Shared domain types and utilities                                       |
+| `packages/site`      | Documentation site only                                                 |
 
 When in doubt, place the change where the responsibility already lives. Prefer
 small changes within one package over cross-package refactors.

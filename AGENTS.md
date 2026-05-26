@@ -15,6 +15,7 @@ pnpm clean              # clear turbo and node_modules caches
 ```
 
 Run tests for a single package:
+
 ```bash
 pnpm --filter @ngcompass/engine vitest run
 pnpm --filter @ngcompass/rules vitest run src/rules/reactivity/rxjs-no-subscribe-in-component.rule.test.ts
@@ -24,18 +25,18 @@ pnpm --filter @ngcompass/rules vitest run src/rules/reactivity/rxjs-no-subscribe
 
 Turborepo + pnpm workspaces. All packages live in `packages/`. Root `package.json` is `private: true` and is never published.
 
-| Package | Purpose |
-|---|---|
-| `packages/cli` | Binary (`ngcompass`), command orchestration |
-| `packages/config` | Config discovery, validation, normalization |
-| `packages/scanner` | File discovery (git/glob), file-list cache |
-| `packages/rules` | All built-in rules, presets, RuleRegistry |
-| `packages/planner` | Task graph, content-addressed task IDs, incremental filtering |
-| `packages/engine` | Single-pass AST execution, worker pool, type-aware chunking |
-| `packages/ast` | Oxc TS parser, Angular HTML parser, CSS parser, stream types |
-| `packages/cache` | Multi-layer cache (config, file, plan, result, analysis, meta) |
-| `packages/reporters` | Console, JSON, SARIF, HTML reporters |
-| `packages/common` | Shared types: `RuleContext`, `RuleResult`, `AnalysisResult`, `Task` |
+| Package              | Purpose                                                             |
+| -------------------- | ------------------------------------------------------------------- |
+| `packages/cli`       | Binary (`ngcompass`), command orchestration                         |
+| `packages/config`    | Config discovery, validation, normalization                         |
+| `packages/scanner`   | File discovery (git/glob), file-list cache                          |
+| `packages/rules`     | All built-in rules, presets, RuleRegistry                           |
+| `packages/planner`   | Task graph, content-addressed task IDs, incremental filtering       |
+| `packages/engine`    | Single-pass AST execution, worker pool, type-aware chunking         |
+| `packages/ast`       | Oxc TS parser, Angular HTML parser, CSS parser, stream types        |
+| `packages/cache`     | Multi-layer cache (config, file, plan, result, analysis, meta)      |
+| `packages/reporters` | Console, JSON, SARIF, HTML reporters                                |
+| `packages/common`    | Shared types: `RuleContext`, `RuleResult`, `AnalysisResult`, `Task` |
 
 `packages/site` is docs only — excluded from build and publish.
 
@@ -95,15 +96,15 @@ These standards exist because this is a performance-sensitive static analyzer. V
 
 ## Performance (Hot Path: Engine, Planner, Rule Handlers)
 
-| Rule | Why |
-|---|---|
-| No allocations inside AST traversal callbacks | Single-pass engine visits millions of nodes |
-| Avoid `Object.keys`/`values`/`entries` in hot loops | They allocate intermediate arrays |
-| Cache regex objects at module scope | `new RegExp` per call is expensive |
-| Use `Map` for keyed string lookups, not plain objects | Predictable O(1), supports `.clear()` |
-| Bounded caches must evict — see `CACHE_LIMIT` constants | Unbounded caches leak in long-running CI |
-| No `JSON.parse`/`stringify` in rule handlers | Belongs at cache boundaries only |
-| Use classical `for` loops in hot paths | V8 optimizes them most aggressively |
+| Rule                                                    | Why                                         |
+| ------------------------------------------------------- | ------------------------------------------- |
+| No allocations inside AST traversal callbacks           | Single-pass engine visits millions of nodes |
+| Avoid `Object.keys`/`values`/`entries` in hot loops     | They allocate intermediate arrays           |
+| Cache regex objects at module scope                     | `new RegExp` per call is expensive          |
+| Use `Map` for keyed string lookups, not plain objects   | Predictable O(1), supports `.clear()`       |
+| Bounded caches must evict — see `CACHE_LIMIT` constants | Unbounded caches leak in long-running CI    |
+| No `JSON.parse`/`stringify` in rule handlers            | Belongs at cache boundaries only            |
+| Use classical `for` loops in hot paths                  | V8 optimizes them most aggressively         |
 
 ## Clean Code
 
@@ -134,23 +135,19 @@ CLI → config/scanner/planner/engine/reporters → rules/cache/ast → common
 ```
 
 Forbidden:
+
 - `common` importing from any other package
 - `engine` importing concrete rules
 - `rules` importing from `planner` or `cli`
 - Reporters touching the filesystem directly
 - Anything outside CLI calling `process.exit`
 
-## Comments
+## No Comments In Code
 
-- **`@fileoverview` JSDoc** at the top of every module (see `packages/engine/src/rule-handler.ts`).
-- **Formal file documentation is required for both new and existing source files.** New files must include the formal comments from the start. Existing files must be upgraded to this standard whenever they are touched or included in a documentation pass.
-- **Match the formal JSDoc style used by mature static-analysis projects such as ESLint's `config-loader.js`:** concise `@fileoverview` block, clear section banners for major module regions when useful, documented typedefs/interfaces, and complete API comments for functions, classes, class fields, and methods.
-- **JSDoc on every exported symbol** with `@param`, `@returns`, `@example` for non-obvious APIs.
-- **Document important internal helpers too** when they encode cache behavior, parser behavior, file discovery, import resolution, worker orchestration, or other non-obvious analyzer mechanics. Include `@throws` for intentional exceptions and clear return descriptions, including `@returns {void}` when that makes control flow explicit.
-- **Inline comments only for WHY**, never WHAT.
-- **Mark non-obvious performance choices** (e.g. `// Hoisted out of visitor callback to avoid per-node allocation`).
-- **No TODO comments without an issue link.**
-- **No author/date comments.** Git blame is authoritative.
+- **Code comments are forbidden** in source, test, script, and configuration files. Do not add JSDoc, `@fileoverview` blocks, block comments, line comments, section banners, TODO comments, commented-out code, or disable comments.
+- **Remove existing comments from any code file you modify.** When touching a source, test, script, or configuration file, erase comments from that entire file in the same change.
+- **Use code structure instead of comments.** If something needs explanation, improve names, extraction, types, or control flow until the code explains itself.
+- **Markdown prose is exempt.** Documentation files may use normal prose, but embedded code examples should still avoid comments.
 
 ## Node.js Rules
 
@@ -185,11 +182,11 @@ Forbidden:
 - **Don't abstract before needed.** Three similar lines beats a premature helper.
 - **Don't add defensive checks for impossible states.** TypeScript already guarantees types.
 - **Don't wrap working code in try/catch "just in case."**
-- **Don't add `// @ts-ignore` or `// eslint-disable`** without explaining inline why the linter is wrong.
+- **Don't add disable comments.** Fix the issue or adjust configuration instead.
 - **Don't refactor unrelated code** in a feature change. Separate PRs.
 - **Don't add new npm dependencies casually.** Justify each one. Prefer Node built-ins.
 - **Don't generate dead exports or unused parameters.** Strict TypeScript will reject them.
-- **Don't write comments that restate code.** Fix the code instead.
+- **Don't add explanatory code comments.** Improve the code until the explanation is unnecessary.
 - **Don't write functions over ~50 lines** without extracting helpers.
 
 ## When in Doubt
