@@ -1,8 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import fs from 'node:fs';
+import { pathToFileURL } from 'node:url';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { HtmlReporter } from '../src/reporters/html-reporter.js';
+import { HtmlReporter, resolveBrowserLaunch } from '../src/reporters/html-reporter.js';
 import { createTestOutput } from '../src/output.js';
 import type { RuleFailure, RuleResult } from '@ngcompass/common';
 import type { ParseError, ResultSummary } from '../src/types.js';
@@ -27,6 +29,12 @@ function makeResult(failure: RuleFailure = makeFailure()): RuleResult {
   };
 }
 
+function setPlatform(platform: NodeJS.Platform): () => void {
+  const original = process.platform;
+  Object.defineProperty(process, 'platform', { value: platform });
+  return () => Object.defineProperty(process, 'platform', { value: original });
+}
+
 describe('HtmlReporter', () => {
   let tempDir: string;
 
@@ -35,6 +43,7 @@ describe('HtmlReporter', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await rm(tempDir, { recursive: true, force: true });
   });
 
@@ -178,5 +187,25 @@ describe('HtmlReporter', () => {
 
     expect(html).toContain('status-indicator warn');
     expect(html).toContain('WARN');
+  });
+
+  it('resolves the Windows fallback to a file URL browser launch', () => {
+    const outputPath = join(tempDir, 'report.html');
+    const restorePlatform = setPlatform('win32');
+    vi.spyOn(fs, 'existsSync').mockReturnValue(false);
+
+    const launch = (() => {
+      try {
+        return resolveBrowserLaunch(outputPath);
+      } finally {
+        restorePlatform();
+      }
+    })();
+
+    expect(launch).toEqual({
+      command: 'cmd',
+      args: ['/c', 'start', '', pathToFileURL(outputPath).href],
+      windowsHide: true,
+    });
   });
 });
