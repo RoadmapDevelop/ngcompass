@@ -1,6 +1,6 @@
 ﻿{
   "name": "@ngcompass/rules",
-  "version": "0.1.6-beta",
+  "version": "0.1.7-beta",
   "description": "Rules collection for ngcompass",
   "sideEffects": false,
   "main": "./dist/index.cjs",
