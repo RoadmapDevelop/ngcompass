@@ -3,53 +3,56 @@ import { analyzeTemplate } from '../../src/analyzers/template-analyzer.js';
 import { parseHtml } from '../../src/parsers/html.js';
 
 describe('template-analyzer', () => {
-    it('analyzes attributes from HTML elements', () => {
-        const html = '<div id="test" class="my-class"></div>';
-        const parsed = parseHtml(html);
-        const analyzed = analyzeTemplate(parsed);
+  it('analyzes attributes from HTML elements', () => {
+    const html = '<div id="test" class="my-class"></div>';
+    const parsed = parseHtml(html);
+    const analyzed = analyzeTemplate(parsed);
 
-        expect(analyzed.attributes.length).toBeGreaterThan(0);
-        // Note: Id and Class may either be extracted or ignored depending on internal angular-html-parser representation, 
-        // but 'id' and 'class' should emit attributes at the very least.
-        const ids = analyzed.attributes.filter(a => a.name === 'id');
-        expect(ids.length).toBe(1);
-        expect(ids[0].value).toBe('test');
-    });
+    expect(analyzed.attributes.length).toBeGreaterThan(0);
 
-    it('analyzes structural directives', () => {
-        const html = '<div *ngIf="show"></div>';
-        const parsed = parseHtml(html);
-        const analyzed = analyzeTemplate(parsed);
+    const ids = analyzed.attributes.filter((a) => a.name === 'id');
+    expect(ids.length).toBe(1);
+    expect(ids[0].value).toBe('test');
+  });
 
-        expect(analyzed.expressions.length).toBeGreaterThan(0);
-        // "show" wrapped expression will be available
-        const expr = analyzed.expressions[0];
-        expect(expr.expression).toBeDefined();
-        // Since it's parsed via oxc into ts AST, it will have type Identifier
-        expect(expr.expression.type).toBe('Identifier');
-    });
+  it('analyzes structural directives', () => {
+    const html = '<div *ngIf="show"></div>';
+    const parsed = parseHtml(html);
+    const analyzed = analyzeTemplate(parsed);
 
-    it('analyzes property bindings', () => {
-        const html = '<custom-component [prop]="someValue"></custom-component>';
-        const parsed = parseHtml(html);
-        const analyzed = analyzeTemplate(parsed);
+    expect(analyzed.expressions.length).toBeGreaterThan(0);
 
-        expect(analyzed.attributes.some(a => a.name === '[prop]')).toBe(true);
-        expect(analyzed.expressions.length).toBeGreaterThan(0);
-        expect(analyzed.expressions[0].expression.type).toBe('Identifier');
-    });
+    const expr = analyzed.expressions[0];
+    expect(expr.expression).toBeDefined();
 
-    it('returns file-absolute spans for inline templates', () => {
-        const html = '<custom-component [prop]="someValue"></custom-component>';
-        const base = analyzeTemplate(parseHtml(html));
-        const parsed = parseHtml(html, 100);
-        const analyzed = analyzeTemplate(parsed);
+    expect(expr.expression.type).toBe('Identifier');
+  });
 
-        const expression = analyzed.expressions[0];
-        expect(expression.sourceSpan.start).toBe(base.expressions[0].sourceSpan.start + 100);
+  it('analyzes property bindings', () => {
+    const html = '<custom-component [prop]="someValue"></custom-component>';
+    const parsed = parseHtml(html);
+    const analyzed = analyzeTemplate(parsed);
 
-        const binding = analyzed.attributes.find(a => a.name === '[prop]');
-        const baseBinding = base.attributes.find(a => a.name === '[prop]');
-        expect(binding?.sourceSpan.start).toBe((baseBinding?.sourceSpan.start ?? 0) + 100);
-    });
+    expect(analyzed.attributes.some((a) => a.name === '[prop]')).toBe(true);
+    expect(analyzed.expressions.length).toBeGreaterThan(0);
+    expect(analyzed.expressions[0].expression.type).toBe('Identifier');
+  });
+
+  it('returns file-absolute spans for inline templates', () => {
+    const html = '<custom-component [prop]="someValue"></custom-component>';
+    const base = analyzeTemplate(parseHtml(html));
+    const parsed = parseHtml(html, 100);
+    const analyzed = analyzeTemplate(parsed);
+
+    const expression = analyzed.expressions[0];
+    expect(expression.sourceSpan.start).toBe(
+      base.expressions[0].sourceSpan.start + 100
+    );
+
+    const binding = analyzed.attributes.find((a) => a.name === '[prop]');
+    const baseBinding = base.attributes.find((a) => a.name === '[prop]');
+    expect(binding?.sourceSpan.start).toBe(
+      (baseBinding?.sourceSpan.start ?? 0) + 100
+    );
+  });
 });

@@ -17,14 +17,14 @@ It is designed for teams that want a clearer view of Angular-specific risks: com
 
 ## Highlights
 
-| Area | What ngcompass helps find |
-|---|---|
-| Architecture | Circular dependencies, boundary violations, and fragile component relationships |
-| Performance | Missing `OnPush`, expensive template expressions, missing `trackBy`, and inefficient bindings |
-| SSR | Browser-only APIs in universal code, hydration risks, and render lifecycle pitfalls |
-| Security | Unsafe template bindings and sanitizer bypasses |
-| Reactivity | RxJS subscription issues, Signals misuse, and migration opportunities |
-| Code quality | Deprecated patterns, focused tests, and modern Angular API improvements |
+| Area         | What ngcompass helps find                                                                     |
+| ------------ | --------------------------------------------------------------------------------------------- |
+| Architecture | Circular dependencies, boundary violations, and fragile component relationships               |
+| Performance  | Missing `OnPush`, expensive template expressions, missing `trackBy`, and inefficient bindings |
+| SSR          | Browser-only APIs in universal code, hydration risks, and render lifecycle pitfalls           |
+| Security     | Unsafe template bindings and sanitizer bypasses                                               |
+| Reactivity   | RxJS subscription issues, Signals misuse, and migration opportunities                         |
+| Code quality | Deprecated patterns, focused tests, and modern Angular API improvements                       |
 
 ## Installation
 
@@ -71,14 +71,14 @@ pnpm exec ngcompass analyze
 
 ## Output Formats
 
-| Command | Output |
-|---|---|
-| `ngcompass analyze` | Default terminal report |
-| `ngcompass analyze --format console --compact` | Compact one-line issue output |
-| `ngcompass analyze --format html --output report.html` | Self-contained HTML report |
-| `ngcompass analyze --format ui` | Interactive HTML report alias |
-| `ngcompass analyze --format json > results.json` | Machine-readable JSON |
-| `ngcompass analyze --format sarif > results.sarif` | SARIF for GitHub Code Scanning |
+| Command                                                | Output                         |
+| ------------------------------------------------------ | ------------------------------ |
+| `ngcompass analyze`                                    | Default terminal report        |
+| `ngcompass analyze --format console --compact`         | Compact one-line issue output  |
+| `ngcompass analyze --format html --output report.html` | Self-contained HTML report     |
+| `ngcompass analyze --format ui`                        | Interactive HTML report alias  |
+| `ngcompass analyze --format json > results.json`       | Machine-readable JSON          |
+| `ngcompass analyze --format sarif > results.sarif`     | SARIF for GitHub Code Scanning |
 
 ## Configuration
 
@@ -119,15 +119,15 @@ export default defineConfig({
 
 ### Presets
 
-| Preset | Purpose |
-|---|---|
-| `ngcompass:recommended` | Balanced default for most Angular projects |
-| `ngcompass:strict` | Stronger enforcement for mature codebases |
-| `ngcompass:performance` | Rendering and change-detection checks |
-| `ngcompass:reactivity` | Signals and RxJS correctness |
-| `ngcompass:security` | Security-focused Angular checks |
-| `ngcompass:ssr` | Server rendering and hydration safety |
-| `ngcompass:all` | Every built-in rule at its default severity |
+| Preset                  | Purpose                                     |
+| ----------------------- | ------------------------------------------- |
+| `ngcompass:recommended` | Balanced default for most Angular projects  |
+| `ngcompass:strict`      | Stronger enforcement for mature codebases   |
+| `ngcompass:performance` | Rendering and change-detection checks       |
+| `ngcompass:reactivity`  | Signals and RxJS correctness                |
+| `ngcompass:security`    | Security-focused Angular checks             |
+| `ngcompass:ssr`         | Server rendering and hydration safety       |
+| `ngcompass:all`         | Every built-in rule at its default severity |
 
 Override individual rules in the same config:
 
@@ -143,32 +143,32 @@ export default defineConfig({
 
 ## Commands
 
-| Command | Description |
-|---|---|
-| `ngcompass init` | Create `ngcompass.config.ts` |
-| `ngcompass analyze` | Run analysis |
-| `ngcompass rules` | List available rules |
-| `ngcompass rules <name>` | Inspect one rule |
-| `ngcompass config health` | Validate configuration |
-| `ngcompass cache info` | Show cache status |
-| `ngcompass cache clear` | Clear cached analysis data |
-| `ngcompass cache path` | Print the cache directory |
+| Command                   | Description                  |
+| ------------------------- | ---------------------------- |
+| `ngcompass init`          | Create `ngcompass.config.ts` |
+| `ngcompass analyze`       | Run analysis                 |
+| `ngcompass rules`         | List available rules         |
+| `ngcompass rules <name>`  | Inspect one rule             |
+| `ngcompass config health` | Validate configuration       |
+| `ngcompass cache info`    | Show cache status            |
+| `ngcompass cache clear`   | Clear cached analysis data   |
+| `ngcompass cache path`    | Print the cache directory    |
 
 ### Analyze Options
 
-| Option | Description |
-|---|---|
-| `--format <fmt>` | `console`, `json`, `sarif`, `html`, or `ui` |
-| `--output <path>` | Output path for HTML/UI reports |
-| `--compact` | Use compact issue output |
-| `-q, --quiet` | Show summary counts only |
-| `--no-recommendation` | Hide fix recommendations |
-| `--rule <id>` | Run one rule in isolation |
-| `--force` | Ignore cached results |
-| `-p, --profile <name>` | Run a named config profile |
-| `--mode <mode>` | Performance mode: `eco`, `balanced`, or `turbo` |
-| `--max-workers <n>` | Limit worker threads |
-| `--skip-type-check` | Skip rules that require TypeScript type checking |
+| Option                 | Description                                      |
+| ---------------------- | ------------------------------------------------ |
+| `--format <fmt>`       | `console`, `json`, `sarif`, `html`, or `ui`      |
+| `--output <path>`      | Output path for HTML/UI reports                  |
+| `--compact`            | Use compact issue output                         |
+| `-q, --quiet`          | Show summary counts only                         |
+| `--no-recommendation`  | Hide fix recommendations                         |
+| `--rule <id>`          | Run one rule in isolation                        |
+| `--force`              | Ignore cached results                            |
+| `-p, --profile <name>` | Run a named config profile                       |
+| `--mode <mode>`        | Performance mode: `eco`, `balanced`, or `turbo`  |
+| `--max-workers <n>`    | Limit worker threads                             |
+| `--skip-type-check`    | Skip rules that require TypeScript type checking |
 
 ## CI
 
@@ -196,19 +196,19 @@ ngcompass analyze --force
 
 ## Monorepo
 
-| Package | Responsibility |
-|---|---|
-| [`ngcompass`](packages/cli) | CLI entry point |
-| [`@ngcompass/config`](packages/config) | Config loading, validation, profiles, and health checks |
-| [`@ngcompass/scanner`](packages/scanner) | File discovery and filtering |
-| [`@ngcompass/rules`](packages/rules) | Built-in rules, presets, and rule registry |
-| [`@ngcompass/planner`](packages/planner) | Incremental execution planning |
-| [`@ngcompass/engine`](packages/engine) | Rule execution and analysis orchestration |
-| [`@ngcompass/ast`](packages/ast) | TypeScript, template, and style parsing helpers |
-| [`@ngcompass/cache`](packages/cache) | Memory and disk cache services |
-| [`@ngcompass/reporters`](packages/reporters) | Console, JSON, SARIF, and HTML reporters |
-| [`@ngcompass/common`](packages/common) | Shared types and utilities |
-| [`@ngcompass/site`](packages/site) | Documentation site |
+| Package                                      | Responsibility                                          |
+| -------------------------------------------- | ------------------------------------------------------- |
+| [`ngcompass`](packages/cli)                  | CLI entry point                                         |
+| [`@ngcompass/config`](packages/config)       | Config loading, validation, profiles, and health checks |
+| [`@ngcompass/scanner`](packages/scanner)     | File discovery and filtering                            |
+| [`@ngcompass/rules`](packages/rules)         | Built-in rules, presets, and rule registry              |
+| [`@ngcompass/planner`](packages/planner)     | Incremental execution planning                          |
+| [`@ngcompass/engine`](packages/engine)       | Rule execution and analysis orchestration               |
+| [`@ngcompass/ast`](packages/ast)             | TypeScript, template, and style parsing helpers         |
+| [`@ngcompass/cache`](packages/cache)         | Memory and disk cache services                          |
+| [`@ngcompass/reporters`](packages/reporters) | Console, JSON, SARIF, and HTML reporters                |
+| [`@ngcompass/common`](packages/common)       | Shared types and utilities                              |
+| [`@ngcompass/site`](packages/site)           | Documentation site                                      |
 
 ## Development
 
@@ -238,4 +238,3 @@ pnpm prerelease:check
 - Rule names, messages, and report layout may change before `1.0`.
 - Template analysis is best-effort for highly dynamic templates.
 - Validate ngcompass against your project before making it a required CI gate.
-

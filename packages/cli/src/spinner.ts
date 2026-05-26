@@ -1,83 +1,65 @@
-/**
- * @fileoverview
- * Minimal braille-frame spinner used by the analyze command to show progress
- * without pulling in a heavier dependency.
- *
- * Falls back gracefully on non-TTY streams (CI logs) by emitting one
- * stable line per `start()` call and printing subsequent `writeLine` events
- * as plain lines. Manages cursor visibility via raw ANSI sequences.
- */
-
 import pc from 'picocolors';
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;
 
-/**
- * Renders a lightweight in-place progress indicator for interactive output.
- */
 export class Spinner {
-    private timer: NodeJS.Timeout | null = null;
-    private frameIndex = 0;
-    private message = '';
-    private readonly isTTY: boolean;
+  private timer: NodeJS.Timeout | null = null;
+  private frameIndex = 0;
+  private message = '';
+  private readonly isTTY: boolean;
 
-    constructor(private readonly stream: NodeJS.WriteStream) {
-        this.isTTY = !!stream.isTTY;
+  constructor(private readonly stream: NodeJS.WriteStream) {
+    this.isTTY = !!stream.isTTY;
+  }
+
+  start(message: string): void {
+    this.message = message;
+    this.frameIndex = 0;
+
+    if (!this.isTTY) {
+      this.stream.write(`${pc.cyan('❯')} ${pc.dim(message)}\n`);
+      return;
     }
 
-    start(message: string): void {
-        this.message = message;
-        this.frameIndex = 0;
+    this.stream.write('\x1B[?25l');
+    this.render();
+    this.timer = setInterval(() => this.render(), INTERVAL_MS);
+  }
 
-        if (!this.isTTY) {
-            this.stream.write(`${pc.cyan('❯')} ${pc.dim(message)}\n`);
-            return;
-        }
+  update(message: string): void {
+    this.message = message;
 
-        this.stream.write('\x1B[?25l'); // hide cursor
-        this.render();
-        this.timer = setInterval(() => this.render(), INTERVAL_MS);
+    if (this.isTTY && this.timer) {
+      this.render();
+    }
+  }
+
+  writeLine(line: string): void {
+    if (this.isTTY && this.timer) {
+      this.stream.write('\r\x1B[K');
+      this.stream.write(`${line}\n`);
+      this.render();
+    } else {
+      this.stream.write(`${line}\n`);
+    }
+  }
+
+  stop(): void {
+    if (this.timer) {
+      clearInterval(this.timer);
+      this.timer = null;
     }
 
-    update(message: string): void {
-        this.message = message;
-
-        if (this.isTTY && this.timer) {
-            this.render();
-        }
+    if (this.isTTY) {
+      this.stream.write('\r\x1B[K');
+      this.stream.write('\x1B[?25h');
     }
+  }
 
-    /**
-     * Write a line of output while the spinner is active.
-     * In TTY mode: clears the spinner line, prints the line, reprints the spinner.
-     * In non-TTY mode: just prints the line normally.
-     */
-    writeLine(line: string): void {
-        if (this.isTTY && this.timer) {
-            this.stream.write('\r\x1B[K'); // clear spinner line
-            this.stream.write(`${line}\n`);
-            this.render();
-        } else {
-            this.stream.write(`${line}\n`);
-        }
-    }
-
-    stop(): void {
-        if (this.timer) {
-            clearInterval(this.timer);
-            this.timer = null;
-        }
-
-        if (this.isTTY) {
-            this.stream.write('\r\x1B[K'); // clear spinner line
-            this.stream.write('\x1B[?25h'); // show cursor
-        }
-    }
-
-    private render(): void {
-        const frame = pc.cyan(FRAMES[this.frameIndex % FRAMES.length]);
-        this.frameIndex++;
-        this.stream.write(`\r\x1B[K${frame} ${pc.dim(this.message)}`);
-    }
+  private render(): void {
+    const frame = pc.cyan(FRAMES[this.frameIndex % FRAMES.length]);
+    this.frameIndex++;
+    this.stream.write(`\r\x1B[K${frame} ${pc.dim(this.message)}`);
+  }
 }

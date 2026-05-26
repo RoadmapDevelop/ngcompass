@@ -1,57 +1,57 @@
 ﻿{
-    "name":  "@ngcompass/cache",
-    "version":  "0.1.6-beta",
-    "description":  "Caching layer for ngcompass",
-    "sideEffects":  false,
-    "main":  "./dist/index.cjs",
-    "module":  "./dist/index.js",
-    "types":  "./dist/index.d.ts",
-    "type":  "module",
-    "engines":  {
-                    "node":  "^20.19.0 || \u003e=22.12.0"
-                },
-    "exports":  {
-                    ".":  {
-                              "types":  "./dist/index.d.ts",
-                              "import":  "./dist/index.js",
-                              "require":  "./dist/index.cjs"
-                          }
-                },
-    "files":  [
-                  "dist"
-              ],
-    "scripts":  {
-                    "build":  "tsup",
-                    "build:prod":  "tsup --minify",
-                    "dev":  "tsup --watch",
-                    "test":  "vitest run ",
-                    "test:watch":  "vitest",
-                    "typecheck":  "tsc --noEmit",
-                    "clean":  "rimraf dist .turbo"
-                },
-    "dependencies":  {
-                         "@ngcompass/common":  "workspace:*",
-                         "cacache":  "^20.0.3",
-                         "lru-cache":  "^11.2.5",
-                         "write-file-atomic":  "^7.0.0",
-                         "xxhash-wasm":  "^1.1.0"
-                     },
-    "peerDependencies":  {
-                             "typescript":  "catalog:"
-                         },
-    "devDependencies":  {
-                            "@types/cacache":  "^20.0.0",
-                            "@types/node":  "^25.1.0",
-                            "@types/write-file-atomic":  "^4.0.3"
-                        },
-    "keywords":  [
-                     "angular",
-                     "cache",
-                     "ngcompass"
-                 ],
-    "author":  "ngcompass",
-    "license":  "PolyForm-Shield-1.0.0",
-    "publishConfig":  {
-                          "access":  "public"
-                      }
+  "name": "@ngcompass/cache",
+  "version": "0.1.6-beta",
+  "description": "Caching layer for ngcompass",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "build:prod": "tsup --minify",
+    "dev": "tsup --watch",
+    "test": "vitest run ",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@ngcompass/common": "workspace:*",
+    "cacache": "^20.0.3",
+    "lru-cache": "^11.2.5",
+    "write-file-atomic": "^7.0.0",
+    "xxhash-wasm": "^1.1.0"
+  },
+  "peerDependencies": {
+    "typescript": "catalog:"
+  },
+  "devDependencies": {
+    "@types/cacache": "^20.0.0",
+    "@types/node": "^25.1.0",
+    "@types/write-file-atomic": "^4.0.3"
+  },
+  "keywords": [
+    "angular",
+    "cache",
+    "ngcompass"
+  ],
+  "author": "ngcompass",
+  "license": "PolyForm-Shield-1.0.0",
+  "publishConfig": {
+    "access": "public"
+  }
 }

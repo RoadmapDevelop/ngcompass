@@ -1,66 +1,81 @@
 ﻿{
-    "name": "ngcompass",
-    "version": "0.1.6-beta",
-    "description": "Command line interface for ngcompass",
-    "sideEffects": false,
-    "bin": {
-        "ngcompass": "./dist/cli.js"
+  "name": "ngcompass",
+  "version": "0.1.6-beta",
+  "description": "Command line interface for ngcompass",
+  "sideEffects": false,
+  "bin": {
+    "ngcompass": "./dist/cli.js"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     },
-    "main": "./dist/index.cjs",
-    "module": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "type": "module",
-    "engines": {
-        "node": "^20.19.0 || >=22.12.0"
-    },
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js",
-            "require": "./dist/index.cjs"
-        }
-    },
-    "files": [
-        "dist",
-        "README.md"
-    ],
-    "scripts": {
-        "prepack": "node -e \"require('fs').copyFileSync('../../README.md','./README.md')\"",
-        "build": "tsup",
-        "build:prod": "tsup --minify",
-        "dev": "tsup --watch",
-        "test": "vitest run --passWithNoTests",
-        "test:watch": "vitest --passWithNoTests",
-        "test:ui": "vitest --ui --passWithNoTests",
-        "test:coverage": "vitest run --coverage --passWithNoTests",
-        "typecheck": "tsc --noEmit",
-        "clean": "rimraf dist .turbo"
-    },
-    "dependencies": {
-        "@ngcompass/common": "workspace:*",
-        "@ngcompass/reporters": "workspace:*",
-        "@ngcompass/rules": "workspace:*",
-        "@ngcompass/cache": "workspace:*",
-        "@ngcompass/config": "workspace:*",
-        "@ngcompass/engine": "workspace:*",
-        "@ngcompass/scanner": "workspace:*",
-        "@ngcompass/planner": "workspace:*",
-        "@ngcompass/ast": "workspace:*",
-        "commander": "^11.0.0",
-        "picocolors": "^1.1.1"
-    },
-    "keywords": [
-        "angular",
-        "analysis",
-        "cli"
-    ],
-    "author": "ngcompass",
-    "license": "PolyForm-Shield-1.0.0",
-    "publishConfig": {
-        "access": "public"
-    },
-    "devDependencies": {
-        "@types/node": "^25.1.0",
-        "typescript": "catalog:"
+    "./schematics/*": "./schematics/*"
+  },
+  "schematics": "./schematics/collection.json",
+  "ng-add": {
+    "save": "devDependencies"
+  },
+  "files": [
+    "dist",
+    "schematics",
+    "README.md"
+  ],
+  "scripts": {
+    "prepack": "node -e \"require('fs').copyFileSync('../../README.md','./README.md')\"",
+    "build": "tsup",
+    "build:prod": "tsup --minify",
+    "dev": "tsup --watch",
+    "test": "vitest run --passWithNoTests",
+    "test:watch": "vitest --passWithNoTests",
+    "test:ui": "vitest --ui --passWithNoTests",
+    "test:coverage": "vitest run --coverage --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@ngcompass/common": "workspace:*",
+    "@ngcompass/reporters": "workspace:*",
+    "@ngcompass/rules": "workspace:*",
+    "@ngcompass/cache": "workspace:*",
+    "@ngcompass/config": "workspace:*",
+    "@ngcompass/engine": "workspace:*",
+    "@ngcompass/scanner": "workspace:*",
+    "@ngcompass/planner": "workspace:*",
+    "@ngcompass/ast": "workspace:*",
+    "commander": "^11.0.0",
+    "picocolors": "^1.1.1"
+  },
+  "keywords": [
+    "angular",
+    "analysis",
+    "cli"
+  ],
+  "author": "ngcompass",
+  "license": "PolyForm-Shield-1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@angular-devkit/schematics": ">=17.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@angular-devkit/schematics": {
+      "optional": true
     }
+  },
+  "devDependencies": {
+    "@angular-devkit/schematics": "^19.0.0",
+    "@types/node": "^25.1.0",
+    "typescript": "catalog:"
+  }
 }

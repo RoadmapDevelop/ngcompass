@@ -1,60 +1,153 @@
+import ts from 'typescript';
 import { AnyAngularClassNode } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
-import { AstNode, unwrapNode, getClassBody, getConstructorMember, getNodeStart, getParamIdentifierName, getParamTypeName, getParamsArray, getTsSymbolAtNode, isLikelyAngularInjectableSymbol } from '../../rule-utils';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
+import { AstNode, getNodeStart } from '../../rule-utils';
 
 const RULE_NAME = 'prefer-inject-over-constructor-di';
 
-const DIISH_NAMES = new Set(['http', 'router', 'route', 'cdr', 'cdref', 'changedetectorref', 'injector', 'ngzone', 'zone', 'renderer', 'renderer2', 'elementref', 'el', 'document', 'platform', 'location', 'dialog', 'snack', 'toast', 'store', 'facade', 'logger', 'translate', 'i18n', 'auth', 'api', 'client', 'matdialog', 'overlay', 'breakpointobserver', 'snackbar', 'matsnackbar', 'bottomsheet', 'matbottomsheet', 'clipboard', 'directionality', 'focusmonitor', 'mediamatcher', 'viewportruler', 'scrolldispatcher', 'dragdrop', 'liveannouncer', 'activatedroute', 'fb', 'firestore', 'angularfire', 'formbuilder', 'titleservice', 'metaservice', 'title', 'meta', 'sanitizer', 'domsanitizer', 'compiler', 'applicationref', 'componentfactoryresolver', 'viewcontainerref', 'templateref', 'destroyref']);
-const NON_DIISH_NAMES = new Set(['data', 'config', 'options', 'opts', 'params', 'payload', 'input', 'value', 'values', 'items', 'item', 'context', 'ctx', 'model', 'vm', 'state', 'initialstate', 'result', 'name', 'id', 'label', 'text', 'title', 'message', 'url', 'path', 'index', 'count', 'size', 'length', 'width', 'height', 'color', 'type', 'key', 'mode', 'flag', 'enabled', 'disabled', 'visible', 'hidden']);
-const DIISH_SUFFIXES = ['Service', 'Facade', 'Store', 'Client', 'Repository', 'Adapter', 'Manager', 'Controller', 'Provider', 'Registry', 'Logger', 'Router', 'ActivatedRoute', 'ChangeDetectorRef', 'DestroyRef', 'Injector', 'NgZone', 'Renderer2', 'ElementRef', 'HttpClient', 'ViewContainerRef', 'TemplateRef', 'ComponentFactoryResolver', 'ApplicationRef', 'MatDialog', 'MatDialogRef', 'MatSnackBar', 'MatBottomSheet', 'Overlay', 'OverlayRef', 'BreakpointObserver', 'Clipboard', 'FocusMonitor', 'MediaMatcher', 'ScrollDispatcher', 'DragDrop', 'LiveAnnouncer', 'Directionality', 'ViewportRuler', 'FormBuilder', 'DomSanitizer', 'Title', 'Meta', 'Dispatcher', 'Gateway', 'Handler', 'Interceptor', 'Guard', 'Resolver', 'Factory', 'Strategy', 'Validator'];
-const PRIMITIVES = new Set(['string', 'number', 'boolean', 'symbol', 'bigint', 'any', 'unknown', 'void']);
+const DI_PARAMETER_DECORATORS = new Set([
+  'Inject',
+  'Optional',
+  'Self',
+  'SkipSelf',
+  'Host',
+]);
 
-function isLikelyDi(param: AstNode, context: RuleContext): boolean {
-    const node = unwrapNode(param);
-    if (!node) return false;
-
-    if (Array.isArray(node.decorators) && node.decorators.length > 0) return true;
-    if (node.accessibility || node.readonly) return true;
-    if (context.typeChecker) {
-        const symbol = getTsSymbolAtNode(param, context);
-        if (symbol && isLikelyAngularInjectableSymbol(symbol)) return true;
-    }
-
-    const name = (getParamIdentifierName(param) || '').toLowerCase().trim();
-    if (!name || NON_DIISH_NAMES.has(name)) return false;
-    if (DIISH_NAMES.has(name)) return true;
-
-    const type = (getParamTypeName(param) || '').trim();
-    if (!type || PRIMITIVES.has(type.toLowerCase())) return false;
-    return DIISH_SUFFIXES.some(s => type.endsWith(s));
+interface DiParameter {
+  readonly name: string;
+  readonly typeText: string;
 }
 
 export const preferInjectRule = createAnyAngularClassRule(
-    RULE_NAME,
-    (classNodeWrapper: AnyAngularClassNode, context: RuleContext): RuleFailure | null => {
-        const classBody = getClassBody(classNodeWrapper.node as AstNode);
-        const ctor = getConstructorMember(classBody);
-        if (!ctor) return null;
+  RULE_NAME,
+  (
+    classNodeWrapper: AnyAngularClassNode,
+    context: RuleContext
+  ): RuleFailure | null => {
+    const { typeChecker, angularTypes } = context;
+    if (!typeChecker || !angularTypes) return null;
 
-        const params = getParamsArray((ctor.value ?? ctor) as AstNode);
-        const diParams = params.filter(p => isLikelyDi(p, context));
-        if (diParams.length === 0) return null;
+    const tsClass = findTsClass(classNodeWrapper.node as AstNode, context);
+    if (!tsClass) return null;
 
-        const { line, column } = context.locator.location(getNodeStart(ctor));
-        const offenders = diParams.map(p => `${getParamIdentifierName(p)}: ${getParamTypeName(p)}`).join(', ');
+    const ctor = tsClass.members.find(ts.isConstructorDeclaration);
+    if (!ctor || ctor.parameters.length === 0) return null;
 
-        return {
-            filePath: context.filePath,
-            ruleName: RULE_NAME,
-            message: `Constructor dependency injection makes class setup less composable than inject().${offenders ? ` Offending params: ${offenders}.` : ''}`,
-            line,
-            column,
-            severity: 'warn',
-            fix: RECOMMENDATIONS[RULE_NAME],
-            codeExample: CODE_EXAMPLES[RULE_NAME],
-        };
-    },
-    { requires: { typeChecker: true } }
+    const diParams: DiParameter[] = [];
+    for (const param of ctor.parameters) {
+      if (isDiParameter(param, typeChecker, angularTypes)) {
+        diParams.push(describeParameter(param));
+      }
+    }
+    if (diParams.length === 0) return null;
+
+    const { line, column } = context.locator.location(
+      getNodeStart(ctor as unknown as AstNode)
+    );
+    const offenders = diParams
+      .map((p) => `${p.name}: ${p.typeText}`)
+      .join(', ');
+
+    return {
+      filePath: context.filePath,
+      ruleName: RULE_NAME,
+      message: `Constructor dependency injection makes class setup less composable than inject(). Offending params: ${offenders}.`,
+      line,
+      column,
+      severity: 'warn',
+      fix: RECOMMENDATIONS[RULE_NAME],
+      codeExample: CODE_EXAMPLES[RULE_NAME],
+    };
+  },
+  { requires: { typeChecker: true } }
 );
+
+function isDiParameter(
+  param: ts.ParameterDeclaration,
+  typeChecker: ts.TypeChecker,
+  angularTypes: NonNullable<RuleContext['angularTypes']>
+): boolean {
+  if (hasAngularDiDecorator(param, typeChecker, angularTypes)) return true;
+
+  if (!param.type) return false;
+
+  const type = typeChecker.getTypeFromTypeNode(param.type);
+  if (angularTypes.isInjectionToken(type)) return true;
+
+  const typeSymbol = type.aliasSymbol ?? type.symbol;
+  if (!typeSymbol) return false;
+
+  return angularTypes.isInjectableClass(typeSymbol);
+}
+
+function hasAngularDiDecorator(
+  param: ts.ParameterDeclaration,
+  typeChecker: ts.TypeChecker,
+  angularTypes: NonNullable<RuleContext['angularTypes']>
+): boolean {
+  const decorators = ts.getDecorators(param);
+  if (!decorators || decorators.length === 0) return false;
+
+  for (const dec of decorators) {
+    const calleeIdent = getDecoratorIdentifier(dec);
+    if (!calleeIdent || !DI_PARAMETER_DECORATORS.has(calleeIdent.text))
+      continue;
+
+    const symbol = typeChecker.getSymbolAtLocation(calleeIdent);
+    const resolved =
+      symbol && symbol.flags & ts.SymbolFlags.Alias
+        ? typeChecker.getAliasedSymbol(symbol)
+        : symbol;
+    if (angularTypes.isFromAngularCore(resolved)) return true;
+  }
+  return false;
+}
+
+function getDecoratorIdentifier(dec: ts.Decorator): ts.Identifier | undefined {
+  const expr = ts.isCallExpression(dec.expression)
+    ? dec.expression.expression
+    : dec.expression;
+  return ts.isIdentifier(expr) ? expr : undefined;
+}
+
+function findTsClass(
+  oxcClassNode: AstNode,
+  context: RuleContext
+): ts.ClassDeclaration | undefined {
+  const sourceFile = ensureSourceFile(context);
+  if (!sourceFile) return undefined;
+
+  const pos = getNodeStart(oxcClassNode);
+  for (const statement of sourceFile.statements) {
+    if (
+      ts.isClassDeclaration(statement) &&
+      statement.pos <= pos &&
+      pos <= statement.end
+    ) {
+      return statement;
+    }
+  }
+  return undefined;
+}
+
+function ensureSourceFile(context: RuleContext): ts.SourceFile | undefined {
+  type Mutable = RuleContext & { sourceFile?: ts.SourceFile };
+  const mutable = context as Mutable;
+  if (mutable.sourceFile) return mutable.sourceFile;
+  if (!context.fileContent) return undefined;
+  mutable.sourceFile = ts.createSourceFile(
+    context.filePath,
+    context.fileContent,
+    ts.ScriptTarget.Latest,
+    true
+  );
+  return mutable.sourceFile;
+}
+
+function describeParameter(param: ts.ParameterDeclaration): DiParameter {
+  const name = ts.isIdentifier(param.name) ? param.name.text : '<binding>';
+  const typeText = param.type ? param.type.getText() : '<inferred>';
+  return { name, typeText };
+}

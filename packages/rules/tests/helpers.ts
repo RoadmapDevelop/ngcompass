@@ -1,147 +1,300 @@
-/**
- * Shared Test Helpers for Rules Unit Tests
- *
- * Provides a lightweight `RuleContext` factory based on real `parseTs` AST output.
- * Rules call `rule.handle(node, ctx)` — these helpers construct both pieces.
- */
-
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import ts from 'typescript';
 import { Locator } from '@ngcompass/common';
 import { parseTs } from '@ngcompass/ast';
+import { createAngularTypeIndex } from '@ngcompass/engine';
 import type { RuleContext } from '@ngcompass/common';
 import type { Program } from 'oxc-parser';
 
-// ---------------------------------------------------------------------------
-// Context factory
-// ---------------------------------------------------------------------------
-
 export function makeContext(
-    source: string,
-    filePath = '/src/test.component.ts',
+  source: string,
+  filePath = '/src/test.component.ts'
 ): RuleContext & { program: Program } {
-    const { program } = parseTs(source, filePath);
-    return {
-        filePath,
-        fileContent: source,
-        // Some rules access sourceText via (context as any).sourceText for import
-        // alias detection (collectRxjsAliases). Aliasing fileContent here ensures
-        // those rules receive source text in both fields without duplicating it.
-        sourceText: source,
-        locator: new Locator(source),
-        program,
-    } as any;
+  const { program } = parseTs(source, filePath);
+  return {
+    filePath,
+    fileContent: source,
+
+    sourceText: source,
+    locator: new Locator(source),
+    program,
+  } as any;
 }
 
-// ---------------------------------------------------------------------------
-// Node walkers — collect all AST nodes matching a predicate
-// ---------------------------------------------------------------------------
-
-export function findNodes(program: Program, predicate: (n: any) => boolean): any[] {
-    const results: any[] = [];
-    const stack: any[] = [program];
-    while (stack.length) {
-        const node = stack.pop();
-        if (!node || typeof node !== 'object') continue;
-        if (predicate(node)) results.push(node);
-        for (const val of Object.values(node)) {
-            if (Array.isArray(val)) stack.push(...val);
-            else if (val && typeof val === 'object') stack.push(val);
-        }
+export function findNodes(
+  program: Program,
+  predicate: (n: any) => boolean
+): any[] {
+  const results: any[] = [];
+  const stack: any[] = [program];
+  while (stack.length) {
+    const node = stack.pop();
+    if (!node || typeof node !== 'object') continue;
+    if (predicate(node)) results.push(node);
+    for (const val of Object.values(node)) {
+      if (Array.isArray(val)) stack.push(...val);
+      else if (val && typeof val === 'object') stack.push(val);
     }
-    return results;
+  }
+  return results;
 }
 
 export function findCallExpressions(program: Program, callee?: string): any[] {
-    return findNodes(program, (n) => {
-        if (n.type !== 'CallExpression') return false;
-        if (!callee) return true;
-        // Identifier direct call: foo()
-        if (n.callee?.type === 'Identifier' && n.callee.name === callee) return true;
-        // Member expression: obj.foo()
-        if (
-            (n.callee?.type === 'StaticMemberExpression' || n.callee?.type === 'MemberExpression') &&
-            n.callee?.property?.name === callee
-        ) return true;
-        return false;
-    });
+  return findNodes(program, (n) => {
+    if (n.type !== 'CallExpression') return false;
+    if (!callee) return true;
+
+    if (n.callee?.type === 'Identifier' && n.callee.name === callee)
+      return true;
+
+    if (
+      (n.callee?.type === 'StaticMemberExpression' ||
+        n.callee?.type === 'MemberExpression') &&
+      n.callee?.property?.name === callee
+    )
+      return true;
+    return false;
+  });
 }
 
-// ---------------------------------------------------------------------------
-// Angular class node factory  (for AnyAngularClass / AngularClass stream rules)
-// ---------------------------------------------------------------------------
+const ANGULAR_DECORATOR_NAMES = new Set([
+  'Component',
+  'Directive',
+  'Pipe',
+  'Injectable',
+  'NgModule',
+]);
 
-const ANGULAR_DECORATOR_NAMES = new Set(['Component', 'Directive', 'Pipe', 'Injectable', 'NgModule']);
-
-/**
- * Extracts the Angular decorator name from a ClassDeclaration AST node.
- *
- * Strategy (in order):
- * 1. Read the actual `@Decorator` from the parsed AST.
- * 2. Fall back to filename convention (`.component.ts` → 'Component', etc.)
- * 3. Return 'Unknown' so rules that guard on 'Component'/'Directive' correctly
- *    skip unrecognised file types in tests.
- */
 function extractDecoratorName(classNode: any, filePath: string): string {
-    // 1. Try to read from AST decorators
-    const decorators = classNode.decorators;
-    if (Array.isArray(decorators)) {
-        for (const d of decorators) {
-            const expr = d.expression ?? d;
-            if (expr?.type === 'Identifier' && ANGULAR_DECORATOR_NAMES.has(expr.name)) return expr.name;
-            if (expr?.type === 'CallExpression') {
-                const callee = expr.callee;
-                if (callee?.type === 'Identifier' && ANGULAR_DECORATOR_NAMES.has(callee.name)) return callee.name;
-            }
-        }
+  const decorators = classNode.decorators;
+  if (Array.isArray(decorators)) {
+    for (const d of decorators) {
+      const expr = d.expression ?? d;
+      if (expr?.type === 'Identifier' && ANGULAR_DECORATOR_NAMES.has(expr.name))
+        return expr.name;
+      if (expr?.type === 'CallExpression') {
+        const callee = expr.callee;
+        if (
+          callee?.type === 'Identifier' &&
+          ANGULAR_DECORATOR_NAMES.has(callee.name)
+        )
+          return callee.name;
+      }
     }
-    // 2. Fall back to filename convention
-    if (filePath.endsWith('.component.ts')) return 'Component';
-    if (filePath.endsWith('.directive.ts')) return 'Directive';
-    if (filePath.endsWith('.pipe.ts')) return 'Pipe';
-    if (filePath.endsWith('.service.ts')) return 'Injectable';
-    if (filePath.endsWith('.module.ts')) return 'NgModule';
-    if (filePath.endsWith('.guard.ts')) return 'Injectable';
-    // 3. Unrecognised — rules guarding on 'Component'/'Directive' will return null
-    return 'Unknown';
+  }
+
+  if (filePath.endsWith('.component.ts')) return 'Component';
+  if (filePath.endsWith('.directive.ts')) return 'Directive';
+  if (filePath.endsWith('.pipe.ts')) return 'Pipe';
+  if (filePath.endsWith('.service.ts')) return 'Injectable';
+  if (filePath.endsWith('.module.ts')) return 'NgModule';
+  if (filePath.endsWith('.guard.ts')) return 'Injectable';
+
+  return 'Unknown';
 }
 
-/**
- * Parses `source` and returns the first ClassDeclaration node wrapped in the
- * minimal `AnyAngularClassNode`-compatible shape expected by Angular class rules.
- *
- * All `AnyAngularClass` stream rules do:
- *   const classNode = streamNode.node as unknown as AstNode;
- *   const classBody = getClassBody(classNode);
- *
- * Wrapping the parsed ClassDeclaration as `{ node, metadata, decoratorName }`
- * satisfies that contract without requiring the full engine streaming
- * infrastructure.
- *
- * For rules that additionally inspect `streamNode.metadata` (e.g. prefer-on-push),
- * pass `metadata` explicitly:
- *
- *   const { classStreamNode, ctx } = makeAngularClassNode(src, '/src/a.component.ts', {
- *     type: 'Component',
- *     changeDetection: { kind: 'missing' },
- *     className: 'MyComponent',
- *   });
- */
 export function makeAngularClassNode(
-    source: string,
-    filePath = '/src/test.component.ts',
-    metadata: Record<string, unknown> = {},
+  source: string,
+  filePath = '/src/test.component.ts',
+  metadata: Record<string, unknown> = {}
 ): { classStreamNode: any; ctx: RuleContext & { program: Program } } {
-    const ctx = makeContext(source, filePath);
-    const classNodes = findNodes(ctx.program, (n: any) => n.type === 'ClassDeclaration');
-    if (!classNodes.length) {
-        throw new Error(
-            `makeAngularClassNode: no ClassDeclaration found in source:\n${source.slice(0, 200)}`
-        );
-    }
-    // Populate `decoratorName` so rules that guard on classNodeWrapper.decoratorName
-    // (e.g. signal-prefer-input-signal, prefer-after-render-over-after-view-init)
-    // receive the correct value in unit tests.
-    const decoratorName = (metadata.decoratorName as string | undefined)
-        ?? extractDecoratorName(classNodes[0], filePath);
-    const classStreamNode = { node: classNodes[0], metadata, decoratorName };
-    return { classStreamNode, ctx };
+  const ctx = makeContext(source, filePath);
+  const classNodes = findNodes(
+    ctx.program,
+    (n: any) => n.type === 'ClassDeclaration'
+  );
+  if (!classNodes.length) {
+    throw new Error(
+      `makeAngularClassNode: no ClassDeclaration found in source:\n${source.slice(0, 200)}`
+    );
+  }
+
+  const decoratorName =
+    (metadata.decoratorName as string | undefined) ??
+    extractDecoratorName(classNodes[0], filePath);
+  const classStreamNode = { node: classNodes[0], metadata, decoratorName };
+  return { classStreamNode, ctx };
+}
+
+const ANGULAR_CORE_STUB = `
+export declare interface Signal<T> { (): T; }
+export declare interface WritableSignal<T> extends Signal<T> {
+  set(value: T): void;
+  update(updater: (current: T) => T): void;
+}
+export declare function signal<T>(value: T): WritableSignal<T>;
+export declare function computed<T>(fn: () => T): Signal<T>;
+export declare function effect(fn: () => void): { destroy(): void };
+export declare class InjectionToken<T> { constructor(description: string); }
+export declare function Injectable(options?: unknown): ClassDecorator;
+export declare function Inject(token: unknown): ParameterDecorator;
+export declare function Optional(): ParameterDecorator;
+export declare function Self(): ParameterDecorator;
+export declare function SkipSelf(): ParameterDecorator;
+export declare function Host(): ParameterDecorator;
+export declare function Component(options?: unknown): ClassDecorator;
+export declare function Directive(options?: unknown): ClassDecorator;
+export declare function Output(name?: string): PropertyDecorator;
+export declare function Input(name?: string): PropertyDecorator;
+export declare class EventEmitter<T> {
+  emit(value?: T): void;
+  subscribe(next?: (value: T) => void): unknown;
+}
+export declare class Router {}
+export declare class ChangeDetectorRef {
+  detectChanges(): void;
+  markForCheck(): void;
+}
+export declare class DestroyRef {}
+export declare enum ChangeDetectionStrategy { OnPush = 0, Default = 1 }
+`;
+
+const ANGULAR_HTTP_STUB = `
+export declare class HttpClient {
+  get<T>(url: string): unknown;
+  post<T>(url: string, body: unknown): unknown;
+}
+`;
+
+const RXJS_STUB = `
+export declare class Observable<T> { subscribe(): unknown; }
+export declare class Subject<T> extends Observable<T> {
+  next(value: T): void;
+  complete(): void;
+  error(err: unknown): void;
+}
+export declare class BehaviorSubject<T> extends Subject<T> {}
+`;
+
+export interface TypeAwareFixture {
+  readonly ctx: RuleContext & { program: Program };
+
+  readonly oxcProgram: Program;
+
+  readonly filePath: string;
+
+  readonly dispose: () => void;
+}
+
+interface TypeAwareOptions {
+  readonly crossRef?: RuleContext['crossRef'];
+}
+
+let tempDirCounter = 0;
+
+export function makeTypeAwareContext(
+  source: string,
+  options: TypeAwareOptions = {}
+): TypeAwareFixture {
+  const tmpDir = fs.mkdtempSync(
+    path.join(os.tmpdir(), `ngc-rule-${tempDirCounter++}-`)
+  );
+
+  const writeFile = (relPath: string, content: string): void => {
+    const full = path.join(tmpDir, relPath);
+    fs.mkdirSync(path.dirname(full), { recursive: true });
+    fs.writeFileSync(full, content, 'utf8');
+  };
+
+  writeFile('node_modules/@angular/core/index.d.ts', ANGULAR_CORE_STUB);
+  writeFile(
+    'node_modules/@angular/core/package.json',
+    JSON.stringify({ name: '@angular/core', types: 'index.d.ts' })
+  );
+  writeFile('node_modules/@angular/common/http.d.ts', ANGULAR_HTTP_STUB);
+  writeFile(
+    'node_modules/@angular/common/package.json',
+    JSON.stringify({
+      name: '@angular/common',
+      exports: { './http': { types: './http.d.ts' } },
+    })
+  );
+  writeFile('node_modules/rxjs/index.d.ts', RXJS_STUB);
+  writeFile(
+    'node_modules/rxjs/package.json',
+    JSON.stringify({ name: 'rxjs', types: 'index.d.ts' })
+  );
+
+  const filePath = path.join(tmpDir, 'src/source.ts');
+  writeFile('src/source.ts', source);
+
+  const tsProgram = ts.createProgram({
+    rootNames: [filePath],
+    options: {
+      target: ts.ScriptTarget.ES2022,
+      module: ts.ModuleKind.ES2022,
+      moduleResolution: ts.ModuleResolutionKind.Node10,
+      experimentalDecorators: true,
+      strict: false,
+      noEmit: true,
+      baseUrl: tmpDir,
+      paths: {
+        '@angular/common/http': ['node_modules/@angular/common/http.d.ts'],
+      },
+    },
+  });
+
+  const sourceFile = tsProgram.getSourceFile(filePath);
+  if (!sourceFile) {
+    throw new Error(
+      'makeTypeAwareContext: failed to load user source into TS Program'
+    );
+  }
+
+  const { program: oxcProgram } = parseTs(source, filePath);
+  const typeChecker = tsProgram.getTypeChecker();
+  const angularTypes = createAngularTypeIndex(tsProgram);
+
+  const ctx: RuleContext & { program: Program } = {
+    filePath,
+    fileContent: source,
+    locator: new Locator(source),
+    program: oxcProgram,
+    typeChecker,
+    sourceFile,
+    angularTypes,
+    crossRef: options.crossRef,
+  } as RuleContext & { program: Program };
+
+  let disposed = false;
+  return {
+    ctx,
+    oxcProgram,
+    filePath,
+    dispose: () => {
+      if (disposed) return;
+      disposed = true;
+      try {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      } catch {}
+    },
+  };
+}
+
+export function makeTypeAwareAngularClassFixture(
+  source: string,
+  options: TypeAwareOptions = {}
+): TypeAwareFixture & {
+  classStreamNode: {
+    node: unknown;
+    metadata: Record<string, unknown>;
+    decoratorName: string;
+  };
+} {
+  const base = makeTypeAwareContext(source, options);
+  const classNodes = findNodes(
+    base.oxcProgram,
+    (n: any) => n.type === 'ClassDeclaration'
+  );
+  if (!classNodes.length) {
+    base.dispose();
+    throw new Error(
+      'makeTypeAwareAngularClassFixture: no ClassDeclaration found in source'
+    );
+  }
+  const decoratorName = extractDecoratorName(classNodes[0], base.filePath);
+  const classStreamNode = { node: classNodes[0], metadata: {}, decoratorName };
+  return Object.assign(base, { classStreamNode });
 }

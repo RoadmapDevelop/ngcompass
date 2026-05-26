@@ -62,18 +62,18 @@ flowchart TB
 
 ### Package Responsibilities
 
-| Package | Primary Responsibility | Key Artifacts |
-|---|---|---|
-| `ngcompass` | User-facing command line orchestration | `ngcompass analyze`, `init`, `config`, `cache`, `rules` |
-| `@ngcompass/config` | Discover, load, normalize, validate, and profile configuration | `resolveConfig`, config health checks, plugin loader |
-| `@ngcompass/scanner` | Discover source files from Git or glob patterns | `scan`, git discovery, filters, stats |
-| `@ngcompass/rules` | Built-in rules, presets, rule registry, rule resolution | `registerAllBuiltinRules`, `resolveRules`, presets |
-| `@ngcompass/planner` | Convert files plus rules into executable tasks | `buildExecutionPlan`, task IDs, resource graph, indexes |
-| `@ngcompass/engine` | Execute tasks and aggregate results | `runAnalysis`, `executeBatchedTasks`, worker pool, type-aware context |
-| `@ngcompass/ast` | Parse and traverse source artifacts | Oxc TypeScript AST, Angular HTML AST, CSS parser, node streams |
-| `@ngcompass/cache` | Provide durable and memory caches | config, file, plan, result, analysis, AST, metadata caches |
-| `@ngcompass/reporters` | Render results for humans and machines | console, JSON, SARIF, HTML/UI reporters |
-| `@ngcompass/common` | Shared domain model and utilities | `AnalyzerConfig`, `RuleResult`, `RuleContext`, `ProjectContext` |
+| Package                | Primary Responsibility                                         | Key Artifacts                                                         |
+| ---------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `ngcompass`            | User-facing command line orchestration                         | `ngcompass analyze`, `init`, `config`, `cache`, `rules`               |
+| `@ngcompass/config`    | Discover, load, normalize, validate, and profile configuration | `resolveConfig`, config health checks, plugin loader                  |
+| `@ngcompass/scanner`   | Discover source files from Git or glob patterns                | `scan`, git discovery, filters, stats                                 |
+| `@ngcompass/rules`     | Built-in rules, presets, rule registry, rule resolution        | `registerAllBuiltinRules`, `resolveRules`, presets                    |
+| `@ngcompass/planner`   | Convert files plus rules into executable tasks                 | `buildExecutionPlan`, task IDs, resource graph, indexes               |
+| `@ngcompass/engine`    | Execute tasks and aggregate results                            | `runAnalysis`, `executeBatchedTasks`, worker pool, type-aware context |
+| `@ngcompass/ast`       | Parse and traverse source artifacts                            | Oxc TypeScript AST, Angular HTML AST, CSS parser, node streams        |
+| `@ngcompass/cache`     | Provide durable and memory caches                              | config, file, plan, result, analysis, AST, metadata caches            |
+| `@ngcompass/reporters` | Render results for humans and machines                         | console, JSON, SARIF, HTML/UI reporters                               |
+| `@ngcompass/common`    | Shared domain model and utilities                              | `AnalyzerConfig`, `RuleResult`, `RuleContext`, `ProjectContext`       |
 
 ## 4. End-to-End Analysis Lifecycle
 
@@ -160,48 +160,48 @@ The CLI separates presentation from execution. It instantiates reporters early, 
 
 **`analyze`** — run static analysis.
 
-| Flag | Description |
-|---|---|
-| `-p, --profile <name>` | Configuration profile to run |
-| `--force` | Ignore cached results and re-run all checks |
-| `--format <fmt>` | Reporter format: `console` \| `json` \| `sarif` \| `html` \| `ui` |
-| `--compact` | Use compact, ESLint-style output (console format only) |
-| `-q, --quiet` | Show summary counts only, suppress violation details |
-| `--no-recommendation` | Suppress fix recommendations from output |
-| `--output <path>` | Output path for HTML reports (default: `ngcompass-report.html`) |
-| `--rule <id>` | Run only one rule — useful for debugging or focused checks |
-| `--mode <mode>` | Performance mode: `eco` \| `balanced` \| `turbo` (default: `balanced`) |
-| `--max-workers <n>` | Cap the number of worker threads (lower = less memory, e.g. `--max-workers 2`) |
-| `--skip-type-check` | Skip rules that require the TypeScript type checker (fastest, lowest memory) |
+| Flag                   | Description                                                                    |
+| ---------------------- | ------------------------------------------------------------------------------ |
+| `-p, --profile <name>` | Configuration profile to run                                                   |
+| `--force`              | Ignore cached results and re-run all checks                                    |
+| `--format <fmt>`       | Reporter format: `console` \| `json` \| `sarif` \| `html` \| `ui`              |
+| `--compact`            | Use compact, ESLint-style output (console format only)                         |
+| `-q, --quiet`          | Show summary counts only, suppress violation details                           |
+| `--no-recommendation`  | Suppress fix recommendations from output                                       |
+| `--output <path>`      | Output path for HTML reports (default: `ngcompass-report.html`)                |
+| `--rule <id>`          | Run only one rule — useful for debugging or focused checks                     |
+| `--mode <mode>`        | Performance mode: `eco` \| `balanced` \| `turbo` (default: `balanced`)         |
+| `--max-workers <n>`    | Cap the number of worker threads (lower = less memory, e.g. `--max-workers 2`) |
+| `--skip-type-check`    | Skip rules that require the TypeScript type checker (fastest, lowest memory)   |
 
 Hidden power-user flags (not shown in `--help`): `--type-aware-chunk-size`, `--type-aware-concurrency`, `--type-aware-file-concurrency`, `--type-aware-isolation`, `--type-aware-chunk-strategy`. See Section 11 for semantics.
 
 **`init`** — create a starter configuration.
 
-| Flag | Description |
-|---|---|
-| `-f, --force` | Overwrite an existing configuration file |
+| Flag           | Description                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `-f, --force`  | Overwrite an existing configuration file                                             |
 | `--cwd <path>` | Project directory where the configuration will be created (default: `process.cwd()`) |
 
 **`config health`** — validate the active configuration.
 
-| Flag | Description |
-|---|---|
+| Flag                   | Description                       |
+| ---------------------- | --------------------------------- |
 | `-p, --profile <name>` | Configuration profile to validate |
 
 **`cache clear`** — clear cached data.
 
-| Flag | Description |
-|---|---|
-| `-p, --profile <name>` | Configuration profile used to resolve cache settings |
-| `--type <type>` | Cache type to clear: `ast` \| `config` \| `results` \| `all` (default: `all`) |
+| Flag                   | Description                                                                   |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `-p, --profile <name>` | Configuration profile used to resolve cache settings                          |
+| `--type <type>`        | Cache type to clear: `ast` \| `config` \| `results` \| `all` (default: `all`) |
 
 **`cache info`** and **`cache path`** both accept `-p, --profile <name>` to resolve profile-specific cache settings.
 
 **`rules [ruleName]`** — browse or inspect rules.
 
-| Flag | Description |
-|---|---|
+| Flag              | Description                                                                           |
+| ----------------- | ------------------------------------------------------------------------------------- |
 | `--preset <name>` | Filter by preset: `recommended` \| `strict` \| `performance` \| `reactivity` \| `all` |
 
 ## 6. Configuration Architecture
@@ -353,16 +353,16 @@ classDiagram
 
 Built-in rules are registered in `packages/rules/src/registry/register-all.ts`. The domains are:
 
-| Domain | Purpose |
-|---|---|
-| Correctness | Prevent defects, lifecycle misuse, memory leaks, and reactive side effects |
-| Performance | Avoid rendering bottlenecks and change-detection inefficiencies |
-| Security | Detect unsafe bindings and sanitization bypasses |
-| SSR | Detect browser-only API usage and render lifecycle risks |
-| Reactivity | Enforce RxJS and Angular Signals patterns |
-| Modern API | Encourage Angular 17+ APIs such as `inject`, signal inputs, outputs, and models |
-| Template | Enforce template syntax and async-pipe patterns |
-| Testing | Detect focused tests and similar CI blind spots |
+| Domain      | Purpose                                                                         |
+| ----------- | ------------------------------------------------------------------------------- |
+| Correctness | Prevent defects, lifecycle misuse, memory leaks, and reactive side effects      |
+| Performance | Avoid rendering bottlenecks and change-detection inefficiencies                 |
+| Security    | Detect unsafe bindings and sanitization bypasses                                |
+| SSR         | Detect browser-only API usage and render lifecycle risks                        |
+| Reactivity  | Enforce RxJS and Angular Signals patterns                                       |
+| Modern API  | Encourage Angular 17+ APIs such as `inject`, signal inputs, outputs, and models |
+| Template    | Enforce template syntax and async-pipe patterns                                 |
+| Testing     | Detect focused tests and similar CI blind spots                                 |
 
 ### 8.3 Rule Resolution
 
@@ -705,13 +705,13 @@ The `analyze` command exposes a single `--mode` flag that selects a named perfor
 
 ### 11.1 Mode Presets
 
-| Setting | `eco` | `balanced` (default) | `turbo` |
-|---|---|---|---|
-| `typeAwareConcurrency` | 1 | 2 | 2 |
-| `typeAwareFileConcurrency` | 1 | 2 | 4 |
-| `typeAwareChunkSize` | 100 | 300 | 500 |
-| `typeAwareIsolation` | auto | auto | off |
-| `typeAwareChunkStrategy` | dependency | simple | simple |
+| Setting                    | `eco`      | `balanced` (default) | `turbo` |
+| -------------------------- | ---------- | -------------------- | ------- |
+| `typeAwareConcurrency`     | 1          | 2                    | 2       |
+| `typeAwareFileConcurrency` | 1          | 2                    | 4       |
+| `typeAwareChunkSize`       | 100        | 300                  | 500     |
+| `typeAwareIsolation`       | auto       | auto                 | off     |
+| `typeAwareChunkStrategy`   | dependency | simple               | simple  |
 
 **eco** minimizes memory by processing one type-aware chunk at a time with the safest chunk ordering strategy. It is the right choice for CI environments with limited RAM or for machines running many parallel jobs.
 
@@ -843,13 +843,13 @@ The worker distribution algorithm keeps all tasks for the same file together. Th
 
 `@ngcompass/ast` provides parsing, node streams, template analysis, and traversal helpers.
 
-| Artifact | Parser or Analyzer | Usage |
-|---|---|---|
-| TypeScript/TSX | `oxc-parser` | Fast syntax AST for rule streams |
-| Angular HTML | `angular-html-parser` | Template expressions, attributes, blocks |
-| CSS-like styles | CSS parser wrapper | Style-oriented rules |
+| Artifact         | Parser or Analyzer                  | Usage                                            |
+| ---------------- | ----------------------------------- | ------------------------------------------------ |
+| TypeScript/TSX   | `oxc-parser`                        | Fast syntax AST for rule streams                 |
+| Angular HTML     | `angular-html-parser`               | Template expressions, attributes, blocks         |
+| CSS-like styles  | CSS parser wrapper                  | Style-oriented rules                             |
 | Inline templates | Template extractor from Oxc program | Maps inline template offsets to source locations |
-| AST traversal | Iterative DFS walker | Single-pass engine traversal |
+| AST traversal    | Iterative DFS walker                | Single-pass engine traversal                     |
 
 The Angular HTML parser is configured with Angular block tokenization enabled. Template ASTs preserve `templateStartOffset`, so inline-template diagnostics can be mapped back to the correct line and column in the TypeScript file.
 
@@ -883,16 +883,16 @@ flowchart TB
 
 ### 14.1 Cache Services
 
-| Cache Service | Key | Value | Main Consumer |
-|---|---|---|---|
-| Config cache | Config hash | `ConfigValidationResult` | Config loader |
-| File cache | Scan key | Discovered file list and scan statistics | Scanner |
-| Plan cache | Global hash | Serialized full execution plan | Planner |
-| Result cache | Task ID | `RuleResult` | Planner and engine |
-| Analysis cache | Global hash | Full `AnalysisResult` | Planner and engine |
-| AST cache | Content hash | Parsed AST entry | Config enrichment and parser-adjacent flows |
-| Meta cache | File path/hash metadata | Hash warmup metadata | Planner |
-| Source cache | File content | In-memory source entries | Cache subsystem consumers |
+| Cache Service  | Key                     | Value                                    | Main Consumer                               |
+| -------------- | ----------------------- | ---------------------------------------- | ------------------------------------------- |
+| Config cache   | Config hash             | `ConfigValidationResult`                 | Config loader                               |
+| File cache     | Scan key                | Discovered file list and scan statistics | Scanner                                     |
+| Plan cache     | Global hash             | Serialized full execution plan           | Planner                                     |
+| Result cache   | Task ID                 | `RuleResult`                             | Planner and engine                          |
+| Analysis cache | Global hash             | Full `AnalysisResult`                    | Planner and engine                          |
+| AST cache      | Content hash            | Parsed AST entry                         | Config enrichment and parser-adjacent flows |
+| Meta cache     | File path/hash metadata | Hash warmup metadata                     | Planner                                     |
+| Source cache   | File content            | In-memory source entries                 | Cache subsystem consumers                   |
 
 ### 14.2 Cache Layers and Fast Paths
 
@@ -989,18 +989,18 @@ erDiagram
 
 ### Principal Domain Types
 
-| Type | Package | Description |
-|---|---|---|
-| `AnalyzerConfig` | common | User-authored configuration shape |
-| `NormalizedAnalyzerConfig` | common | Runtime-safe validated config |
-| `ResolvedRule` | common | Rule config plus metadata |
-| `Task` | planner | Content-addressed unit of work |
-| `ExecutionPlanOutput` | planner | Full planner result for engine |
-| `RuleContext` | common | Resources passed to rule handlers |
-| `RuleResult` | common | Result for one rule execution |
-| `RuleFailure` | common | One diagnostic finding |
-| `AnalysisResult` | common | Final aggregate output |
-| `ProjectContext` | common | Cross-file metadata for project-aware rules |
+| Type                       | Package | Description                                 |
+| -------------------------- | ------- | ------------------------------------------- |
+| `AnalyzerConfig`           | common  | User-authored configuration shape           |
+| `NormalizedAnalyzerConfig` | common  | Runtime-safe validated config               |
+| `ResolvedRule`             | common  | Rule config plus metadata                   |
+| `Task`                     | planner | Content-addressed unit of work              |
+| `ExecutionPlanOutput`      | planner | Full planner result for engine              |
+| `RuleContext`              | common  | Resources passed to rule handlers           |
+| `RuleResult`               | common  | Result for one rule execution               |
+| `RuleFailure`              | common  | One diagnostic finding                      |
+| `AnalysisResult`           | common  | Final aggregate output                      |
+| `ProjectContext`           | common  | Cross-file metadata for project-aware rules |
 
 ## 18. Project Context and Cross-File Analysis
 
@@ -1087,17 +1087,17 @@ flowchart TD
 
 The performance model is based on reducing repeated work at every layer.
 
-| Layer | Optimization |
-|---|---|
-| Config | Content-hash validation cache |
-| Scanner | Git discovery and file-list cache |
-| Planner | Global hash, plan cache, component graph, hash warmup |
-| Incremental | `taskId` result-cache filtering |
-| Engine | Single-pass AST traversal and batched rule execution |
-| Workers | Parallel syntax-only execution by file group |
-| Type-aware | Small chunked TypeScript Programs and capped type-aware concurrency for memory control |
-| Cache I/O | Packed result cache and write-behind flush |
-| Context | LRU file content, memoized ASTs, explicit eviction |
+| Layer       | Optimization                                                                           |
+| ----------- | -------------------------------------------------------------------------------------- |
+| Config      | Content-hash validation cache                                                          |
+| Scanner     | Git discovery and file-list cache                                                      |
+| Planner     | Global hash, plan cache, component graph, hash warmup                                  |
+| Incremental | `taskId` result-cache filtering                                                        |
+| Engine      | Single-pass AST traversal and batched rule execution                                   |
+| Workers     | Parallel syntax-only execution by file group                                           |
+| Type-aware  | Small chunked TypeScript Programs and capped type-aware concurrency for memory control |
+| Cache I/O   | Packed result cache and write-behind flush                                             |
+| Context     | LRU file content, memoized ASTs, explicit eviction                                     |
 
 ### Cold Run
 

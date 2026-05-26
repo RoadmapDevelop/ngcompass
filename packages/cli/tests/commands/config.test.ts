@@ -8,71 +8,73 @@ vi.mock('@ngcompass/config');
 vi.mock('@ngcompass/reporters');
 
 describe('Config Command', () => {
-    let program: Command;
-    let mockExit: any;
-    let mockConsoleError: any;
-    let mockRenderHealthReport: any;
+  let program: Command;
+  let mockExit: any;
+  let mockConsoleError: any;
+  let mockRenderHealthReport: any;
 
-    beforeEach(() => {
-        vi.resetAllMocks();
-        program = new Command();
-        
-        mockRenderHealthReport = vi.fn().mockResolvedValue(undefined);
-        vi.spyOn(reportersModule, 'getConfigReporter').mockReturnValue({
-            renderHealthReport: mockRenderHealthReport
-        } as any);
+  beforeEach(() => {
+    vi.resetAllMocks();
+    program = new Command();
 
-        mockExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-        mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    });
+    mockRenderHealthReport = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(reportersModule, 'getConfigReporter').mockReturnValue({
+      renderHealthReport: mockRenderHealthReport,
+    } as any);
 
-    it('registers the health subcommand', () => {
-        registerConfigCommand(program, {} as any);
-        expect(program.commands.length).toBe(1);
-        const configCmd = program.commands[0];
-        expect(configCmd.name()).toBe('config');
-        expect(configCmd.commands.length).toBe(1);
-        expect(configCmd.commands[0].name()).toBe('health');
-    });
+    mockExit = vi
+      .spyOn(process, 'exit')
+      .mockImplementation(() => undefined as never);
+    mockConsoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+  });
 
-    it('validates config and exits 0 if valid', async () => {
-        registerConfigCommand(program, {} as any);
-        
-        // Return valid
-        vi.spyOn(configModule, 'validateConfig').mockResolvedValue({
-            report: { valid: true }
-        } as any);
+  it('registers the health subcommand', () => {
+    registerConfigCommand(program, {} as any);
+    expect(program.commands.length).toBe(1);
+    const configCmd = program.commands[0];
+    expect(configCmd.name()).toBe('config');
+    expect(configCmd.commands.length).toBe(1);
+    expect(configCmd.commands[0].name()).toBe('health');
+  });
 
-        await program.parseAsync(['node', 'test', 'config', 'health']);
+  it('validates config and exits 0 if valid', async () => {
+    registerConfigCommand(program, {} as any);
 
-        expect(configModule.validateConfig).toHaveBeenCalled();
-        expect(mockRenderHealthReport).toHaveBeenCalledWith({ valid: true });
-        expect(mockExit).not.toHaveBeenCalled();
-    });
+    vi.spyOn(configModule, 'validateConfig').mockResolvedValue({
+      report: { valid: true },
+    } as any);
 
-    it('validates config and exits 1 if invalid', async () => {
-        registerConfigCommand(program, {} as any);
-        
-        // Return invalid
-        vi.spyOn(configModule, 'validateConfig').mockResolvedValue({
-            report: { valid: false }
-        } as any);
+    await program.parseAsync(['node', 'test', 'config', 'health']);
 
-        await program.parseAsync(['node', 'test', 'config', 'health']);
+    expect(configModule.validateConfig).toHaveBeenCalled();
+    expect(mockRenderHealthReport).toHaveBeenCalledWith({ valid: true });
+    expect(mockExit).not.toHaveBeenCalled();
+  });
 
-        expect(mockExit).toHaveBeenCalledWith(1);
-    });
+  it('validates config and exits 1 if invalid', async () => {
+    registerConfigCommand(program, {} as any);
 
-    it('handles unexpected validation errors gracefully', async () => {
-        registerConfigCommand(program, {} as any);
-        
-        vi.spyOn(configModule, 'validateConfig').mockRejectedValue(new Error('Validation Crash'));
+    vi.spyOn(configModule, 'validateConfig').mockResolvedValue({
+      report: { valid: false },
+    } as any);
 
-        await program.parseAsync(['node', 'test', 'config', 'health']);
+    await program.parseAsync(['node', 'test', 'config', 'health']);
 
-        expect(mockConsoleError).toHaveBeenCalled();
-        const errorArg = String(mockConsoleError.mock.calls[0][0]);
-        expect(errorArg).toContain('Validation Crash');
-        expect(mockExit).toHaveBeenCalledWith(1);
-    });
+    expect(mockExit).toHaveBeenCalledWith(1);
+  });
+
+  it('handles unexpected validation errors gracefully', async () => {
+    registerConfigCommand(program, {} as any);
+
+    vi.spyOn(configModule, 'validateConfig').mockRejectedValue(
+      new Error('Validation Crash')
+    );
+
+    await program.parseAsync(['node', 'test', 'config', 'health']);
+
+    expect(mockConsoleError).toHaveBeenCalled();
+    const errorArg = String(mockConsoleError.mock.calls[0][0]);
+    expect(errorArg).toContain('Validation Crash');
+    expect(mockExit).toHaveBeenCalledWith(1);
+  });
 });

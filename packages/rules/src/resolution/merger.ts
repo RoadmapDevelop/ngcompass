@@ -1,86 +1,61 @@
-/**
- * @fileoverview
- * Rule-config merger.
- *
- * Pure helpers that combine rule configurations with deterministic
- * precedence: later inputs override earlier ones, with rule options merged
- * key-by-key so a user can selectively replace one option while inheriting
- * the rest from a preset.
- */
-
-import type { RulesConfig, RuleConfig, RuleConfigFull } from '@ngcompass/common';
+import type {
+  RulesConfig,
+  RuleConfig,
+  RuleConfigFull,
+} from '@ngcompass/common';
 import { normalizeRuleConfig } from './normalize.js';
 
-/**
- * Merge two rule configurations
- *
- * Pure function: later config overrides earlier config
- * Handles both shorthand and full format
- */
 export const mergeRuleConfig = (
-    base: RuleConfig,
-    override: RuleConfig
+  base: RuleConfig,
+  override: RuleConfig
 ): RuleConfigFull => {
-    const baseNormalized = normalizeRuleConfig(base);
-    const overrideNormalized = normalizeRuleConfig(override);
+  const baseNormalized = normalizeRuleConfig(base);
+  const overrideNormalized = normalizeRuleConfig(override);
 
-    return {
-        severity: overrideNormalized.severity,
-        options: {
-            ...baseNormalized.options,
-            ...overrideNormalized.options,
-        },
-    };
+  return {
+    severity: overrideNormalized.severity,
+    options: {
+      ...baseNormalized.options,
+      ...overrideNormalized.options,
+    },
+  };
 };
 
-/**
- * Merge multiple rule configuration objects
- *
- * Pure function: later configs override earlier configs
- * Precedence: rules[0] < rules[1] < ... < rules[n]
- */
 export const mergeRulesConfigs = (
-    configs: ReadonlyArray<RulesConfig>
+  configs: ReadonlyArray<RulesConfig>
 ): ReadonlyMap<string, RuleConfigFull> => {
-    const merged = new Map<string, RuleConfigFull>();
+  const merged = new Map<string, RuleConfigFull>();
 
-    for (const config of configs) {
-        for (const [ruleName, ruleConfig] of Object.entries(config)) {
-            const existing = merged.get(ruleName);
+  for (const config of configs) {
+    for (const [ruleName, ruleConfig] of Object.entries(config)) {
+      const existing = merged.get(ruleName);
 
-            if (existing) {
-                // Merge with existing
-                merged.set(ruleName, mergeRuleConfig(existing, ruleConfig));
-            } else {
-                // First occurrence
-                merged.set(ruleName, normalizeRuleConfig(ruleConfig));
-            }
-        }
+      if (existing) {
+        merged.set(ruleName, mergeRuleConfig(existing, ruleConfig));
+      } else {
+        merged.set(ruleName, normalizeRuleConfig(ruleConfig));
+      }
     }
+  }
 
-    return merged;
+  return merged;
 };
 
-/**
- * Apply overrides to a base rules configuration
- *
- * Pure function: overrides have highest precedence
- */
 export const applyOverrides = (
-    base: ReadonlyMap<string, RuleConfigFull>,
-    overrides: RulesConfig
+  base: ReadonlyMap<string, RuleConfigFull>,
+  overrides: RulesConfig
 ): ReadonlyMap<string, RuleConfigFull> => {
-    const result = new Map(base);
+  const result = new Map(base);
 
-    for (const [ruleName, ruleConfig] of Object.entries(overrides)) {
-        const existing = result.get(ruleName);
+  for (const [ruleName, ruleConfig] of Object.entries(overrides)) {
+    const existing = result.get(ruleName);
 
-        if (existing) {
-            result.set(ruleName, mergeRuleConfig(existing, ruleConfig));
-        } else {
-            result.set(ruleName, normalizeRuleConfig(ruleConfig));
-        }
+    if (existing) {
+      result.set(ruleName, mergeRuleConfig(existing, ruleConfig));
+    } else {
+      result.set(ruleName, normalizeRuleConfig(ruleConfig));
     }
+  }
 
-    return result;
+  return result;
 };
