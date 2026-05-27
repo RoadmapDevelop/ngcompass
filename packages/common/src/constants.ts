@@ -1,4 +1,4 @@
-export const PACKAGE_VERSION = 'v0.1.8-beta';
+export const PACKAGE_VERSION = 'v0.1.9-beta';
 
 export const CACHE_VERSION = '1.0.0';
 
