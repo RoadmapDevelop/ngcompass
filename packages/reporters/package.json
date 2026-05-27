@@ -1,6 +1,6 @@
 ﻿{
   "name": "@ngcompass/reporters",
-  "version": "0.1.7-beta",
+  "version": "0.1.8-beta",
   "description": "Reporters for ngcompass analysis results",
   "sideEffects": false,
   "main": "./dist/index.cjs",
