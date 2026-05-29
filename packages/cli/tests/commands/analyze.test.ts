@@ -411,11 +411,7 @@ describe('Analyze Command', () => {
       expect.anything(),
       expect.objectContaining({
         maxWorkers: 4,
-        typeAwareChunkSize: 150,
-        typeAwareConcurrency: 1,
         typeAwareFileConcurrency: 1,
-        typeAwareIsolation: 'auto',
-        typeAwareChunkStrategy: 'dependency',
       })
     );
   });
@@ -431,11 +427,7 @@ describe('Analyze Command', () => {
     expect(engineModule.runAnalysis).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        typeAwareChunkSize: 100,
-        typeAwareConcurrency: 1,
         typeAwareFileConcurrency: 1,
-        typeAwareIsolation: 'process',
-        typeAwareChunkStrategy: 'dependency',
       })
     );
   });
@@ -451,11 +443,7 @@ describe('Analyze Command', () => {
     expect(engineModule.runAnalysis).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
-        typeAwareChunkSize: 500,
-        typeAwareConcurrency: 2,
         typeAwareFileConcurrency: 4,
-        typeAwareIsolation: 'off',
-        typeAwareChunkStrategy: 'simple',
       })
     );
   });

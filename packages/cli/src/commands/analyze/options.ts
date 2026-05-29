@@ -3,15 +3,7 @@ import type { ReporterFormat } from '@ngcompass/reporters';
 
 export type PerformanceMode = 'eco' | 'balanced' | 'turbo';
 
-export type TypeAwareIsolation = 'auto' | 'process' | 'off';
-
-export type TypeAwareChunkStrategy = 'dependency' | 'simple';
-
 export interface PerformanceModeOptions {
-  typeAwareChunkSize: number;
-  typeAwareIsolation: TypeAwareIsolation;
-  typeAwareChunkStrategy: TypeAwareChunkStrategy;
-  typeAwareConcurrency: number;
   typeAwareFileConcurrency: number;
 }
 
@@ -38,25 +30,13 @@ const PERFORMANCE_MODE_PRESETS: Readonly<
   Record<PerformanceMode, PerformanceModeOptions>
 > = {
   eco: {
-    typeAwareConcurrency: 1,
     typeAwareFileConcurrency: 1,
-    typeAwareChunkSize: 100,
-    typeAwareIsolation: 'process',
-    typeAwareChunkStrategy: 'dependency',
   },
   balanced: {
-    typeAwareConcurrency: 1,
     typeAwareFileConcurrency: 1,
-    typeAwareChunkSize: 150,
-    typeAwareIsolation: 'auto',
-    typeAwareChunkStrategy: 'dependency',
   },
   turbo: {
-    typeAwareConcurrency: 2,
     typeAwareFileConcurrency: 4,
-    typeAwareChunkSize: 500,
-    typeAwareIsolation: 'off',
-    typeAwareChunkStrategy: 'simple',
   },
 };
 
@@ -111,10 +91,6 @@ export function resolvePerformanceOptions(
 
   return {
     maxWorkers: cliMaxWorkers ?? config.maxWorkers,
-    typeAwareChunkSize: preset.typeAwareChunkSize,
-    typeAwareConcurrency: preset.typeAwareConcurrency,
     typeAwareFileConcurrency: preset.typeAwareFileConcurrency,
-    typeAwareIsolation: preset.typeAwareIsolation,
-    typeAwareChunkStrategy: preset.typeAwareChunkStrategy,
   };
 }
