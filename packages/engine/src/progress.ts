@@ -1,5 +1,7 @@
 import type { RuleResult, WorkerFileProgress } from '@ngcompass/common';
 
+import { sampleHeapUsage } from './runtime-memory.js';
+
 export interface AnalysisFileProgress {
   readonly filePath: string;
   readonly taskCount: number;
@@ -9,6 +11,8 @@ export interface AnalysisFileProgress {
   readonly duration: number;
   readonly cached?: boolean;
   readonly typeAware?: boolean;
+  readonly heapUsedBytes?: number;
+  readonly heapLimitBytes?: number;
 }
 
 export const buildFileProgress = (
@@ -28,6 +32,8 @@ export const buildFileProgress = (
     }
   }
 
+  const heap = sampleHeapUsage();
+
   return {
     filePath,
     taskCount,
@@ -36,6 +42,8 @@ export const buildFileProgress = (
     warningCount,
     duration,
     typeAware,
+    heapUsedBytes: heap.usedBytes,
+    heapLimitBytes: heap.limitBytes,
   };
 };
 

@@ -41,7 +41,7 @@ const PERFORMANCE_MODE_PRESETS: Readonly<
     typeAwareConcurrency: 1,
     typeAwareFileConcurrency: 1,
     typeAwareChunkSize: 100,
-    typeAwareIsolation: 'auto',
+    typeAwareIsolation: 'process',
     typeAwareChunkStrategy: 'dependency',
   },
   balanced: {

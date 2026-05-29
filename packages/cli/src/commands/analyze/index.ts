@@ -1,6 +1,9 @@
 import process from 'node:process';
 import { Command } from 'commander';
+import pc from 'picocolors';
 import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
+import type { HeapUsage } from '@ngcompass/common';
+import type { AnalysisFileProgress } from '@ngcompass/engine';
 import { getReporter, type ResultSummary } from '@ngcompass/reporters';
 import { Spinner } from '../../spinner.js';
 import { exitWithError } from '../exit.js';
@@ -139,17 +142,37 @@ export function registerAnalyzeCommand(
         const totalChecks =
           plan.tasks.length + (plan.skippedTasks?.length ?? 0);
         const mode = getAnalyzeMode(options);
-        spinner.start(formatAnalysisProgressMessage(mode, 0, totalChecks));
-        const logFileProgress = createFileProgressLogger(
+        spinner.start(
+          formatAnalysisProgressMessage(mode, 0, totalChecks, undefined)
+        );
+        const baseLogFileProgress = createFileProgressLogger(
           plan,
           (line) => spinner.writeLine(line),
           process.cwd()
         );
+        let latestHeap: HeapUsage | undefined;
+        const logFileProgress = (event: AnalysisFileProgress): void => {
+          if (
+            typeof event.heapUsedBytes === 'number' &&
+            typeof event.heapLimitBytes === 'number'
+          ) {
+            latestHeap = {
+              usedBytes: event.heapUsedBytes,
+              limitBytes: event.heapLimitBytes,
+            };
+          }
+          baseLogFileProgress(event);
+        };
         const updateAnalysisProgress = (
           completed: number,
           total: number
         ): void => {
-          spinner.update(formatAnalysisProgressMessage(mode, completed, total));
+          spinner.update(
+            formatAnalysisProgressMessage(mode, completed, total, latestHeap)
+          );
+        };
+        const logNotice = (message: string): void => {
+          spinner.writeLine(`${pc.yellow('⚠')} ${pc.yellow(message)}`);
         };
         const analysis = await runAnalysisStep(
           plan,
@@ -160,7 +183,8 @@ export function registerAnalyzeCommand(
           files,
           config,
           updateAnalysisProgress,
-          logFileProgress
+          logFileProgress,
+          logNotice
         );
         spinner.stop();
         if (!analysis) {

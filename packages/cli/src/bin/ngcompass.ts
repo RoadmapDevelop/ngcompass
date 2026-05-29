@@ -4,6 +4,7 @@ import { enableDebug, PACKAGE_VERSION } from '@ngcompass/common';
 import { createCacheContext, CacheContext } from '@ngcompass/cache';
 import { registerAllBuiltinRules } from '@ngcompass/rules';
 import { restoreCursor, printError } from '../commands/exit.js';
+import { maybeRespawnWithExposeGc } from './gc-respawn.js';
 
 const FLUSH_TIMEOUT_MS = 10_000;
 
@@ -69,6 +70,8 @@ const isBannerSuppressedFormat = (format: unknown): boolean => {
 };
 
 export async function run(): Promise<void> {
+  maybeRespawnWithExposeGc();
+
   const program = new Command();
 
   program

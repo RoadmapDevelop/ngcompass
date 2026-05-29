@@ -40,6 +40,7 @@ import {
   createTypeAwareAnalysisContext,
   isTsProgramRoot,
 } from './type-aware-context.js';
+import { requestGarbageCollectionUnderPressure } from './runtime-memory.js';
 import { runAnalysisParallel } from './worker-pool.js';
 
 const DEFAULT_TYPE_AWARE_CHUNK_SIZE = 100;
@@ -52,11 +53,33 @@ const LARGE_TYPE_AWARE_CHUNK_SIZE = 50;
 const MAX_FULL_ANALYSIS_CACHE_RESULTS = 20_000;
 const MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE = 10;
 const ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE = 2000;
+const TYPE_AWARE_CHUNK_CAP_TINY_HEAP = 50;
+const TYPE_AWARE_CHUNK_CAP_SMALL_HEAP = 100;
+const TYPE_AWARE_CHUNK_CAP_MEDIUM_HEAP = 150;
+const TYPE_AWARE_CHUNK_CAP_LARGE_HEAP = 200;
+const TINY_HEAP_LIMIT_GB = 2;
+const SMALL_HEAP_LIMIT_GB = 4;
+const MEDIUM_HEAP_LIMIT_GB = 8;
+const LOW_FREE_MEMORY_GB = 1.5;
+const LOW_FREE_MEMORY_CHUNK_CAP = 75;
+const LOW_CPU_COUNT = 2;
+const MAX_TS_ROOTS_TINY_HEAP = 50;
+const MAX_TS_ROOTS_SMALL_HEAP = 100;
+const MAX_TS_ROOTS_MEDIUM_HEAP = 150;
+const MAX_TS_ROOTS_LARGE_HEAP = 300;
+const PARENT_GC_PRESSURE_RATIO = 0.8;
 const HIGH_HEAP_PRESSURE_RATIO = 0.88;
 const CRITICAL_HEAP_PRESSURE_RATIO = 0.94;
 const LOW_HEAP_PRESSURE_RATIO = 0.35;
 const ADAPTIVE_GROWTH_STREAK = 3;
-const ISOLATED_TYPE_AWARE_FILE_COUNT = 150;
+const ISOLATION_THRESHOLD_TINY_HEAP = 40;
+const ISOLATION_THRESHOLD_SMALL_HEAP = 75;
+const ISOLATION_THRESHOLD_MEDIUM_HEAP = 120;
+const ISOLATION_THRESHOLD_LARGE_HEAP = 150;
+const PREFLIGHT_ADVISORY_HEAP_GB = SMALL_HEAP_LIMIT_GB;
+const PREFLIGHT_ADVISORY_FILE_COUNT = 600;
+const BISECTION_CHILD_BUDGET_MULTIPLIER = 2;
+const BISECTION_CHILD_BUDGET_FLOOR = 16;
 const TYPE_AWARE_CHILD_TIMEOUT_MS = 10 * 60 * 1000;
 const DEPENDENCY_GROUPING_CONCURRENCY = 64;
 const DEPENDENCY_GROUPING_TIMEOUT_MS = 5_000;
@@ -138,6 +161,8 @@ export interface AnalysisOptions {
   readonly onProgress?: (completed: number, total: number) => void;
 
   readonly onFileProgress?: (event: AnalysisFileProgress) => void;
+
+  readonly onNotice?: (message: string) => void;
 }
 
 export const runAnalysis = async (
@@ -182,6 +207,18 @@ export const runAnalysis = async (
       'engine',
       `workerTasks: ${workerTasks.length}, typeAwareTasks: ${typeAwareTasks.length}`
     );
+
+    if (typeAwareTasks.length > 0 && !options.skipTypeCheck) {
+      const preflightFileCount = groupTasksByFile(typeAwareTasks).size;
+      emitTypeAwarePreflightNotice(
+        preflightFileCount,
+        resolveProcessIsolation(
+          options.typeAwareIsolation ?? 'auto',
+          preflightFileCount
+        ),
+        options.onNotice
+      );
+    }
 
     const grandTotal = tasks.length + skippedTasks.length;
 
@@ -444,15 +481,20 @@ const executeTypeAwareTasks = async (
     options.typeAwareChunkStrategy ?? 'dependency'
   );
 
-  const isolationMode = options.typeAwareIsolation ?? 'auto';
-  const useProcessIsolation =
-    isolationMode === 'process' ||
-    (isolationMode === 'auto' &&
-      fileEntries.length >= ISOLATED_TYPE_AWARE_FILE_COUNT);
-  const adaptiveChunkCap = getAdaptiveTypeAwareChunkCap();
+  const useProcessIsolation = resolveProcessIsolation(
+    options.typeAwareIsolation ?? 'auto',
+    fileEntries.length
+  );
+  const adaptiveChunkCap =
+    options.typeAwareChunkSize != null
+      ? clampChunkSize(options.typeAwareChunkSize)
+      : getAdaptiveTypeAwareChunkCap();
+  const maxRootsPerProgram = useProcessIsolation
+    ? `${getMaxRootsPerChild()}`
+    : 'unbounded (in-process)';
   debug(
     'engine',
-    `Type-aware: ${tasks.length} tasks across ${fileEntries.length} files; requested chunk size ${chunkSize}; adaptive cap ${adaptiveChunkCap}; chunk concurrency=${concurrency}; file concurrency=${fileConcurrency}; isolation=${useProcessIsolation ? 'process' : 'in-process'}`
+    `Type-aware: ${tasks.length} tasks across ${fileEntries.length} files; requested chunk size ${chunkSize}; adaptive cap ${adaptiveChunkCap}; max TS roots per program ${maxRootsPerProgram}; chunk concurrency=${concurrency}; file concurrency=${fileConcurrency}; isolation=${useProcessIsolation ? 'process' : 'in-process'}`
   );
 
   const allResults: RuleResult[] = [];
@@ -461,6 +503,108 @@ const executeTypeAwareTasks = async (
   const projectFiles =
     options.files && options.files.length > 0 ? options.files : undefined;
 
+  let childSpawnCount = 0;
+  const maxChildSpawns = Math.max(
+    BISECTION_CHILD_BUDGET_FLOOR,
+    fileEntries.length * BISECTION_CHILD_BUDGET_MULTIPLIER
+  );
+
+  const runIsolatedChunkResilient = async (
+    chunk: TypeAwareChunkWork
+  ): Promise<RuleResult[]> => {
+    childSpawnCount++;
+    try {
+      return await executeTypeAwareChunkInChildProcess(
+        chunk.tasks,
+        rootDir,
+        resolveTypeAwareContextFiles(projectFiles, chunk),
+        chunk.programRootFiles,
+        chunk.buildProjectContext,
+        fileConcurrency,
+        options,
+        onFileProgress
+      );
+    } catch (error) {
+      const salvaged =
+        error instanceof TypeAwareChildFailure
+          ? [...error.partialResults]
+          : [];
+      const completedFiles =
+        error instanceof TypeAwareChildFailure
+          ? error.completedFiles
+          : new Set<string>();
+      const remaining = filterChunkToRemainingFiles(chunk, completedFiles);
+      if (!remaining) return salvaged;
+
+      const halves = bisectChunkByFiles(remaining);
+      if (isRetryableChildFailure(error) && halves.length > 1) {
+        if (childSpawnCount >= maxChildSpawns) {
+          debug(
+            'engine',
+            `Type-aware bisection budget (${maxChildSpawns} child spawns) exhausted; skipping ${remaining.files.length} remaining file(s)`
+          );
+          reportTypeAwareSkip(remaining, error, options);
+          return salvaged;
+        }
+        debug(
+          'engine',
+          `Type-aware chunk ${chunk.index} failed under memory pressure; salvaged ${salvaged.length} result(s), retrying ${remaining.files.length} remaining file(s) in ${halves.length} smaller sub-batches`
+        );
+        const collected: RuleResult[] = salvaged;
+        for (const half of halves) {
+          collected.push(...(await runIsolatedChunkResilient(half)));
+          requestGarbageCollectionUnderPressure(PARENT_GC_PRESSURE_RATIO);
+        }
+        return collected;
+      }
+      reportTypeAwareSkip(remaining, error, options);
+      return salvaged;
+    }
+  };
+
+  const runChunk = async (chunk: TypeAwareChunkWork): Promise<RuleResult[]> => {
+    const maxRootsPerChild = getMaxRootsPerChild();
+    const subChunks = useProcessIsolation
+      ? splitChunkByRoots(chunk, maxRootsPerChild)
+      : [chunk];
+    if (subChunks.length > 1) {
+      debug(
+        'engine',
+        `Type-aware chunk ${chunk.index}: ${chunk.programRootFiles.length} TS roots exceeds ${maxRootsPerChild}; rebuilding program across ${subChunks.length} sequential sub-batches`
+      );
+    }
+
+    const collected: RuleResult[] = [];
+    for (const subChunk of subChunks) {
+      debug(
+        'engine',
+        `Type-aware chunk ${subChunk.index}: ${subChunk.files.length} files, ${subChunk.programRootFiles.length} TS roots, ${subChunk.tasks.length} tasks`
+      );
+      const results = useProcessIsolation
+        ? await runIsolatedChunkResilient(subChunk)
+        : await executeTasksLocally(
+            subChunk.tasks,
+            rootDir,
+            fileConcurrency,
+            true,
+            options.errorCollector,
+            resolveTypeAwareContextFiles(projectFiles, subChunk),
+            options.parserOptions,
+            subChunk.buildProjectContext,
+            subChunk.programRootFiles,
+            onDelta,
+            onFileProgress
+          );
+
+      if (useProcessIsolation) onDelta?.(subChunk.tasks.length);
+      collected.push(...results);
+      if (subChunks.length > 1) {
+        requestGarbageCollectionUnderPressure(PARENT_GC_PRESSURE_RATIO);
+      }
+    }
+    return collected;
+  };
+
   for (const wave of buildTypeAwareChunkWaves(
     fileEntries,
     chunkSize,
@@ -468,61 +612,14 @@ const executeTypeAwareTasks = async (
     concurrency
   )) {
     const waveResults = await Promise.all(
-      wave.map((chunk) =>
-        limit(async () => {
-          debug(
-            'engine',
-            `Type-aware chunk ${chunk.index}: ${chunk.files.length} files, ${chunk.programRootFiles.length} TS roots, ${chunk.tasks.length} tasks`
-          );
-          const filesForContext = resolveTypeAwareContextFiles(
-            projectFiles,
-            chunk
-          );
-          const results = useProcessIsolation
-            ? await executeTypeAwareChunkInChildProcess(
-                chunk.tasks,
-                rootDir,
-                filesForContext,
-                chunk.programRootFiles,
-                chunk.buildProjectContext,
-                fileConcurrency,
-                options,
-                onFileProgress
-              )
-            : await executeTasksLocally(
-                chunk.tasks,
-                rootDir,
-                fileConcurrency,
-                true,
-                options.errorCollector,
-                filesForContext,
-                options.parserOptions,
-                chunk.buildProjectContext,
-                chunk.programRootFiles,
-                onDelta,
-                onFileProgress
-              );
-
-          if (useProcessIsolation) {
-            onDelta?.(chunk.tasks.length);
-          }
-          return results;
-        })
-      )
+      wave.map((chunk) => limit(() => runChunk(chunk)))
     );
 
     allResults.push(...waveResults.flat());
-    runGarbageCollectionHint();
+    requestGarbageCollectionUnderPressure(PARENT_GC_PRESSURE_RATIO);
   }
 
   return allResults;
-};
-
-const runGarbageCollectionHint = (): void => {
-  const maybeGc = (globalThis as { gc?: () => void }).gc;
-  if (typeof maybeGc === 'function') {
-    maybeGc();
-  }
 };
 
 const resolveTypeAwareContextFiles = (
@@ -631,45 +728,64 @@ const normalizeChunkSize = (size: number, maxChunkSize: number): number => {
 };
 
 const getAdaptiveTypeAwareChunkCap = (): number => {
-  const totalGb = os.totalmem() / 1024 ** 3;
   const freeGb = os.freemem() / 1024 ** 3;
   const heapLimitGb = v8.getHeapStatistics().heap_size_limit / 1024 ** 3;
   const cpuCount = os.cpus().length;
 
   let cap: number;
-  if (freeGb < 1.5 || totalGb < 4) {
-    cap = 100;
-  } else if (freeGb < 3 || totalGb < 8) {
-    cap = 300;
-  } else if (freeGb < 6 || totalGb < 16) {
-    cap = 650;
-  } else if (freeGb < 12 || totalGb < 32) {
-    cap = 1000;
+  if (heapLimitGb < TINY_HEAP_LIMIT_GB) {
+    cap = TYPE_AWARE_CHUNK_CAP_TINY_HEAP;
+  } else if (heapLimitGb < SMALL_HEAP_LIMIT_GB) {
+    cap = TYPE_AWARE_CHUNK_CAP_SMALL_HEAP;
+  } else if (heapLimitGb < MEDIUM_HEAP_LIMIT_GB) {
+    cap = TYPE_AWARE_CHUNK_CAP_MEDIUM_HEAP;
   } else {
-    cap = 1500;
+    cap = TYPE_AWARE_CHUNK_CAP_LARGE_HEAP;
   }
 
-  if (cpuCount <= 4) cap = Math.min(cap, 500);
-  else if (cpuCount >= 12)
-    cap = Math.min(
-      ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE,
-      Math.round(cap * 1.2)
-    );
+  if (freeGb < LOW_FREE_MEMORY_GB) cap = Math.min(cap, LOW_FREE_MEMORY_CHUNK_CAP);
+  if (cpuCount <= LOW_CPU_COUNT) {
+    cap = Math.min(cap, TYPE_AWARE_CHUNK_CAP_SMALL_HEAP);
+  }
 
-  if (heapLimitGb < 2) cap = Math.min(cap, 250);
-  else if (heapLimitGb < 4) cap = Math.min(cap, 650);
-
-  cap = Math.max(
-    MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE,
-    Math.min(ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, cap)
-  );
+  cap = clampChunkSize(cap);
   debug(
     'engine',
     `Adaptive type-aware chunk cap: ${cap} files ` +
-      `(free memory ${freeGb.toFixed(1)}GB, total memory ${totalGb.toFixed(1)}GB, V8 heap limit ${heapLimitGb.toFixed(1)}GB, CPUs ${cpuCount})`
+      `(free memory ${freeGb.toFixed(1)}GB, V8 heap limit ${heapLimitGb.toFixed(1)}GB, CPUs ${cpuCount})`
   );
   return cap;
 };
+
+const getMaxRootsPerChild = (): number => {
+  const heapLimitGb = v8.getHeapStatistics().heap_size_limit / 1024 ** 3;
+  if (heapLimitGb < TINY_HEAP_LIMIT_GB) return MAX_TS_ROOTS_TINY_HEAP;
+  if (heapLimitGb < SMALL_HEAP_LIMIT_GB) return MAX_TS_ROOTS_SMALL_HEAP;
+  if (heapLimitGb < MEDIUM_HEAP_LIMIT_GB) return MAX_TS_ROOTS_MEDIUM_HEAP;
+  return MAX_TS_ROOTS_LARGE_HEAP;
+};
+
+const getAutoIsolationFileThreshold = (): number => {
+  const heapLimitGb = v8.getHeapStatistics().heap_size_limit / 1024 ** 3;
+  if (heapLimitGb < TINY_HEAP_LIMIT_GB) return ISOLATION_THRESHOLD_TINY_HEAP;
+  if (heapLimitGb < SMALL_HEAP_LIMIT_GB) return ISOLATION_THRESHOLD_SMALL_HEAP;
+  if (heapLimitGb < MEDIUM_HEAP_LIMIT_GB) return ISOLATION_THRESHOLD_MEDIUM_HEAP;
+  return ISOLATION_THRESHOLD_LARGE_HEAP;
+};
+
+const resolveProcessIsolation = (
+  isolationMode: 'auto' | 'process' | 'off',
+  typeAwareFileCount: number
+): boolean =>
+  isolationMode === 'process' ||
+  (isolationMode === 'auto' &&
+    typeAwareFileCount >= getAutoIsolationFileThreshold());
+
+const clampChunkSize = (size: number): number =>
+  Math.max(
+    MIN_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE,
+    Math.min(ABSOLUTE_MAX_ADAPTIVE_TYPE_AWARE_CHUNK_SIZE, Math.floor(size))
+  );
 
 const getNextAdaptiveChunkSize = (
   current: number,
@@ -737,6 +853,125 @@ const getTypeScriptRootFiles = (tasks: ReadonlyArray<Task>): string[] => {
     if (isTsProgramRoot(tsPath)) roots.add(tsPath);
   }
   return [...roots];
+};
+
+const buildSubChunk = (
+  index: number,
+  fileEntries: ReadonlyArray<[string, Task[]]>,
+  buildProjectContext: boolean
+): TypeAwareChunkWork => {
+  const subTasks = fileEntries.flatMap(([, t]) => t);
+  return {
+    index,
+    tasks: subTasks,
+    files: fileEntries.map(([f]) => f),
+    programRootFiles: getTypeScriptRootFiles(subTasks),
+    buildProjectContext,
+  };
+};
+
+const splitChunkByRoots = (
+  chunk: TypeAwareChunkWork,
+  maxRoots: number
+): TypeAwareChunkWork[] => {
+  if (chunk.programRootFiles.length <= maxRoots) return [chunk];
+
+  const fileEntries = Array.from(groupTasksByFile(chunk.tasks).entries());
+  const subChunks: TypeAwareChunkWork[] = [];
+
+  let current: Array<[string, Task[]]> = [];
+  let currentRootCount = 0;
+
+  for (const entry of fileEntries) {
+    const entryRootCount = getTypeScriptRootFiles(entry[1]).length;
+    if (current.length > 0 && currentRootCount + entryRootCount > maxRoots) {
+      subChunks.push(
+        buildSubChunk(chunk.index, current, chunk.buildProjectContext)
+      );
+      current = [];
+      currentRootCount = 0;
+    }
+    current.push(entry);
+    currentRootCount += entryRootCount;
+  }
+
+  if (current.length > 0) {
+    subChunks.push(
+      buildSubChunk(chunk.index, current, chunk.buildProjectContext)
+    );
+  }
+
+  return subChunks;
+};
+
+const bisectChunkByFiles = (
+  chunk: TypeAwareChunkWork
+): TypeAwareChunkWork[] => {
+  const entries = Array.from(groupTasksByFile(chunk.tasks).entries());
+  if (entries.length <= 1) return [chunk];
+  const mid = Math.ceil(entries.length / 2);
+  return [
+    buildSubChunk(chunk.index, entries.slice(0, mid), chunk.buildProjectContext),
+    buildSubChunk(chunk.index, entries.slice(mid), chunk.buildProjectContext),
+  ];
+};
+
+const filterChunkToRemainingFiles = (
+  chunk: TypeAwareChunkWork,
+  completedFiles: ReadonlySet<string>
+): TypeAwareChunkWork | null => {
+  if (completedFiles.size === 0) return chunk;
+  const remainingEntries = Array.from(
+    groupTasksByFile(chunk.tasks).entries()
+  ).filter(([filePath]) => !completedFiles.has(filePath));
+  if (remainingEntries.length === 0) return null;
+  return buildSubChunk(
+    chunk.index,
+    remainingEntries,
+    chunk.buildProjectContext
+  );
+};
+
+const reportTypeAwareSkip = (
+  chunk: TypeAwareChunkWork,
+  error: unknown,
+  options: AnalysisOptions
+): void => {
+  const fileCount = new Set(chunk.tasks.map((t) => t.filePath)).size;
+  const reason =
+    error instanceof TypeAwareChildFailure ? error.reason : 'error';
+  const message =
+    `Skipped type-aware checks for ${fileCount.toLocaleString()} file(s) after a worker failed (${reason}). ` +
+    `Increase memory with NODE_OPTIONS=--max-old-space-size=8192 or run with --skip-type-check to include them.`;
+  options.onNotice?.(message);
+  options.errorCollector?.record(
+    createInfrastructureError('WorkerCrash', {
+      cause: message,
+      phase: 'engine',
+      recoverable: true,
+    })
+  );
+  debug('engine', message);
+};
+
+const emitTypeAwarePreflightNotice = (
+  typeAwareFileCount: number,
+  useProcessIsolation: boolean,
+  onNotice: ((message: string) => void) | undefined
+): void => {
+  if (!onNotice) return;
+  const heapLimitGb = v8.getHeapStatistics().heap_size_limit / 1024 ** 3;
+  if (heapLimitGb >= PREFLIGHT_ADVISORY_HEAP_GB) return;
+  if (typeAwareFileCount < PREFLIGHT_ADVISORY_FILE_COUNT) return;
+  const heap = heapLimitGb.toFixed(1);
+  const count = typeAwareFileCount.toLocaleString();
+  onNotice(
+    useProcessIsolation
+      ? `Large type-aware workload: ${count} files on a ${heap} GB heap. ` +
+          `If analysis runs out of memory, raise it with NODE_OPTIONS=--max-old-space-size=8192 or run with --skip-type-check.`
+      : `Large type-aware workload: ${count} files on a ${heap} GB heap with no per-chunk memory isolation (turbo). ` +
+          `Memory exhaustion is possible — switch to balanced or eco for isolation, raise NODE_OPTIONS=--max-old-space-size=8192, or run with --skip-type-check.`
+  );
 };
 
 type TypeAwareChunkStrategy = NonNullable<
@@ -840,6 +1075,52 @@ const findFirstLocalImport = (source: string): string | null => {
   return match?.[1] ?? null;
 };
 
+const HEAP_FLAG_PREFIXES = [
+  '--max-old-space-size',
+  '--max-semi-space-size',
+] as const;
+
+const buildChildExecArgv = (): string[] => {
+  const forwarded: string[] = [];
+  const source = process.execArgv;
+  for (let i = 0; i < source.length; i++) {
+    const arg = source[i];
+    const matchedPrefix = HEAP_FLAG_PREFIXES.find(
+      (prefix) => arg === prefix || arg.startsWith(`${prefix}=`)
+    );
+    if (!matchedPrefix) continue;
+    forwarded.push(arg);
+    if (arg === matchedPrefix && i + 1 < source.length) {
+      forwarded.push(source[++i]);
+    }
+  }
+  return ['--expose-gc', ...forwarded];
+};
+
+type TypeAwareChildFailureReason = 'timeout' | 'crash' | 'spawn' | 'reported';
+
+class TypeAwareChildFailure extends Error {
+  readonly reason: TypeAwareChildFailureReason;
+  readonly partialResults: ReadonlyArray<RuleResult>;
+  readonly completedFiles: ReadonlySet<string>;
+  constructor(
+    message: string,
+    reason: TypeAwareChildFailureReason,
+    partialResults: ReadonlyArray<RuleResult>,
+    completedFiles: ReadonlySet<string>
+  ) {
+    super(message);
+    this.name = 'TypeAwareChildFailure';
+    this.reason = reason;
+    this.partialResults = partialResults;
+    this.completedFiles = completedFiles;
+  }
+}
+
+const isRetryableChildFailure = (error: unknown): boolean =>
+  error instanceof TypeAwareChildFailure &&
+  (error.reason === 'crash' || error.reason === 'timeout');
+
 const executeTypeAwareChunkInChildProcess = async (
   tasks: ReadonlyArray<Task>,
   rootDir: string,
@@ -874,17 +1155,22 @@ const executeTypeAwareChunkInChildProcess = async (
   return new Promise<RuleResult[]>((resolve, reject) => {
     const child = fork(workerPath, [], {
       cwd: rootDir,
-      execArgv: [],
+      execArgv: buildChildExecArgv(),
       stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
     let settled = false;
+    const streamed: RuleResult[] = [];
+    const completedFiles = new Set<string>();
     const timeout = setTimeout(() => {
       if (settled) return;
       settled = true;
       child.kill();
       reject(
-        new Error(
-          `Type-aware child process timed out after ${TYPE_AWARE_CHILD_TIMEOUT_MS / 1000}s`
+        new TypeAwareChildFailure(
+          `Type-aware child process timed out after ${TYPE_AWARE_CHILD_TIMEOUT_MS / 1000}s`,
+          'timeout',
+          streamed.slice(),
+          completedFiles
         )
       );
     }, TYPE_AWARE_CHILD_TIMEOUT_MS);
@@ -902,11 +1188,17 @@ const executeTypeAwareChunkInChildProcess = async (
         return;
       }
 
+      if (isTypeAwareFileResult(message)) {
+        streamed.push(...message.results);
+        completedFiles.add(message.filePath);
+        return;
+      }
+
       if (isTypeAwareChildComplete(message)) {
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
-        resolve(message.results);
+        resolve(streamed);
         return;
       }
 
@@ -914,7 +1206,14 @@ const executeTypeAwareChunkInChildProcess = async (
         if (settled) return;
         settled = true;
         clearTimeout(timeout);
-        reject(new Error(message.error));
+        reject(
+          new TypeAwareChildFailure(
+            message.error,
+            'reported',
+            streamed.slice(),
+            completedFiles
+          )
+        );
       }
     });
 
@@ -922,7 +1221,14 @@ const executeTypeAwareChunkInChildProcess = async (
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
-      reject(error);
+      reject(
+        new TypeAwareChildFailure(
+          error.message,
+          'spawn',
+          streamed.slice(),
+          completedFiles
+        )
+      );
     });
 
     child.on('exit', (code) => {
@@ -930,8 +1236,11 @@ const executeTypeAwareChunkInChildProcess = async (
       settled = true;
       clearTimeout(timeout);
       reject(
-        new Error(
-          `Type-aware child process exited before completion with code ${code}`
+        new TypeAwareChildFailure(
+          `Type-aware child process exited before completion with code ${code}`,
+          'crash',
+          streamed.slice(),
+          completedFiles
         )
       );
     });
@@ -972,11 +1281,22 @@ const resolveTypeAwareWorkerPath = async (): Promise<string | null> => {
 
 const isTypeAwareChildComplete = (
   message: unknown
-): message is { kind: 'complete'; results: RuleResult[] } => {
+): message is { kind: 'complete' } => {
   return (
     !!message &&
     typeof message === 'object' &&
-    (message as { kind?: unknown }).kind === 'complete' &&
+    (message as { kind?: unknown }).kind === 'complete'
+  );
+};
+
+const isTypeAwareFileResult = (
+  message: unknown
+): message is { kind: 'file-result'; filePath: string; results: RuleResult[] } => {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    (message as { kind?: unknown }).kind === 'file-result' &&
+    typeof (message as { filePath?: unknown }).filePath === 'string' &&
     Array.isArray((message as { results?: unknown }).results)
   );
 };

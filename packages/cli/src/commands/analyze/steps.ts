@@ -199,7 +199,8 @@ export async function runAnalysisStep(
   files: ReadonlyArray<string> | undefined,
   config: NormalizedAnalyzerConfig | undefined,
   onProgress: (completed: number, total: number) => void,
-  onFileProgress: (event: AnalysisFileProgress) => void
+  onFileProgress: (event: AnalysisFileProgress) => void,
+  onNotice: (message: string) => void
 ): Promise<AnalysisResult | null> {
   const tStart = performance.now();
 
@@ -220,6 +221,7 @@ export async function runAnalysisStep(
     parserOptions: config?.parserOptions,
     onProgress,
     onFileProgress,
+    onNotice,
   });
 
   if (!result.ok) {

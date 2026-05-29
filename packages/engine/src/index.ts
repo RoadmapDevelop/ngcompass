@@ -33,6 +33,13 @@ export * from './analysis-stats.js';
 
 export * from './constants.js';
 
+export {
+  requestGarbageCollection,
+  requestGarbageCollectionUnderPressure,
+  sampleHeapUsage,
+  getHeapPressureRatio,
+} from './runtime-memory.js';
+
 export * from './spinner.js';
 
 export * from './worker-pool.js';

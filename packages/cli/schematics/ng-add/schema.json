@@ -1,6 +1,17 @@
 {
   "$schema": "http://json-schema.org/schema",
   "type": "object",
-  "properties": {},
+  "properties": {
+    "force": {
+      "type": "boolean",
+      "default": false,
+      "description": "Overwrite an existing ngcompass.config.ts"
+    },
+    "skipScript": {
+      "type": "boolean",
+      "default": false,
+      "description": "Skip adding the lint:ngcompass script to package.json"
+    }
+  },
   "additionalProperties": false
 }

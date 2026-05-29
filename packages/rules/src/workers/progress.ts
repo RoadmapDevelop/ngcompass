@@ -1,4 +1,5 @@
 import type { RuleResult, WorkerFileProgress } from '@ngcompass/common';
+import { sampleHeapUsage } from '@ngcompass/engine';
 
 export const buildWorkerFileProgress = (
   filePath: string,
@@ -15,6 +16,7 @@ export const buildWorkerFileProgress = (
       else if (failure.severity === 'warn') warningCount++;
     }
   }
+  const heap = sampleHeapUsage();
   return {
     kind: 'file-progress',
     filePath,
@@ -24,5 +26,7 @@ export const buildWorkerFileProgress = (
     warningCount,
     duration,
     typeAware,
+    heapUsedBytes: heap.usedBytes,
+    heapLimitBytes: heap.limitBytes,
   };
 };

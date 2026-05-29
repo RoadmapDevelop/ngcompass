@@ -71,7 +71,7 @@ export async function detectAngularWorkspaceIncludes(
   const projects = readRecordProperty(workspace, 'projects');
   if (!projects) return undefined;
 
-  const roots = readAngularProjectSourceRoots(projects);
+  const roots = await resolveAngularProjectSourceRoots(projects, cwd);
   if (roots.length === 0) return undefined;
 
   return buildSourceRootIncludes(roots);
@@ -120,14 +120,15 @@ function parseJsonRecord(
   }
 }
 
-function readAngularProjectSourceRoots(
-  projects: Record<string, unknown>
-): string[] {
+async function resolveAngularProjectSourceRoots(
+  projects: Record<string, unknown>,
+  cwd: string
+): Promise<string[]> {
   const roots: string[] = [];
   const seen = new Set<string>();
 
   for (const project of Object.values(projects)) {
-    const sourceRoot = readProjectSourceRoot(project);
+    const sourceRoot = await resolveProjectSourceRoot(project, cwd);
     if (!sourceRoot || seen.has(sourceRoot)) continue;
     seen.add(sourceRoot);
     roots.push(sourceRoot);
@@ -136,9 +137,22 @@ function readAngularProjectSourceRoots(
   return roots.sort((a, b) => a.localeCompare(b));
 }
 
-function readProjectSourceRoot(project: unknown): string | undefined {
-  if (!isRecord(project)) return undefined;
+async function resolveProjectSourceRoot(
+  project: unknown,
+  cwd: string
+): Promise<string | undefined> {
+  if (isRecord(project)) {
+    return readRecordSourceRoot(project);
+  }
+  if (typeof project === 'string' && project.trim() !== '') {
+    return resolveNxProjectSourceRoot(project.trim(), cwd);
+  }
+  return undefined;
+}
 
+function readRecordSourceRoot(
+  project: Record<string, unknown>
+): string | undefined {
   const sourceRoot = project['sourceRoot'];
   if (typeof sourceRoot === 'string' && sourceRoot.trim() !== '') {
     return normalizeProjectPath(sourceRoot);
@@ -150,6 +164,24 @@ function readProjectSourceRoot(project: unknown): string | undefined {
   }
 
   return undefined;
+}
+
+async function resolveNxProjectSourceRoot(
+  projectPath: string,
+  cwd: string
+): Promise<string> {
+  const projectJsonPath = path.join(cwd, projectPath, 'project.json');
+  const raw = await readOptionalFile(projectJsonPath);
+  if (raw) {
+    const config = parseJsonRecord(raw, projectJsonPath);
+    if (config) {
+      const sourceRoot = config['sourceRoot'];
+      if (typeof sourceRoot === 'string' && sourceRoot.trim() !== '') {
+        return normalizeProjectPath(sourceRoot);
+      }
+    }
+  }
+  return normalizeProjectPath(`${projectPath}/src`);
 }
 
 function buildSourceRootIncludes(

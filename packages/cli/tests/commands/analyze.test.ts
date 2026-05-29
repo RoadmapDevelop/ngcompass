@@ -434,7 +434,7 @@ describe('Analyze Command', () => {
         typeAwareChunkSize: 100,
         typeAwareConcurrency: 1,
         typeAwareFileConcurrency: 1,
-        typeAwareIsolation: 'auto',
+        typeAwareIsolation: 'process',
         typeAwareChunkStrategy: 'dependency',
       })
     );

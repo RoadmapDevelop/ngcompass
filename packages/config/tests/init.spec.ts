@@ -110,3 +110,129 @@ export default defineConfig({
     ]);
   });
 });
+
+describe('detectAngularWorkspaceIncludes', () => {
+  it('returns undefined when angular.json is absent', async () => {
+    const cwd = await makeWorkspace();
+    await expect(detectAngularWorkspaceIncludes(cwd)).resolves.toBeUndefined();
+  });
+
+  it('resolves Nx-style string project references using project.json sourceRoot', async () => {
+    const cwd = await makeWorkspace();
+
+    await fs.mkdir(path.join(cwd, 'apps', 'shell'), { recursive: true });
+    await fs.mkdir(path.join(cwd, 'libs', 'ui'), { recursive: true });
+
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify({ version: 2, projects: { shell: 'apps/shell', ui: 'libs/ui' } })
+    );
+    await fs.writeFile(
+      path.join(cwd, 'apps', 'shell', 'project.json'),
+      JSON.stringify({ sourceRoot: 'apps/shell/src' })
+    );
+    await fs.writeFile(
+      path.join(cwd, 'libs', 'ui', 'project.json'),
+      JSON.stringify({ sourceRoot: 'libs/ui/src' })
+    );
+
+    await expect(detectAngularWorkspaceIncludes(cwd)).resolves.toEqual([
+      'apps/shell/src/**/*.ts',
+      'apps/shell/src/**/*.html',
+      'libs/ui/src/**/*.ts',
+      'libs/ui/src/**/*.html',
+    ]);
+  });
+
+  it('falls back to <projectPath>/src when Nx project.json is absent', async () => {
+    const cwd = await makeWorkspace();
+
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify({ version: 2, projects: { shell: 'apps/shell', ui: 'libs/ui' } })
+    );
+
+    await expect(detectAngularWorkspaceIncludes(cwd)).resolves.toEqual([
+      'apps/shell/src/**/*.ts',
+      'apps/shell/src/**/*.html',
+      'libs/ui/src/**/*.ts',
+      'libs/ui/src/**/*.html',
+    ]);
+  });
+
+  it('handles a workspace with 13 mixed-format projects', async () => {
+    const cwd = await makeWorkspace();
+
+    const projects: Record<string, unknown> = {};
+    for (let i = 1; i <= 8; i++) {
+      projects[`app${i}`] = { sourceRoot: `apps/app${i}/src` };
+    }
+    for (let i = 1; i <= 5; i++) {
+      projects[`lib${i}`] = `libs/lib${i}`;
+    }
+
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify({ version: 2, projects })
+    );
+
+    for (let i = 1; i <= 3; i++) {
+      await fs.mkdir(path.join(cwd, 'libs', `lib${i}`), { recursive: true });
+      await fs.writeFile(
+        path.join(cwd, 'libs', `lib${i}`, 'project.json'),
+        JSON.stringify({ sourceRoot: `libs/lib${i}/src` })
+      );
+    }
+
+    const result = await detectAngularWorkspaceIncludes(cwd);
+
+    expect(result).toBeDefined();
+    expect(result!.length).toBe(26);
+
+    for (let i = 1; i <= 8; i++) {
+      expect(result).toContain(`apps/app${i}/src/**/*.ts`);
+      expect(result).toContain(`apps/app${i}/src/**/*.html`);
+    }
+
+    for (let i = 1; i <= 5; i++) {
+      expect(result).toContain(`libs/lib${i}/src/**/*.ts`);
+      expect(result).toContain(`libs/lib${i}/src/**/*.html`);
+    }
+  });
+
+  it('deduplicates projects that share the same source root', async () => {
+    const cwd = await makeWorkspace();
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify({
+        projects: {
+          app: { sourceRoot: 'src' },
+          'app-e2e': { sourceRoot: 'src' },
+        },
+      })
+    );
+
+    await expect(detectAngularWorkspaceIncludes(cwd)).resolves.toEqual([
+      'src/**/*.ts',
+      'src/**/*.html',
+    ]);
+  });
+
+  it('skips projects with empty root and no sourceRoot', async () => {
+    const cwd = await makeWorkspace();
+    await fs.writeFile(
+      path.join(cwd, 'angular.json'),
+      JSON.stringify({
+        projects: {
+          ghost: { root: '' },
+          lib: { sourceRoot: 'projects/lib/src' },
+        },
+      })
+    );
+
+    await expect(detectAngularWorkspaceIncludes(cwd)).resolves.toEqual([
+      'projects/lib/src/**/*.ts',
+      'projects/lib/src/**/*.html',
+    ]);
+  });
+});

@@ -1,10 +1,16 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import v8 from 'node:v8';
+import zlib from 'node:zlib';
+import { promisify } from 'node:util';
 import writeFileAtomic from 'write-file-atomic';
 import type { AsyncDriver, DriverStats } from './types.js';
 
 const PACK_SUFFIX = '.pack';
+const CACHE_GZIP_LEVEL = zlib.constants.Z_DEFAULT_COMPRESSION;
+
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 
 export const createPackedFileDriver = <T>(config: {
   path: string;
@@ -20,14 +26,15 @@ export const createPackedFileDriver = <T>(config: {
     loaded = true;
     try {
       const buf = await fs.readFile(filePath);
-      const restored = v8.deserialize(buf) as Map<string, T>;
+      const restored = v8.deserialize(await gunzip(buf)) as Map<string, T>;
       for (const [k, v] of restored) map.set(k, v);
     } catch {}
   };
 
   const save = async (): Promise<void> => {
     await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await writeFileAtomic(filePath, v8.serialize(map));
+    const compressed = await gzip(v8.serialize(map), { level: CACHE_GZIP_LEVEL });
+    await writeFileAtomic(filePath, compressed);
   };
 
   return {
