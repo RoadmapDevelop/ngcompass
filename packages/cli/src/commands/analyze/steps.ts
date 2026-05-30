@@ -200,7 +200,8 @@ export async function runAnalysisStep(
   config: NormalizedAnalyzerConfig | undefined,
   onProgress: (completed: number, total: number) => void,
   onFileProgress: (event: AnalysisFileProgress) => void,
-  onNotice: (message: string) => void
+  onNotice: (message: string) => void,
+  onFileSkipped: (filePath: string) => void
 ): Promise<AnalysisResult | null> {
   const tStart = performance.now();
 
@@ -212,12 +213,12 @@ export async function runAnalysisStep(
     debug: options.debug,
     files,
     maxWorkers: performanceOptions.maxWorkers,
-    typeAwareFileConcurrency: performanceOptions.typeAwareFileConcurrency,
     skipTypeCheck: options.skipTypeCheck,
     parserOptions: config?.parserOptions,
     onProgress,
     onFileProgress,
     onNotice,
+    onFileSkipped,
   });
 
   if (!result.ok) {

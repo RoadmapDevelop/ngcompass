@@ -47,12 +47,14 @@ const executeTypeAwareChunk = async (
 
   try {
     await context.warmup();
+    process.send?.({ kind: 'ready' });
     const tasksByFile = groupTasksByFile(data.tasks);
 
     await runWithConcurrency(
       Array.from(tasksByFile),
       Math.max(1, data.fileConcurrency ?? 1),
       async ([filePath, fileTasks]) => {
+        process.send?.({ kind: 'file-start', filePath });
         const fileStart = performance.now();
         try {
           const fileResults = await executeBatchedTasks(fileTasks, context);

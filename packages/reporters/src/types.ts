@@ -32,6 +32,8 @@ export interface ResultSummary {
   readonly totalWarnings: number;
   readonly failOnSeverity?: 'warn' | 'error';
   readonly maxWarnings?: number;
+  readonly skippedFiles?: number;
+  readonly skippedFilePaths?: ReadonlyArray<string>;
   readonly duration: number;
 }
 

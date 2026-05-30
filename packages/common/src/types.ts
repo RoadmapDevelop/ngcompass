@@ -332,8 +332,6 @@ export interface WorkerFileProgress {
   readonly warningCount: number;
   readonly duration: number;
   readonly typeAware: boolean;
-  readonly heapUsedBytes?: number;
-  readonly heapLimitBytes?: number;
 }
 
 export interface WorkerMessageResult {

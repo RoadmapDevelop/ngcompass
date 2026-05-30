@@ -156,19 +156,18 @@ export default defineConfig({
 
 ### Analyze Options
 
-| Option                 | Description                                      |
-| ---------------------- | ------------------------------------------------ |
-| `--format <fmt>`       | `console`, `json`, `sarif`, `html`, or `ui`      |
-| `--output <path>`      | Output path for HTML/UI reports                  |
-| `--compact`            | Use compact issue output                         |
-| `-q, --quiet`          | Show summary counts only                         |
-| `--no-recommendation`  | Hide fix recommendations                         |
-| `--rule <id>`          | Run one rule in isolation                        |
-| `--force`              | Ignore cached results                            |
-| `-p, --profile <name>` | Run a named config profile                       |
-| `--mode <mode>`        | Performance mode: `eco`, `balanced`, or `turbo`  |
-| `--max-workers <n>`    | Limit worker threads                             |
-| `--skip-type-check`    | Skip rules that require TypeScript type checking |
+| Option                         | Description                                             |
+| ------------------------------ | ------------------------------------------------------- |
+| `--format <fmt>`               | `console`, `json`, `sarif`, `html`, or `ui`             |
+| `--output <path>`              | Output path for HTML/UI reports                         |
+| `--compact`                    | Use compact issue output                                |
+| `-q, --quiet`                  | Show summary counts only                                |
+| `--no-recommendation`          | Hide fix recommendations                                |
+| `--rule <id>`                  | Run one rule in isolation                               |
+| `--force`                      | Ignore cached results                                   |
+| `-p, --profile <name>`         | Run a named config profile                              |
+| `--max-workers <n>`            | Limit worker threads                                    |
+| `--skip-type-check`            | Skip rules that require TypeScript type checking        |
 
 ## CI
 

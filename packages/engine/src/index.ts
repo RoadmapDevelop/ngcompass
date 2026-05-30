@@ -19,8 +19,14 @@ export type { AnalysisContext } from './analysis-context.js';
 
 export { buildProjectContext } from './project-context-builder.js';
 
-export { createTypeAwareAnalysisContext } from './type-aware-context.js';
-export type { TypeAwareAnalysisContext } from './type-aware-context.js';
+export {
+  createTypeAwareAnalysisContext,
+} from './type-aware-context.js';
+export type {
+  TypeAwareAnalysisContext,
+  TypeAwareAnalysisContextOptions,
+} from './type-aware-context.js';
+
 
 export { createAngularTypeIndex } from './angular-type-index.js';
 
@@ -36,7 +42,6 @@ export * from './constants.js';
 export {
   requestGarbageCollection,
   requestGarbageCollectionUnderPressure,
-  sampleHeapUsage,
   getHeapPressureRatio,
 } from './runtime-memory.js';
 

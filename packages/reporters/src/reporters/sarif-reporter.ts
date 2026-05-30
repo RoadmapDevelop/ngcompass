@@ -37,6 +37,8 @@ interface SarifRun {
       readonly totalWarnings: number;
       readonly failOnSeverity?: 'warn' | 'error';
       readonly maxWarnings?: number;
+      readonly skippedFiles: number;
+      readonly skippedFilePaths: readonly string[];
     };
   };
 }
@@ -205,6 +207,8 @@ function buildSarifReport(
             totalWarnings: summary.totalWarnings,
             failOnSeverity: summary.failOnSeverity,
             maxWarnings: summary.maxWarnings,
+            skippedFiles: summary.skippedFiles ?? 0,
+            skippedFilePaths: summary.skippedFilePaths ?? [],
           },
         },
         ...(invocation ? { invocations: invocation } : {}),

@@ -272,11 +272,17 @@ export class ConsoleReporter implements Reporter {
     const allFailures = this.extractAllFailures(results);
     const scannedFiles =
       this.lastSummary?.discoveredFiles ?? this.lastSummary?.scannedFiles ?? 0;
+    const skippedFiles = this.lastSummary?.skippedFiles ?? 0;
+    const skippedPart =
+      skippedFiles > 0
+        ? `  ${pc.yellow('⊘')} ${pc.yellow(`${skippedFiles.toLocaleString()} files skipped`)}`
+        : '';
 
     if (allFailures.length === 0) {
       if (scannedFiles > 0) {
+        const cleanFiles = scannedFiles - skippedFiles;
         this.out.write(
-          `${pc.green('❯')} ${pc.bold(scannedFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}`
+          `${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${skippedPart}`
         );
       } else {
         this.out.write(pc.green('❯ No violations found'));
@@ -291,14 +297,14 @@ export class ConsoleReporter implements Reporter {
     const sortedFilePaths = Array.from(byFile.keys()).sort();
     const { errorCount, warningCount } = countSeverities(allFailures);
 
-    const cleanFiles = scannedFiles - byFile.size;
+    const cleanFiles = scannedFiles - byFile.size - skippedFiles;
     if (cleanFiles > 0) {
       const violationPart =
         byFile.size > 0
           ? `  ${pc.red('✗')} ${pc.red(`${byFile.size.toLocaleString()} files with violations`)}`
           : '';
       this.out.write(
-        `${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}`
+        `${pc.green('❯')} ${pc.bold(cleanFiles.toLocaleString() + ' files')}  ${pc.dim('no issues')}${violationPart}${skippedPart}`
       );
     }
 

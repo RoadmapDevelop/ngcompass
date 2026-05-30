@@ -170,11 +170,10 @@ The CLI separates presentation from execution. It instantiates reporters early, 
 | `--no-recommendation`  | Suppress fix recommendations from output                                       |
 | `--output <path>`      | Output path for HTML reports (default: `ngcompass-report.html`)                |
 | `--rule <id>`          | Run only one rule — useful for debugging or focused checks                     |
-| `--mode <mode>`        | Performance mode: `eco` \| `balanced` \| `turbo` (default: `balanced`)         |
 | `--max-workers <n>`    | Cap the number of worker threads (lower = less memory, e.g. `--max-workers 2`) |
 | `--skip-type-check`    | Skip rules that require the TypeScript type checker (fastest, lowest memory)   |
 
-Hidden power-user flags (not shown in `--help`): `--type-aware-chunk-size`, `--type-aware-concurrency`, `--type-aware-file-concurrency`, `--type-aware-isolation`, `--type-aware-chunk-strategy`. See Section 11 for semantics.
+See Section 11 for type-aware execution semantics.
 
 **`init`** — create a starter configuration.
 
@@ -576,7 +575,7 @@ flowchart TD
     WorkerDecision{"syntax task count > threshold?"}
     WorkerPool["Worker pool execution"]
     Local["Local pLimit execution"]
-    TypeChunks["Chunked type-aware execution"]
+    TypeChunks["Per-slice type-aware child"]
     Cached["Retrieve skipped cached results"]
     Merge["Merge executed + cached results"]
     Stats["calculateStats"]
@@ -615,45 +614,52 @@ It uses an LRU cache for file content and maps for parsed artifacts. The engine 
 - `getTsSourceFile(filePath)`.
 - `warmup()`.
 
-It creates a TypeScript `Program` from `parserOptions.project` or the nearest `tsconfig.json`. For large repositories it narrows root names to the files in the current type-aware chunk. This controls memory while preserving TypeScript's transitive import resolution.
+It creates TypeScript `Program`s from `parserOptions.project` or the nearest
+`tsconfig.json`, with type-aware root files as program roots. The type-aware
+files are partitioned into heap-sized **slices** (`planTypeAwareSlices`, sized by
+`resolveMaxFilesPerSlice` from the child's `--max-old-space-size`). The child
+builds one `Program` per slice, walks the slice's files against that `Program`'s
+checker, then disposes the `Program` and forces garbage collection before
+building the next slice. Peak memory is therefore bounded by a single slice
+rather than the whole project, which keeps large monorepos under the heap limit
+at the cost of re-parsing shared `.d.ts` declarations once per slice. Files are
+sorted before slicing so that co-located files (which tend to share an import
+closure) land in the same slice.
+
+A small project that fits within one slice is built as a single `Program`, so
+there is no slicing overhead in the common case.
 
 Project-context import graph construction uses TypeScript's module-resolution
 cache while walking import specifiers, avoiding repeated package/path resolution
-work inside each type-aware chunk.
+work.
 
-Type-aware execution is chunked by file count. The default chunk size is 100 files, or 50 files for very large type-aware runs. Each chunk gets a fresh TypeScript `Program`, which becomes eligible for garbage collection after the chunk completes. Type-aware batches run one file batch at a time by default to avoid holding many parsed artifacts beside a TypeScript `Program`.
+The type-aware step runs in one long-lived `child_process.fork`. The `Program`s
+live on the child's own heap, so an out-of-memory crash is contained to the
+child: the CLI process survives, keeps every `RuleResult` already streamed back,
+and reports a clean skip for the unfinished files. Because each slice streams its
+results before the next slice is built, an OOM late in the run only affects the
+files not yet reached. There is no bisection retry — slicing is the memory bound,
+and the streamed-results salvage is the last resort.
 
-The adaptive chunk ceiling is computed at runtime from available memory, total
-memory, CPU count, and the V8 heap limit. User-provided chunk size is treated as
-the starting target, then clamped to that machine-derived cap. The cap is
-speed-biased on machines with ample free memory, while low-memory systems keep
-a smaller ceiling. During execution the chunk size steps down on high heap
-pressure and grows only after sustained low pressure, so large machines can use
-bigger Programs while smaller machines stay conservative.
+The child walks each slice's files one at a time against that slice's
+`TypeChecker` and streams `file-result` and `file-progress` messages back as each
+file finishes. After every file it evicts that file's content, AST, template, and
+style artifacts, and hints garbage collection when heap pressure is high. The
+`TypeChecker` is single-threaded, so files are processed sequentially rather than
+concurrently.
 
-Type-aware chunk ordering supports a dependency pre-pass or a simple path sort.
-The dependency strategy reads TypeScript roots with bounded concurrency and
-falls back to simple ordering if the pre-pass exceeds its time budget. The
-simple strategy skips import inspection entirely, which is useful for very large
-repositories where chunk preparation itself becomes visible.
+When the workload contains project-context rules and the project is sliced, a
+single whole-project `ProjectContext` is built once (`buildWholeProjectContext`)
+from a lightweight `noResolve`/`noLib` `Program` that parses only the project's
+own source files — never the `.d.ts` type closure and never the checker — and is
+shared, unchanged, across every slice. This keeps cross-file rules as accurate as
+a single whole-project build while staying cheap enough to fit in memory. The
+import graphs, component graphs, and NgModule maps it produces hold only string
+keys, so the lightweight `Program` is released immediately after. Workloads that
+only need the `TypeChecker` skip that construction entirely.
 
-Type-aware chunk concurrency is configurable and defaults to one. Raising it
-allows multiple type-aware chunks to build separate TypeScript Programs at the
-same time, trading memory for speed. The value is clamped by the effective
-worker count and an absolute safety ceiling.
-
-Type-aware file concurrency is a separate control inside each chunk. It reuses
-the same TypeScript Program while processing multiple file batches at once,
-which can improve throughput without creating additional Programs, but it may
-hold more parsed file/template artifacts in memory.
-
-Chunks that only need the TypeScript `TypeChecker` skip `ProjectContext`
-construction. `ProjectContext` is built only for chunks containing
-project-context rules, because import graphs, component graphs, and NgModule
-maps add meaningful memory pressure on top of the compiler Program. After each
-chunk the analysis context explicitly clears file, AST, template, style,
-`Program`, `TypeChecker`, and `ProjectContext` references before the next chunk
-starts.
+If the child cannot be located, the type-aware tasks fall back to running
+in-process against an equivalent context.
 
 ### 10.4 Rule Context Factory
 
@@ -699,47 +705,35 @@ The factory also builds component/template cross references when project context
 - Signal-like members.
 - Template references.
 
-## 11. Performance Modes
+## 11. Type-Aware Execution Tuning
 
-The `analyze` command exposes a single `--mode` flag that selects a named performance preset. Individual type-aware tuning flags still exist for power users but are hidden from `--help` to keep the interface simple. When an individual flag is passed it takes precedence over the active mode.
+Type-aware analysis partitions type-aware root files into heap-sized slices and builds one TypeScript `Program` per slice inside a forked child process, walking each file once, sequentially, against that slice's checker. The type checker is single-threaded and never runs concurrently with itself. Slicing bounds peak memory to a single slice (sized from the child's `--max-old-space-size`), so raising the heap limit both lets each slice hold more files and is the primary lever for type-aware throughput; the syntax worker pool and skipping type-aware work entirely are the other levers.
 
-### 11.1 Mode Presets
+### 11.1 Tuning Knobs
 
-| Setting                    | `eco`      | `balanced` (default) | `turbo` |
-| -------------------------- | ---------- | -------------------- | ------- |
-| `typeAwareConcurrency`     | 1          | 2                    | 2       |
-| `typeAwareFileConcurrency` | 1          | 2                    | 4       |
-| `typeAwareChunkSize`       | 100        | 300                  | 500     |
-| `typeAwareIsolation`       | auto       | auto                 | off     |
-| `typeAwareChunkStrategy`   | dependency | simple               | simple  |
+| Knob                  | Flag                | Default | Effect                                                                                              |
+| --------------------- | ------------------- | ------- | --------------------------------------------------------------------------------------------------- |
+| Syntax worker threads | `--max-workers <n>` | CPU − 1 | Caps the syntax-only worker pool. Lower values reduce memory for the parallel, non-type-aware path. |
+| Skip type checking    | `--skip-type-check` | off     | Skips every rule that needs the TypeScript checker, so no type-aware `Program` is ever built.        |
+| Heap limit            | `NODE_OPTIONS=--max-old-space-size=<mb>` | ~4 GB child | Raises the per-slice file budget, so more files fit per slice and fewer slices are built. |
 
-**eco** minimizes memory by processing one type-aware chunk at a time with the safest chunk ordering strategy. It is the right choice for CI environments with limited RAM or for machines running many parallel jobs.
-
-**balanced** is the default. It doubles chunk and file concurrency and switches to the simpler chunk strategy, which skips the import-graph pre-pass and produces meaningfully faster cold runs without significant memory overhead on typical developer machines.
-
-**turbo** maximizes throughput by using larger chunks, more in-process file concurrency, and disabling process isolation entirely. It is suited for fast developer machines where memory is not a concern.
+`--max-workers` only affects the syntax-only pool; type-aware files are always walked one at a time within a slice, so this flag does not change type-aware memory or speed.
 
 ### 11.2 Priority Chain
 
 ```
-explicit type-aware flag  >  --mode preset  >  engine default
+explicit CLI flag  >  config value  >  engine default
 ```
 
-This means `--mode turbo --type-aware-file-concurrency 8` uses the turbo preset for every setting except `typeAwareFileConcurrency`, which is overridden to 8.
-
-`maxWorkers` keeps the existing configuration precedence: explicit `--max-workers` wins over the normalized config value.
+`--max-workers` overrides the normalized config `maxWorkers`, which falls back to the engine default of CPU − 1.
 
 ### 11.3 Usage
 
 ```sh
-ngcompass analyze                         # balanced (default)
-ngcompass analyze --mode eco              # low memory, CI-friendly
-ngcompass analyze --mode turbo            # maximum speed on capable machines
-ngcompass analyze -p strict               # run with a named profile
-ngcompass analyze --skip-type-check       # syntax-only, fastest path
-
-# Power-user override: turbo preset with a custom chunk size
-ngcompass analyze --mode turbo --type-aware-chunk-size 800
+ngcompass analyze                   # default: syntax pool + per-slice type-aware pass
+ngcompass analyze --max-workers 2   # low memory for the syntax worker pool
+ngcompass analyze -p strict         # run with a named profile
+ngcompass analyze --skip-type-check # syntax-only, fastest, lowest memory
 ```
 
 ## 12. Single-Pass Analysis Engine
@@ -1095,7 +1089,7 @@ The performance model is based on reducing repeated work at every layer.
 | Incremental | `taskId` result-cache filtering                                                        |
 | Engine      | Single-pass AST traversal and batched rule execution                                   |
 | Workers     | Parallel syntax-only execution by file group                                           |
-| Type-aware  | Small chunked TypeScript Programs and capped type-aware concurrency for memory control |
+| Type-aware  | Heap-sized per-slice TypeScript Programs in an isolated forked child, one shared project-context index |
 | Cache I/O   | Packed result cache and write-behind flush                                             |
 | Context     | LRU file content, memoized ASTs, explicit eviction                                     |
 
@@ -1216,7 +1210,7 @@ flowchart TD
     O["Retrieve cached RuleResult entries"]
     P["Split pending tasks by execution capability"]
     Q["Syntax-only workers or local batches"]
-    R["Type-aware chunked main-thread batches"]
+    R["Type-aware per-slice forked child"]
     S["RuleContextFactory builds RuleContext"]
     T["Single-pass engine dispatches rule handlers"]
     U["Merge executed and cached results"]

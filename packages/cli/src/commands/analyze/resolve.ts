@@ -1,12 +1,10 @@
 import path from 'node:path';
 import type {
   AnalysisResult,
-  HeapUsage,
   NormalizedAnalyzerConfig,
   ParserOptions,
 } from '@ngcompass/common';
 import type { ReporterFormat } from '@ngcompass/reporters';
-import type { AnalyzeOptions } from './options.js';
 
 export function normalizeReporterFormat(
   format: ReporterFormat | undefined
@@ -75,26 +73,9 @@ export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-export function getAnalyzeMode(options: AnalyzeOptions): string {
-  return options.mode ?? 'balanced';
-}
-
-const BYTES_PER_GB = 1024 ** 3;
-
 export function formatAnalysisProgressMessage(
-  mode: string,
   completed: number,
-  total: number,
-  heap: HeapUsage | undefined
+  total: number
 ): string {
-  const base = `Running analysis in ${mode} mode: ${completed.toLocaleString()}/${total.toLocaleString()} checks complete...`;
-  const heapSuffix = formatHeapSuffix(heap);
-  return heapSuffix ? `${base} ${heapSuffix}` : base;
-}
-
-function formatHeapSuffix(heap: HeapUsage | undefined): string {
-  if (!heap || heap.limitBytes <= 0) return '';
-  const usedGb = (heap.usedBytes / BYTES_PER_GB).toFixed(1);
-  const limitGb = (heap.limitBytes / BYTES_PER_GB).toFixed(1);
-  return `(heap ${usedGb}/${limitGb} GB)`;
+  return `Running analysis: ${completed.toLocaleString()}/${total.toLocaleString()} checks complete...`;
 }
