@@ -1,5 +1,6 @@
 import process from 'node:process';
 import { Command } from 'commander';
+import pc from 'picocolors';
 import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { getReporter, type ResultSummary } from '@ngcompass/reporters';
 import { Spinner } from '../../spinner.js';
@@ -7,7 +8,6 @@ import { exitWithError } from '../exit.js';
 import { resolvePerformanceOptions, type AnalyzeOptions } from './options.js';
 import {
   formatAnalysisProgressMessage,
-  getAnalyzeMode,
   normalizeReporterFormat,
   resolveReporterFormat,
   shouldFailAnalysis,
@@ -51,11 +51,6 @@ export function registerAnalyzeCommand(
     .option(
       '--rule <id>',
       'Run only one rule (useful for debugging or focused checks)'
-    )
-    .option(
-      '--mode <mode>',
-      'Performance mode: eco | balanced | turbo (default: balanced)',
-      'balanced'
     )
     .option(
       '--max-workers <n>',
@@ -138,8 +133,7 @@ export function registerAnalyzeCommand(
         const spinner = new Spinner(progressStream);
         const totalChecks =
           plan.tasks.length + (plan.skippedTasks?.length ?? 0);
-        const mode = getAnalyzeMode(options);
-        spinner.start(formatAnalysisProgressMessage(mode, 0, totalChecks));
+        spinner.start(formatAnalysisProgressMessage(0, totalChecks));
         const logFileProgress = createFileProgressLogger(
           plan,
           (line) => spinner.writeLine(line),
@@ -149,7 +143,14 @@ export function registerAnalyzeCommand(
           completed: number,
           total: number
         ): void => {
-          spinner.update(formatAnalysisProgressMessage(mode, completed, total));
+          spinner.update(formatAnalysisProgressMessage(completed, total));
+        };
+        const logNotice = (message: string): void => {
+          spinner.writeLine(`${pc.yellow('[!]')} ${pc.yellow(message)}`);
+        };
+        const skippedFiles: string[] = [];
+        const recordSkippedFile = (filePath: string): void => {
+          skippedFiles.push(filePath);
         };
         const analysis = await runAnalysisStep(
           plan,
@@ -160,7 +161,9 @@ export function registerAnalyzeCommand(
           files,
           config,
           updateAnalysisProgress,
-          logFileProgress
+          logFileProgress,
+          logNotice,
+          recordSkippedFile
         );
         spinner.stop();
         if (!analysis) {
@@ -184,6 +187,8 @@ export function registerAnalyzeCommand(
           totalWarnings: analysis.stats.totalWarnings,
           failOnSeverity: config.failOnSeverity,
           maxWarnings: config.maxWarnings,
+          skippedFiles: skippedFiles.length || undefined,
+          skippedFilePaths: skippedFiles.length ? skippedFiles : undefined,
           duration,
         };
         if (reporterFormat === 'console') {

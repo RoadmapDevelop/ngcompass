@@ -1,8 +1,15 @@
 import v8 from 'node:v8';
+import zlib from 'node:zlib';
+import { promisify } from 'node:util';
 import cacache from 'cacache';
 import { debug } from '@ngcompass/common';
 import { getDirectoryStats } from '../utils/fs.js';
 import type { AsyncDriver, DiskDriverConfig } from './types.js';
+
+const CACHE_GZIP_LEVEL = zlib.constants.Z_DEFAULT_COMPRESSION;
+
+const gzip = promisify(zlib.gzip);
+const gunzip = promisify(zlib.gunzip);
 
 const errorCode = (err: unknown): string | undefined => {
   if (err && typeof err === 'object' && 'code' in err) {
@@ -25,7 +32,7 @@ export const createDiskDriver = <T>(
         const tReadEnd = performance.now();
 
         const tDeserStart = performance.now();
-        const deserialized = v8.deserialize(result.data) as T;
+        const deserialized = v8.deserialize(await gunzip(result.data)) as T;
         const tDeserEnd = performance.now();
 
         debug(
@@ -49,7 +56,7 @@ export const createDiskDriver = <T>(
     },
 
     set: async (key, value) => {
-      const buffer = v8.serialize(value);
+      const buffer = await gzip(v8.serialize(value), { level: CACHE_GZIP_LEVEL });
       await cacache.put(cachePath, key, buffer);
     },
 

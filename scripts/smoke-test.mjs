@@ -123,7 +123,6 @@ const tests = [
       /--force/,
       /--skip-type-check/,
       /--max-workers/,
-      /--mode/,
     ],
   },
   {

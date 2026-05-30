@@ -1,4 +1,5 @@
 import pc from 'picocolors';
+import { setLiveRedraw } from '@ngcompass/common';
 
 const FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const INTERVAL_MS = 80;
@@ -25,6 +26,10 @@ export class Spinner {
     this.stream.write('\x1B[?25l');
     this.render();
     this.timer = setInterval(() => this.render(), INTERVAL_MS);
+    setLiveRedraw({
+      clear: () => this.stream.write('\r\x1B[K'),
+      redraw: () => this.render(),
+    });
   }
 
   update(message: string): void {
@@ -46,6 +51,8 @@ export class Spinner {
   }
 
   stop(): void {
+    setLiveRedraw(undefined);
+
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;

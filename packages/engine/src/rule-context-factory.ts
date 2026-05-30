@@ -214,6 +214,16 @@ const SIGNAL_FACTORY_NAMES = new Set([
   'input',
   'model',
   'toSignal',
+  'viewChild',
+  'viewChildren',
+  'contentChild',
+  'contentChildren',
+]);
+
+const REQUIRED_VARIANT_BASES = new Set([
+  'input',
+  'viewChild',
+  'contentChild',
 ]);
 
 function getSignalFactoryName(expr: ts.Expression): string | undefined {
@@ -230,9 +240,9 @@ function getSignalFactoryName(expr: ts.Expression): string | undefined {
   if (ts.isPropertyAccessExpression(callee)) {
     if (
       ts.isIdentifier(callee.expression) &&
-      callee.expression.text === 'input'
+      REQUIRED_VARIANT_BASES.has(callee.expression.text)
     ) {
-      return 'input';
+      return callee.expression.text;
     }
     return callee.name.text;
   }

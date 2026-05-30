@@ -5,7 +5,6 @@ import type {
   ParserOptions,
 } from '@ngcompass/common';
 import type { ReporterFormat } from '@ngcompass/reporters';
-import type { AnalyzeOptions } from './options.js';
 
 export function normalizeReporterFormat(
   format: ReporterFormat | undefined
@@ -74,14 +73,9 @@ export function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
 }
 
-export function getAnalyzeMode(options: AnalyzeOptions): string {
-  return options.mode ?? 'balanced';
-}
-
 export function formatAnalysisProgressMessage(
-  mode: string,
   completed: number,
   total: number
 ): string {
-  return `Running analysis in ${mode} mode: ${completed.toLocaleString()}/${total.toLocaleString()} checks complete...`;
+  return `Running analysis: ${completed.toLocaleString()}/${total.toLocaleString()} checks complete...`;
 }

@@ -104,6 +104,27 @@ describe('HtmlReporter', () => {
     expect(out.errors[0]).toContain('Report saved:');
   });
 
+  it('renders a skipped-files section listing each skipped file', async () => {
+    const { html } = await renderHtml([makeResult()], [], {
+      skippedFiles: 2,
+      skippedFilePaths: [
+        join(process.cwd(), 'libs/components/src/callout/callout.component.ts'),
+        join(process.cwd(), 'libs/components/src/dialog/dialog.component.ts'),
+      ],
+    });
+
+    expect(html).toContain('Skipped files');
+    expect(html).toContain('callout.component.ts');
+    expect(html).toContain('dialog.component.ts');
+    expect(html).toContain('rules were not evaluated for this file');
+  });
+
+  it('omits the skipped-files section when nothing was skipped', async () => {
+    const { html } = await renderHtml([makeResult()]);
+
+    expect(html).not.toContain('Skipped files');
+  });
+
   it('renders inline source context when the source file is available', async () => {
     const sourceDir = join(tempDir, 'src');
     const sourcePath = join(sourceDir, 'app.component.ts');

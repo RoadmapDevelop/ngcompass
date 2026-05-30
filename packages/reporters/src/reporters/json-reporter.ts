@@ -98,6 +98,8 @@ export class JsonReporter implements Reporter {
             duration: stats.duration,
             failOnSeverity: stats.failOnSeverity,
             maxWarnings: stats.maxWarnings,
+            skippedFiles: stats.skippedFiles ?? 0,
+            skippedFilePaths: stats.skippedFilePaths ?? [],
             parseErrorCount: this.accumulatedParseErrors.length,
           },
           results: toJsonOutput(this.accumulatedResults),

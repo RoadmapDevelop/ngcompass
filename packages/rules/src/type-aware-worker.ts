@@ -4,6 +4,7 @@ import {
   configureRuleExecutor,
   createTypeAwareAnalysisContext,
   executeBatchedTasks,
+  requestGarbageCollectionUnderPressure,
 } from '@ngcompass/engine';
 import {
   executeBatchedNewEngineRules,
@@ -22,6 +23,8 @@ interface TypeAwareWorkerData {
   readonly fileConcurrency?: number;
 }
 
+const CHILD_GC_PRESSURE_RATIO = 0.8;
+
 registerAllBuiltinRules();
 configureRuleExecutor(executeBatchedNewEngineRules, isNewEngineRule);
 
@@ -32,7 +35,6 @@ process.on('message', (message: TypeAwareWorkerData) => {
 const executeTypeAwareChunk = async (
   data: TypeAwareWorkerData
 ): Promise<void> => {
-  const results: RuleResult[] = [];
   const context = createTypeAwareAnalysisContext(
     data.rootDir,
     data.files,
@@ -45,12 +47,14 @@ const executeTypeAwareChunk = async (
 
   try {
     await context.warmup();
+    process.send?.({ kind: 'ready' });
     const tasksByFile = groupTasksByFile(data.tasks);
 
-    const batchResults = await runWithConcurrency(
+    await runWithConcurrency(
       Array.from(tasksByFile),
       Math.max(1, data.fileConcurrency ?? 1),
       async ([filePath, fileTasks]) => {
+        process.send?.({ kind: 'file-start', filePath });
         const fileStart = performance.now();
         try {
           const fileResults = await executeBatchedTasks(fileTasks, context);
@@ -60,7 +64,7 @@ const executeTypeAwareChunk = async (
             fileResults,
             performance.now() - fileStart
           );
-          return fileResults;
+          sendFileResult(filePath, fileResults);
         } catch {
           sendFileProgress(
             filePath,
@@ -68,15 +72,15 @@ const executeTypeAwareChunk = async (
             [],
             performance.now() - fileStart
           );
-          return [];
+          sendFileResult(filePath, []);
         } finally {
           context.evict(filePath);
+          requestGarbageCollectionUnderPressure(CHILD_GC_PRESSURE_RATIO);
         }
       }
     );
-    results.push(...batchResults.flat());
 
-    process.send?.({ kind: 'complete', results });
+    process.send?.({ kind: 'complete' });
   } catch (error) {
     process.send?.({
       kind: 'error',
@@ -117,4 +121,11 @@ const sendFileProgress = (
   process.send?.(
     buildWorkerFileProgress(filePath, taskCount, results, duration, true)
   );
+};
+
+const sendFileResult = (
+  filePath: string,
+  results: ReadonlyArray<RuleResult>
+): void => {
+  process.send?.({ kind: 'file-result', filePath, results });
 };

@@ -1,4 +1,4 @@
-import { debug, type ResolvedRule } from '@ngcompass/common';
+import { type ResolvedRule } from '@ngcompass/common';
 import { type CacheKeyContext } from '@ngcompass/cache';
 import type { ComponentDependencyGraph } from './component-graph.js';
 import { calculateTaskId, hashFile } from './hashing.js';
@@ -76,12 +76,7 @@ export const buildTask = async (
   rule: ResolvedRule,
   context?: TaskBuilderContext
 ): Promise<Task | null> => {
-  const applicability = evaluateRuleApplicability(rule, fileType);
-  if (!applicability.apply) {
-    debug(
-      'planner',
-      `      - Rule ${rule.name} skipped: ${applicability.reason}`
-    );
+  if (!isRuleApplicable(rule, fileType)) {
     return null;
   }
 
@@ -126,17 +121,10 @@ const isTypescriptLike = (fileType: FileType): boolean =>
   fileType !== 'config' &&
   fileType !== 'unknown';
 
-const evaluateRuleApplicability = (
-  rule: ResolvedRule,
-  fileType: FileType
-): { apply: boolean; reason: string } => {
-  if (!shouldApplyRule(rule, fileType)) {
-    return { apply: false, reason: `does not apply to ${fileType}` };
-  }
-  if (rule.severity === 'off') {
-    return { apply: false, reason: "disabled ('off')" };
-  }
-  return { apply: true, reason: 'applicable' };
+const isRuleApplicable = (rule: ResolvedRule, fileType: FileType): boolean => {
+  if (!shouldApplyRule(rule, fileType)) return false;
+  if (rule.severity === 'off') return false;
+  return true;
 };
 
 const resolveAstRequirements = (rule: ResolvedRule) => {

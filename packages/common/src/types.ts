@@ -318,6 +318,11 @@ export interface WorkerTaskError {
   readonly error: string;
 }
 
+export interface HeapUsage {
+  readonly usedBytes: number;
+  readonly limitBytes: number;
+}
+
 export interface WorkerFileProgress {
   readonly kind: 'file-progress';
   readonly filePath: string;

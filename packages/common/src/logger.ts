@@ -72,6 +72,13 @@ function getNamespaceColor(namespace: string) {
   return COLORS[Math.abs(hash) % COLORS.length];
 }
 
+export interface LiveRedraw {
+  clear(): void;
+  redraw(): void;
+}
+
+let liveRedraw: LiveRedraw | undefined;
+
 class Logger {
   private config: LoggerConfig;
   private timers: Map<string, number>;
@@ -179,7 +186,9 @@ class Logger {
       ? pc.gray(`[${now.toISOString()}] `)
       : '';
 
+    liveRedraw?.clear();
     console.error(`${timestamp}${prefix} ${message}`, ...args);
+    liveRedraw?.redraw();
   }
 
   private parseNamespaces(debugEnv: string): Set<Namespace> | 'all' {
@@ -257,5 +266,9 @@ export const enableDebug = (
 export const disableDebug = () => logger.disable();
 
 export const isDebugEnabled = () => logger.isEnabled();
+
+export const setLiveRedraw = (hook: LiveRedraw | undefined): void => {
+  liveRedraw = hook;
+};
 
 export default logger;

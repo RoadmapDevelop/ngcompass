@@ -1587,7 +1587,7 @@ packages:
     resolution: {integrity: sha512-OkTL9umf+He2DZkUq8f8J9of7yL6RJKI24dVITBmNfZBmri9zYZQrKkuXiKhyfPSu8tUhnVBB1iKXevvnlR4Ww==}
     engines: {node: '>= 12'}
 
-  confbox@0.1.9:
+  confbox@0.2.0:
     resolution: {integrity: sha512-RMtmw0iFkeR4YV+fUOSucriAQNb9g8zFR52MWCtl+cCZOFRNL6zeB395vPzFhEjjn4fMxXudmELnl/KF/WrK6w==}
 
   consola@3.4.2:
@@ -1683,7 +1683,7 @@ packages:
     resolution: {integrity: sha512-yblEwXAbGv1VQDmow7s38W77hzAgJAO50ztBLMcUyUBfxv1HC+LGwtiEN+Co6LtlqT/5uwVOxsD4TNIilWhwdQ==}
     engines: {node: '>=4'}
 
-  extendable-error@0.1.9:
+  extendable-error@0.2.0:
     resolution: {integrity: sha512-UOiS2in6/Q0FK0R0q6UY9vYpQ21mr/Qn1KOnte7vsACuNJf514WvCCUHSRCPcgjPT2bAhNIJdlE6bVap1GKmeg==}
 
   fast-check@4.5.3:
@@ -2860,7 +2860,7 @@ snapshots:
 
   '@changesets/errors@0.2.0':
     dependencies:
-      extendable-error: 0.1.9
+      extendable-error: 0.2.0
 
   '@changesets/get-dependents-graph@2.1.3':
     dependencies:
@@ -3850,7 +3850,7 @@ snapshots:
 
   commander@8.3.0: {}
 
-  confbox@0.1.9: {}
+  confbox@0.2.0: {}
 
   consola@3.4.2: {}
 
@@ -3963,7 +3963,7 @@ snapshots:
       ext-list: 2.2.2
       sort-keys-length: 1.0.1
 
-  extendable-error@0.1.9: {}
+  extendable-error@0.2.0: {}
 
   fast-check@4.5.3:
     dependencies:
@@ -4477,7 +4477,7 @@ snapshots:
 
   pkg-types@1.3.1:
     dependencies:
-      confbox: 0.1.9
+      confbox: 0.2.0
       mlly: 1.8.0
       pathe: 2.0.3
 

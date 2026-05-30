@@ -54,11 +54,7 @@ export const createTypeAwareAnalysisContext = (
   );
 
   if (program) {
-    debug(
-      'engine',
-      `TypeScript Program ready in ${(performance.now() - tsStart).toFixed(2)}ms ` +
-        `(${program.getSourceFiles().length} source files)`
-    );
+    logProgramDiagnostics(program, performance.now() - tsStart);
   } else {
     debug(
       'engine',
@@ -67,6 +63,7 @@ export const createTypeAwareAnalysisContext = (
   }
 
   let typeChecker = program?.getTypeChecker();
+  if (typeChecker) installTypeMemoization(typeChecker);
   let projectContext: ProjectContext | undefined;
   let angularTypes: AngularTypeIndex | undefined =
     createAngularTypeIndex(program);
@@ -150,9 +147,15 @@ function loadTypeScriptProgram(
   const programRoots =
     tsFileRoots.length > 0 ? tsFileRoots : parsedCommandLine.fileNames;
 
+  const compilerOptions: ts.CompilerOptions = {
+    ...parsedCommandLine.options,
+    ...HARDENED_COMPILER_OPTIONS,
+  };
+
   const program = ts.createProgram({
     rootNames: programRoots,
-    options: parsedCommandLine.options,
+    options: compilerOptions,
+    host: createCachedCompilerHost(compilerOptions),
   });
 
   debug(
@@ -160,4 +163,83 @@ function loadTypeScriptProgram(
     `Program rootNames: ${programRoots.length} (tsconfig had ${parsedCommandLine.fileNames.length})`
   );
   return { program };
+}
+
+const HARDENED_COMPILER_OPTIONS: ts.CompilerOptions = {
+  skipLibCheck: true,
+  skipDefaultLibCheck: true,
+  noEmit: true,
+  declaration: false,
+  declarationMap: false,
+  sourceMap: false,
+  inlineSourceMap: false,
+  incremental: false,
+  composite: false,
+};
+
+function createCachedCompilerHost(
+  options: ts.CompilerOptions
+): ts.CompilerHost {
+  const host = ts.createCompilerHost(options, true);
+  const resolutionCache = ts.createModuleResolutionCache(
+    host.getCurrentDirectory(),
+    (fileName) => host.getCanonicalFileName(fileName),
+    options
+  );
+
+  host.resolveModuleNameLiterals = (
+    moduleLiterals,
+    containingFile,
+    redirectedReference,
+    resolutionOptions
+  ): readonly ts.ResolvedModuleWithFailedLookupLocations[] =>
+    moduleLiterals.map((literal) =>
+      ts.resolveModuleName(
+        literal.text,
+        containingFile,
+        resolutionOptions,
+        host,
+        resolutionCache,
+        redirectedReference
+      )
+    );
+
+  return host;
+}
+
+function installTypeMemoization(typeChecker: ts.TypeChecker): void {
+  const typeCache = new WeakMap<ts.Node, ts.Type>();
+  const resolveType = typeChecker.getTypeAtLocation.bind(typeChecker);
+
+  typeChecker.getTypeAtLocation = (node: ts.Node): ts.Type => {
+    const cached = typeCache.get(node);
+    if (cached) return cached;
+    const resolved = resolveType(node);
+    typeCache.set(node, resolved);
+    return resolved;
+  };
+}
+
+const NODE_MODULES_RE = /[\\/]node_modules[\\/]/;
+
+function logProgramDiagnostics(program: ts.Program, elapsedMs: number): void {
+  let libFiles = 0;
+  let projectFiles = 0;
+  for (const sourceFile of program.getSourceFiles()) {
+    if (
+      sourceFile.isDeclarationFile ||
+      NODE_MODULES_RE.test(sourceFile.fileName)
+    ) {
+      libFiles++;
+    } else {
+      projectFiles++;
+    }
+  }
+
+  const heapUsedMb = (process.memoryUsage().heapUsed / (1024 * 1024)).toFixed(0);
+  debug(
+    'engine',
+    `Program diagnostics: ${projectFiles} project file(s), ${libFiles} lib/declaration file(s), ` +
+      `built in ${elapsedMs.toFixed(0)}ms, heapUsed ${heapUsedMb}MB`
+  );
 }

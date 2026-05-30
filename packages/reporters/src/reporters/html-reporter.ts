@@ -1644,6 +1644,10 @@ function buildHtml(
     const totalViolations = allFailures.length;
     const totalFiles = summary.discoveredFiles ?? summary.scannedFiles ?? summary.totalFiles;
     const affectedFiles = fileBuckets.length;
+    const skippedFileCount = summary.skippedFiles ?? summary.skippedFilePaths?.length ?? 0;
+    const skippedSuffix = skippedFileCount > 0
+        ? ` ${skippedFileCount.toLocaleString()} file${skippedFileCount === 1 ? '' : 's'} skipped.`
+        : '';
     const hasIssues = totalViolations > 0 || parseErrors.length > 0;
     const status = parseErrors.length > 0
         ? { status: 'failed' as const, label: 'FAILED' as const }
@@ -1659,8 +1663,8 @@ function buildHtml(
         : 'No cache';
 
     const subtitle = passed
-        ? `No violations found across ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}.`
-        : `${totalViolations.toLocaleString()} violation${totalViolations === 1 ? '' : 's'} in ${affectedFiles.toLocaleString()} of ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}. ${parseErrors.length > 0 ? `${parseErrors.length.toLocaleString()} parse error${parseErrors.length === 1 ? '' : 's'}. ` : ''}${cachedCopy}.`;
+        ? `No violations found across ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}.${skippedSuffix}`
+        : `${totalViolations.toLocaleString()} violation${totalViolations === 1 ? '' : 's'} in ${affectedFiles.toLocaleString()} of ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}. ${parseErrors.length > 0 ? `${parseErrors.length.toLocaleString()} parse error${parseErrors.length === 1 ? '' : 's'}. ` : ''}${cachedCopy}.${skippedSuffix}`;
 
     const rulesHtml = topRules.length > 0
         ? topRules.map(([ruleName, count]) => `
@@ -1687,6 +1691,27 @@ function buildHtml(
           <div class="parse-copy">
             <div class="parse-path">${escapeHtml(relativeToRoot(error.filePath))}</div>
             <div class="parse-message">${escapeHtml(error.message)}</div>
+          </div>
+        </div>`).join('\n')}
+    </div>
+  </div>
+</section>` : '';
+
+    const skippedFilePaths = summary.skippedFilePaths ?? [];
+    const skippedBlock = skippedFilePaths.length > 0 ? `
+<section class="card parse-errors">
+  <div class="card-head">
+    <div class="card-title">Skipped files</div>
+    <div class="files-count">${skippedFilePaths.length.toLocaleString()}</div>
+  </div>
+  <div class="card-body">
+    <div class="parse-list">
+      ${skippedFilePaths.map((filePath) => `
+        <div class="parse-item">
+          <div class="parse-icon">${iconWarning()}</div>
+          <div class="parse-copy">
+            <div class="parse-path">${escapeHtml(relativeToRoot(filePath))}</div>
+            <div class="parse-message">Type-check timed out or crashed &mdash; rules were not evaluated for this file.</div>
           </div>
         </div>`).join('\n')}
     </div>
@@ -1768,6 +1793,13 @@ function buildHtml(
             </div>
             <div class="stat-value">${totalViolations.toLocaleString()}</div>
           </div>
+          <div class="card stat-card">
+            <div class="stat-top">
+              <div class="stat-label">Skipped</div>
+              <div class="stat-icon${skippedFileCount > 0 ? ' warning' : ''}">${iconWarning()}</div>
+            </div>
+            <div class="stat-value${skippedFileCount > 0 ? ' warning' : ''}">${skippedFileCount.toLocaleString()}</div>
+          </div>
         </div>
       </div>
 
@@ -1799,6 +1831,8 @@ function buildHtml(
         ` : ''}
 
         ${parseErrorsBlock}
+
+        ${skippedBlock}
 
         <section class="card controls">
           <div class="controls-row">

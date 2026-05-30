@@ -230,7 +230,7 @@ describe('Analyze Command', () => {
     expect(output).toContain('3 issues');
   });
 
-  it('updates the analysis spinner with mode and check progress', async () => {
+  it('updates the analysis spinner with check progress', async () => {
     setupSuccessfulPipeline();
     vi.spyOn(plannerModule, 'buildExecutionPlan').mockResolvedValue({
       ok: true,
@@ -280,8 +280,6 @@ describe('Analyze Command', () => {
         'analyze',
         '--format',
         'json',
-        '--mode',
-        'turbo',
       ]);
     } finally {
       Object.defineProperty(process.stderr, 'isTTY', {
@@ -293,15 +291,9 @@ describe('Analyze Command', () => {
     const output = stderrWrite.mock.calls
       .map((call) => String(call[0]))
       .join('');
-    expect(output).toContain(
-      'Running analysis in turbo mode: 0/3 checks complete'
-    );
-    expect(output).toContain(
-      'Running analysis in turbo mode: 1/3 checks complete'
-    );
-    expect(output).toContain(
-      'Running analysis in turbo mode: 3/3 checks complete'
-    );
+    expect(output).toContain('Running analysis: 0/3 checks complete');
+    expect(output).toContain('Running analysis: 1/3 checks complete');
+    expect(output).toContain('Running analysis: 3/3 checks complete');
   });
 
   it('lets CLI format and output override config defaults', async () => {
@@ -399,67 +391,6 @@ describe('Analyze Command', () => {
     );
   });
 
-  it('uses the balanced performance mode by default', async () => {
-    setupSuccessfulPipeline({ maxWorkers: 4 });
-
-    registerAnalyzeCommand(program, {
-      flush: vi.fn().mockResolvedValue(undefined),
-    } as any);
-    await program.parseAsync(['node', 'test', 'analyze']);
-
-    expect(engineModule.runAnalysis).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        maxWorkers: 4,
-        typeAwareChunkSize: 150,
-        typeAwareConcurrency: 1,
-        typeAwareFileConcurrency: 1,
-        typeAwareIsolation: 'auto',
-        typeAwareChunkStrategy: 'dependency',
-      })
-    );
-  });
-
-  it('passes the eco performance preset to the engine', async () => {
-    setupSuccessfulPipeline({ maxWorkers: 4 });
-
-    registerAnalyzeCommand(program, {
-      flush: vi.fn().mockResolvedValue(undefined),
-    } as any);
-    await program.parseAsync(['node', 'test', 'analyze', '--mode', 'eco']);
-
-    expect(engineModule.runAnalysis).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        typeAwareChunkSize: 100,
-        typeAwareConcurrency: 1,
-        typeAwareFileConcurrency: 1,
-        typeAwareIsolation: 'auto',
-        typeAwareChunkStrategy: 'dependency',
-      })
-    );
-  });
-
-  it('passes the turbo performance preset to the engine', async () => {
-    setupSuccessfulPipeline({ maxWorkers: 4 });
-
-    registerAnalyzeCommand(program, {
-      flush: vi.fn().mockResolvedValue(undefined),
-    } as any);
-    await program.parseAsync(['node', 'test', 'analyze', '--mode', 'turbo']);
-
-    expect(engineModule.runAnalysis).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        typeAwareChunkSize: 500,
-        typeAwareConcurrency: 2,
-        typeAwareFileConcurrency: 4,
-        typeAwareIsolation: 'off',
-        typeAwareChunkStrategy: 'simple',
-      })
-    );
-  });
-
   it('passes CLI maxWorkers to both planner and engine', async () => {
     setupSuccessfulPipeline({ maxWorkers: 7 });
 
@@ -479,24 +410,6 @@ describe('Analyze Command', () => {
         maxWorkers: 3,
       })
     );
-  });
-
-  it('exits with code 1 for an invalid performance mode', async () => {
-    setupSuccessfulPipeline();
-
-    registerAnalyzeCommand(program, {
-      flush: vi.fn().mockResolvedValue(undefined),
-    } as any);
-    await program.parseAsync(['node', 'test', 'analyze', '--mode', 'fast']);
-
-    expect(mockExit).toHaveBeenCalledWith(1);
-    expect(mockReporter.error).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining('Invalid performance mode "fast"'),
-      })
-    );
-    expect(scannerModule.scan).not.toHaveBeenCalled();
-    expect(engineModule.runAnalysis).not.toHaveBeenCalled();
   });
 
   it('exits with code 1 when --max-workers is not a positive integer', async () => {

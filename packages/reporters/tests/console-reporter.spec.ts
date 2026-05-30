@@ -59,6 +59,28 @@ describe('ConsoleReporter', () => {
       expect(output).toContain('10 files  no issues');
     });
 
+    it('shows skipped files and excludes them from the no-issues count', () => {
+      reporter.summary({
+        ...stats,
+        totalErrors: 0,
+        totalWarnings: 0,
+        scannedFiles: 10,
+        skippedFiles: 2,
+      });
+      reporter.report([]);
+      const output = stripAnsi(out.lines.join('\n'));
+      expect(output).toContain('8 files  no issues');
+      expect(output).toContain('2 files skipped');
+    });
+
+    it('shows skipped files alongside violations', () => {
+      reporter.summary({ ...stats, scannedFiles: 10, skippedFiles: 1 });
+      reporter.report([makeResult([makeFailure()])]);
+      const output = stripAnsi(out.lines.join('\n'));
+      expect(output).toContain('files with violations');
+      expect(output).toContain('1 files skipped');
+    });
+
     it('outputs file header and violation line for a failure', () => {
       reporter.report([makeResult([makeFailure()])]);
       const output = out.lines.join('\n');

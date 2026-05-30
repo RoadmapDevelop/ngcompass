@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { runAnalysis } from '../src/orchestrator.js';
+import {
+  runAnalysis,
+  computeAdaptiveFileBudget,
+} from '../src/orchestrator.js';
 import { configureRuleExecutor } from '../src/rule-executor.js';
 import type { Task, ExecutionPlanOutput } from '@ngcompass/planner';
 import type { AnalysisResult, RuleResult } from '@ngcompass/common';
@@ -243,5 +246,27 @@ describe('runAnalysis — error handling', () => {
 
     const result = await runAnalysis(plan, { rootDir: '/fake' });
     expect(result.ok).toBe(false);
+  });
+});
+
+describe('computeAdaptiveFileBudget', () => {
+  it('honors an explicit timeout without adapting', () => {
+    expect(computeAdaptiveFileBudget(1000, 50, 9999)).toBe(1000);
+  });
+
+  it('grants the first file a cold-start grace before any observation', () => {
+    expect(computeAdaptiveFileBudget(undefined, 0, 0)).toBe(30_000);
+  });
+
+  it('drops to the 1s floor once observed files are fast', () => {
+    expect(computeAdaptiveFileBudget(undefined, 5, 40)).toBe(1000);
+  });
+
+  it('relaxes the budget for genuinely slow files instead of killing them', () => {
+    expect(computeAdaptiveFileBudget(undefined, 5, 2000)).toBe(16_000);
+  });
+
+  it('clamps the budget to the 30s ceiling for very heavy files', () => {
+    expect(computeAdaptiveFileBudget(undefined, 5, 9000)).toBe(30_000);
   });
 });
