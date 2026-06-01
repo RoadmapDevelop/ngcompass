@@ -59,6 +59,48 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'Move browser-only DOM access into `afterNextRender()`.',
   'spec-no-focused-test':
     'Replace focused or disabled test helpers with normal `describe` and `it` calls.',
+  'no-ngzone':
+    'Remove NgZone injections and runOutsideAngular/run calls.',
+  'template-no-async-pipe':
+    'Avoid using async pipe in templates for zoneless applications; use toSignal() in component instead.',
+  'no-changedetectorref':
+    'Remove inject(ChangeDetectorRef); rely on signals to update the UI.',
+  'no-content-decorator':
+    'Replace @ContentChild()/@ContentChildren() with contentChild()/contentChildren().',
+  'no-detectchanges-testing':
+    'Replace fixture.detectChanges() with `await fixture.whenStable()`.',
+  'no-directive-accessor':
+    'Use computed() for UI-bound derived values; mark internal getters/setters private.',
+  'no-directive-writable-property':
+    'Mark public/protected properties readonly and back them with signal(), or make them private.',
+  'no-ngoninit':
+    'Remove ngOnInit; initialize state in field initializers or with rxResource()/computed().',
+  'no-ngonchanges':
+    'Remove ngOnChanges; derive state from input() signals with computed().',
+  'no-ngdocheck':
+    'Remove ngDoCheck; signals already track changes automatically.',
+  'no-ngaftercontentinit':
+    'Remove ngAfterContentInit; derive content state with contentChild()/computed().',
+  'no-ngaftercontentchecked':
+    'Remove ngAfterContentChecked; derive content state with contentChild()/computed().',
+  'no-ngafterviewinit':
+    'Remove ngAfterViewInit; use afterNextRender() for DOM access or computed() for derived view state.',
+  'no-ngafterviewchecked':
+    'Remove ngAfterViewChecked; derive view state with viewChild()/computed().',
+  'no-ngondestroy':
+    'Remove ngOnDestroy; use takeUntilDestroyed() or DestroyRef.onDestroy() for the rare manual cleanup.',
+  'no-ngzone-testing':
+    'Remove fixture.ngZone usage; it is null in a zoneless application.',
+  'no-providezonechangedetection':
+    'Remove provideZoneChangeDetection() from the bootstrap providers.',
+  'no-reactive-forms':
+    'Use signal forms (form()) instead of FormGroup/FormControl/FormArray/FormBuilder.',
+  'no-view-decorator':
+    'Replace @ViewChild()/@ViewChildren() with viewChild()/viewChildren().',
+  'no-zonejs-import':
+    "Remove `import 'zone.js'` from polyfills; the entry should not load zone.js.",
+  'no-zonejs-testing-functions':
+    'Replace fakeAsync()/tick()/flush()/waitForAsync() with async/await + fixture.whenStable().',
 };
 
 export const CODE_EXAMPLES: Readonly<Record<string, string>> = {
@@ -330,4 +372,31 @@ xdescribe('MyComponent', () => {
 describe('MyComponent', () => {
   it('should render', () => { ... });
 });`,
+
+  'no-ngzone': `// Before (NgZone injection is dead code in zoneless):
+@Component({ template: '' })
+export class MyComponent {
+  constructor(private zone: NgZone) {}
+}
+
+// After:
+@Component({ template: '' })
+export class MyComponent {
+  constructor() {}
+}`,
+  'template-no-async-pipe': `Before:
+@Component({
+  template: '<div>{{ user$ | async }}</div>'
+})
+export class UserComponent {
+  user$ = this.userService.getUser();
+}
+
+After:
+@Component({
+  template: '<div>{{ user() }}</div>'
+})
+export class UserComponent {
+  user = toSignal(this.userService.getUser());
+}`,
 };

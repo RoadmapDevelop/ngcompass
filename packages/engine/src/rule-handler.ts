@@ -8,7 +8,11 @@ import type {
   TemplateBlockNode,
   TemplateAnalysis,
 } from '@ngcompass/ast';
-import type { CallExpression, NewExpression } from '@ngcompass/ast';
+import type {
+  CallExpression,
+  ImportDeclaration,
+  NewExpression,
+} from '@ngcompass/ast';
 import { RuleMetadata } from '@ngcompass/common';
 
 export type StreamType =
@@ -20,7 +24,8 @@ export type StreamType =
   | 'TemplateBlock'
   | 'Template'
   | 'CallExpression'
-  | 'NewExpression';
+  | 'NewExpression'
+  | 'ImportDeclaration';
 
 export interface RuleHandler<TNode> {
   readonly name: string;
@@ -122,6 +127,20 @@ export const createNewExpressionRule = (
 ): RuleHandler<NewExpression> => ({
   name,
   streamType: 'NewExpression',
+  handle: handler,
+  meta,
+});
+
+export const createImportDeclarationRule = (
+  name: string,
+  handler: (
+    node: ImportDeclaration,
+    context: RuleContext
+  ) => RuleFailure | RuleFailure[] | null,
+  meta?: Partial<RuleMetadata>
+): RuleHandler<ImportDeclaration> => ({
+  name,
+  streamType: 'ImportDeclaration',
   handle: handler,
   meta,
 });

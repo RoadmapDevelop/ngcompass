@@ -13,6 +13,7 @@ export const STREAM_TO_NODE_TYPE: StreamToNodeType = {
   Template: '__template_analysis__',
   CallExpression: 'CallExpression',
   NewExpression: 'NewExpression',
+  ImportDeclaration: 'ImportDeclaration',
 };
 
 export interface VisitorEntry {

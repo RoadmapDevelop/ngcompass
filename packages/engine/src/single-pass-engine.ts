@@ -6,6 +6,7 @@ import {
   toDecoratedPropertyStream,
   toCallExpressionStream,
   toNewExpressionStream,
+  toImportDeclarationStream,
 } from '@ngcompass/ast';
 import type { RuleHandler } from './rule-handler.js';
 import type {
@@ -131,6 +132,7 @@ export const runSinglePassAnalysis = (
     DecoratedProperty: toDecoratedPropertyStream,
     CallExpression: toCallExpressionStream,
     NewExpression: toNewExpressionStream,
+    ImportDeclaration: toImportDeclarationStream,
   });
 
   const templateExpressionHandlers = rules.filter(

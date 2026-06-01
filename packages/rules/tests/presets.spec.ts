@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { allPreset } from '../src/presets/all.js';
 import { builtinPresets } from '../src/presets/index.js';
+import { strictPreset } from '../src/presets/strict.js';
 import { registerAllBuiltinRules } from '../src/registry/register-all.js';
 import {
   getGlobalRegistry,
@@ -36,5 +37,11 @@ describe('builtin presets', () => {
       .filter((ruleName) => !allPresetRules.has(ruleName));
 
     expect(missingFromAll).toEqual([]);
+  });
+
+  it('keeps migration preferences out of strict', () => {
+    expect(strictPreset.rules).not.toHaveProperty(
+      'prefer-inject-over-constructor-di'
+    );
   });
 });

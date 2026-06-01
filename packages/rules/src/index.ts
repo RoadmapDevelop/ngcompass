@@ -1,9 +1,23 @@
 export const rules = '@ngcompass/rules';
 
-export * from './rules/correctness/component-no-manual-detect-changes.rule.js';
 export * from './rules/correctness/signal-no-side-effects-in-computed.rule.js';
 export * from './rules/correctness/signal-effect-must-be-destroy-scoped.rule.js';
 export * from './rules/correctness/rxjs-no-nested-subscribe.rule.js';
+export * from './rules/correctness/no-ngzone.rule.js';
+export * from './rules/correctness/no-changedetectorref.rule.js';
+export * from './rules/correctness/no-directive-accessor.rule.js';
+export * from './rules/correctness/no-directive-writable-property.rule.js';
+export * from './rules/correctness/no-providezonechangedetection.rule.js';
+export * from './rules/correctness/no-reactive-forms.rule.js';
+export * from './rules/correctness/no-zonejs-import.rule.js';
+export * from './rules/correctness/no-ngoninit.rule.js';
+export * from './rules/correctness/no-ngonchanges.rule.js';
+export * from './rules/correctness/no-ngdocheck.rule.js';
+export * from './rules/correctness/no-ngaftercontentinit.rule.js';
+export * from './rules/correctness/no-ngaftercontentchecked.rule.js';
+export * from './rules/correctness/no-ngafterviewinit.rule.js';
+export * from './rules/correctness/no-ngafterviewchecked.rule.js';
+export * from './rules/correctness/no-ngondestroy.rule.js';
 
 export * from './rules/performance/prefer-on-push.rule.js';
 export * from './rules/performance/template-no-call-expression.rule.js';
@@ -29,11 +43,17 @@ export * from './rules/modern-api/prefer-inject.rule.js';
 export * from './rules/modern-api/signal-prefer-input-signal.rule.js';
 export * from './rules/modern-api/signal-prefer-output-function.rule.js';
 export * from './rules/modern-api/signal-prefer-model.rule.js';
+export * from './rules/modern-api/no-view-decorator.rule.js';
+export * from './rules/modern-api/no-content-decorator.rule.js';
 
 export * from './rules/template/template-prefer-control-flow.rule.js';
 export * from './rules/template/template-no-async-pipe-duplication.rule.js';
+export * from './rules/template/template-no-async-pipe.rule.js';
 
 export * from './rules/testing/spec-no-focused-test.rule.js';
+export * from './rules/testing/no-detectchanges-testing.rule.js';
+export * from './rules/testing/no-ngzone-testing.rule.js';
+export * from './rules/testing/no-zonejs-testing-functions.rule.js';
 
 export {
   isKnownRule,

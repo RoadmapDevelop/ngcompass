@@ -148,6 +148,10 @@ export declare class ChangeDetectorRef {
   markForCheck(): void;
 }
 export declare class DestroyRef {}
+export declare class NgZone {
+  run<T>(fn: () => T): T;
+  runOutsideAngular<T>(fn: () => T): T;
+}
 export declare enum ChangeDetectionStrategy { OnPush = 0, Default = 1 }
 `;
 

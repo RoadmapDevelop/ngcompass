@@ -9,6 +9,7 @@ import type {
   ClassDeclaration,
   Decorator,
   Expression,
+  ImportDeclaration,
   NewExpression,
   PropertyDefinition,
 } from './ast/types.js';
@@ -105,3 +106,7 @@ export const toCallExpressionStream = (node: CallExpression): CallExpression =>
 
 export const toNewExpressionStream = (node: NewExpression): NewExpression =>
   node;
+
+export const toImportDeclarationStream = (
+  node: ImportDeclaration
+): ImportDeclaration => node;
