@@ -20,6 +20,8 @@ export interface TypeAwareAnalysisContext extends AnalysisContext {
 
   readonly getProjectContext: () => ProjectContext | undefined;
 
+  readonly getTsProgram: () => ts.Program | undefined;
+
   readonly getTsSourceFile: (filePath: string) => ts.SourceFile | undefined;
 
   readonly getAngularTypes: () => AngularTypeIndex | undefined;
@@ -90,6 +92,7 @@ export const createTypeAwareAnalysisContext = (
     getTypeChecker: (_filePath: string): Promise<ts.TypeChecker | undefined> =>
       Promise.resolve(typeChecker),
     getProjectContext: (): ProjectContext | undefined => projectContext,
+    getTsProgram: (): ts.Program | undefined => activeProgram,
     getTsSourceFile: (filePath: string): ts.SourceFile | undefined =>
       activeProgram?.getSourceFile(filePath),
     getAngularTypes: (): AngularTypeIndex | undefined => angularTypes,
