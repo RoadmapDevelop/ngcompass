@@ -71,8 +71,6 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'Replace fixture.detectChanges() with `await fixture.whenStable()`.',
   'no-directive-accessor':
     'Use computed() for UI-bound derived values; mark internal getters/setters private.',
-  'no-directive-writable-property':
-    'Mark public/protected properties readonly and back them with signal(), or make them private.',
   'no-ngoninit':
     'Remove ngOnInit; initialize state in field initializers or with rxResource()/computed().',
   'no-ngonchanges':

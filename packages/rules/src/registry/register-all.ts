@@ -7,7 +7,6 @@ import { noNgZoneRule } from '../rules/correctness/no-ngzone.rule.js';
 import { componentNoManualDetectChangesRule } from '../rules/correctness/component-no-manual-detect-changes.rule.js';
 import { noChangeDetectorRefRule } from '../rules/correctness/no-changedetectorref.rule.js';
 import { noDirectiveAccessorRule } from '../rules/correctness/no-directive-accessor.rule.js';
-import { noDirectiveWritablePropertyRule } from '../rules/correctness/no-directive-writable-property.rule.js';
 import { noProvideZoneChangeDetectionRule } from '../rules/correctness/no-providezonechangedetection.rule.js';
 import { noReactiveFormsRule } from '../rules/correctness/no-reactive-forms.rule.js';
 import { noZoneJsImportRule } from '../rules/correctness/no-zonejs-import.rule.js';
@@ -63,7 +62,6 @@ export function registerAllBuiltinRules() {
   registerNewEngineRule(componentNoManualDetectChangesRule, 'correctness');
   registerNewEngineRule(noChangeDetectorRefRule, 'correctness');
   registerNewEngineRule(noDirectiveAccessorRule, 'correctness');
-  registerNewEngineRule(noDirectiveWritablePropertyRule, 'correctness');
   registerNewEngineRule(noProvideZoneChangeDetectionRule, 'correctness');
   registerNewEngineRule(noReactiveFormsRule, 'correctness');
   registerNewEngineRule(noZoneJsImportRule, 'correctness');

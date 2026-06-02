@@ -6,7 +6,6 @@ export * from './rules/correctness/rxjs-no-nested-subscribe.rule.js';
 export * from './rules/correctness/no-ngzone.rule.js';
 export * from './rules/correctness/no-changedetectorref.rule.js';
 export * from './rules/correctness/no-directive-accessor.rule.js';
-export * from './rules/correctness/no-directive-writable-property.rule.js';
 export * from './rules/correctness/no-providezonechangedetection.rule.js';
 export * from './rules/correctness/no-reactive-forms.rule.js';
 export * from './rules/correctness/no-zonejs-import.rule.js';

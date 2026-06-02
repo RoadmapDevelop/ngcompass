@@ -17,7 +17,6 @@ export const zonelessPreset: PresetConfig = {
     'no-content-decorator': 'error',
     'no-detectchanges-testing': 'error',
     'no-directive-accessor': 'error',
-    'no-directive-writable-property': 'error',
     'no-ngaftercontentchecked': 'error',
     'no-ngaftercontentinit': 'error',
     'no-ngafterviewchecked': 'error',
