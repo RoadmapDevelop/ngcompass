@@ -166,7 +166,6 @@ export default defineConfig({
 | `--rule <id>`          | Run one rule in isolation                        |
 | `--force`              | Ignore cached results                            |
 | `-p, --profile <name>` | Run a named config profile                       |
-| `--mode <mode>`        | Performance mode: `eco`, `balanced`, or `turbo`  |
 | `--max-workers <n>`    | Limit worker threads                             |
 | `--skip-type-check`    | Skip rules that require TypeScript type checking |
 
