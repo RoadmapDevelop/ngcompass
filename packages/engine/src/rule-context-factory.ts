@@ -59,6 +59,7 @@ export class RuleContextFactory {
       this.context.getProjectContext?.();
     const angularTypes: AngularTypeIndex | undefined =
       this.context.getAngularTypes?.();
+    const sourceFile = this.context.getTsSourceFile?.(filePath);
 
     if (needsTemplate && !template && project) {
       templateFilePath = this.resolveExternalTemplatePath(filePath, project);
@@ -76,6 +77,7 @@ export class RuleContextFactory {
     return {
       filePath,
       fileContent,
+      sourceFile,
       locator,
       program,
       typeChecker,

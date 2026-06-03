@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { templatePreferControlFlowRule } from '../src/rules/template/template-prefer-control-flow.rule.js';
 import { templateNoAsyncPipeDuplicationRule } from '../src/rules/template/template-no-async-pipe-duplication.rule.js';
+import { templateNoAsyncPipeRule } from '../src/rules/template/template-no-async-pipe.rule.js';
 import { makeContext } from './helpers.js';
 
 describe('template-prefer-control-flow', () => {
@@ -268,5 +269,44 @@ describe('template-no-async-pipe-duplication', () => {
       ctx
     );
     expect(second).not.toBeNull();
+  });
+});
+
+describe('template-no-async-pipe', () => {
+  it('has correct name and streamType', () => {
+    expect(templateNoAsyncPipeRule.name).toBe('template-no-async-pipe');
+    expect(templateNoAsyncPipeRule.streamType).toBe('TemplateExpression');
+  });
+
+  it('flags an async pipe expression', () => {
+    const ctx = makeContext('', '/src/app.component.ts');
+    const fakeNode = {
+      expression: {
+        type: 'BinaryExpression',
+        operator: '|',
+        left: { type: 'Identifier', name: 'data$' },
+        right: { type: 'Identifier', name: 'async' },
+      },
+      sourceSpan: { start: 0, end: 20 },
+    } as any;
+    const result = templateNoAsyncPipeRule.handle(fakeNode, ctx);
+    expect(result).not.toBeNull();
+    expect(result!.ruleName).toBe('template-no-async-pipe');
+    expect(result!.severity).toBe('error');
+  });
+
+  it('does NOT flag a non-async pipe', () => {
+    const ctx = makeContext('', '/src/app.component.ts');
+    const fakeNode = {
+      expression: {
+        type: 'BinaryExpression',
+        operator: '|',
+        left: { type: 'Identifier', name: 'today' },
+        right: { type: 'Identifier', name: 'date' },
+      },
+      sourceSpan: { start: 0, end: 20 },
+    } as any;
+    const result = templateNoAsyncPipeRule.handle(fakeNode, ctx);
+    expect(result).toBeNull();
   });
 });

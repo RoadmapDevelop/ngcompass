@@ -6,6 +6,7 @@ import { recommendedPreset } from './recommended.js';
 import { securityPreset } from './security.js';
 import { ssrPreset } from './ssr.js';
 import { strictPreset } from './strict.js';
+import { zonelessPreset } from './zoneless.js';
 
 export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map(
   [
@@ -15,6 +16,7 @@ export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map(
     ['reactivity', reactivityPreset],
     ['security', securityPreset],
     ['ssr', ssrPreset],
+    ['zoneless', zonelessPreset],
     ['all', allPreset],
   ]
 );

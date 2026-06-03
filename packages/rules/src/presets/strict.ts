@@ -2,16 +2,15 @@ import { PresetConfig } from '@ngcompass/common';
 
 export const strictPreset: PresetConfig = {
   name: 'ngcompass:strict',
-  description: 'All rules at error severity — zero tolerance mode',
+  description: 'High-confidence rules at error severity',
   rules: {
     'component-no-manual-detect-changes': 'error',
     'rxjs-no-nested-subscribe': 'error',
     'signal-no-side-effects-in-computed': 'error',
     'signal-effect-must-be-destroy-scoped': 'error',
+    'no-ngzone': 'error',
 
     'prefer-on-push-component-change-detection': 'error',
-
-    'prefer-inject-over-constructor-di': 'error',
 
     'rxjs-no-subscribe-in-component': 'error',
     'rxjs-require-takeUntilDestroyed': 'error',
@@ -31,6 +30,7 @@ export const strictPreset: PresetConfig = {
     'template-no-array-literal-binding': 'error',
     'template-no-async-pipe-duplication': 'error',
     'template-prefer-control-flow': 'error',
+    'template-no-async-pipe': 'error',
 
     'no-bypass-sanitization': 'error',
     'template-no-unsafe-bindings': 'error',

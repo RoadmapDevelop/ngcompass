@@ -6,6 +6,7 @@ export const allPreset: PresetConfig = {
   rules: {
     'prefer-on-push-component-change-detection': 'error',
     'component-no-manual-detect-changes': 'error',
+    'no-ngzone': 'error',
 
     'prefer-inject-over-constructor-di': 'warn',
 
@@ -30,6 +31,7 @@ export const allPreset: PresetConfig = {
     'template-no-array-literal-binding': 'warn',
     'template-no-async-pipe-duplication': 'warn',
     'template-prefer-control-flow': 'warn',
+    'template-no-async-pipe': 'error',
 
     'no-bypass-sanitization': 'warn',
     'template-no-unsafe-bindings': 'warn',
@@ -38,5 +40,24 @@ export const allPreset: PresetConfig = {
     'prefer-after-render-over-after-view-init': 'warn',
 
     'spec-no-focused-test': 'error',
+
+    'no-changedetectorref': 'error',
+    'no-content-decorator': 'error',
+    'no-detectchanges-testing': 'error',
+    'no-directive-accessor': 'error',
+    'no-ngaftercontentchecked': 'error',
+    'no-ngaftercontentinit': 'error',
+    'no-ngafterviewchecked': 'error',
+    'no-ngafterviewinit': 'error',
+    'no-ngdocheck': 'error',
+    'no-ngonchanges': 'error',
+    'no-ngondestroy': 'error',
+    'no-ngoninit': 'error',
+    'no-ngzone-testing': 'error',
+    'no-providezonechangedetection': 'error',
+    'no-reactive-forms': 'error',
+    'no-view-decorator': 'error',
+    'no-zonejs-import': 'error',
+    'no-zonejs-testing-functions': 'error',
   },
 };

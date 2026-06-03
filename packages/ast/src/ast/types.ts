@@ -116,6 +116,12 @@ export interface ReturnStatement extends Node {
   readonly argument?: Expression;
 }
 
+export interface ImportDeclaration extends Node {
+  readonly type: 'ImportDeclaration';
+  readonly source: StringLiteral;
+  readonly specifiers?: ReadonlyArray<Node>;
+}
+
 export interface ClassDeclaration extends Node {
   readonly type: 'ClassDeclaration';
   readonly id?: Identifier;

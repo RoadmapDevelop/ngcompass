@@ -43,9 +43,7 @@ export const preferInjectRule = createAnyAngularClassRule(
     }
     if (diParams.length === 0) return null;
 
-    const { line, column } = context.locator.location(
-      getNodeStart(ctor as unknown as AstNode)
-    );
+    const { line, column } = context.locator.location(ctor.getStart());
     const offenders = diParams
       .map((p) => `${p.name}: ${p.typeText}`)
       .join(', ');

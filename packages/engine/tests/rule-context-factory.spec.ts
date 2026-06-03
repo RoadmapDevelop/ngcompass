@@ -168,6 +168,21 @@ describe('RuleContextFactory.build', () => {
     expect(result.typeChecker).toBe(fakeChecker);
   });
 
+  it('attaches sourceFile from getTsSourceFile when provided', async () => {
+    const sourceFile = ts.createSourceFile(
+      '/src/foo.ts',
+      SIMPLE_TS,
+      ts.ScriptTarget.Latest,
+      true
+    );
+    const getTsSourceFile = vi.fn().mockReturnValue(sourceFile);
+    const ctx = makeBaseContext({ getTsSourceFile });
+    const factory = new RuleContextFactory(ctx);
+    const result = await factory.build('/src/foo.ts', {}, false);
+    expect(getTsSourceFile).toHaveBeenCalledWith('/src/foo.ts');
+    expect(result.sourceFile).toBe(sourceFile);
+  });
+
   it('project is undefined when getProjectContext is absent', async () => {
     const ctx = makeBaseContext();
     const factory = new RuleContextFactory(ctx);

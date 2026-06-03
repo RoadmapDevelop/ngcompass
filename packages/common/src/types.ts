@@ -93,6 +93,7 @@ export type BuiltinPreset =
   | 'reactivity'
   | 'security'
   | 'ssr'
+  | 'zoneless'
   | 'all';
 
 export type PresetReference = string;
