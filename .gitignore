@@ -44,7 +44,7 @@ test-output.txt
 packages/*/test-results/
 .test-cache-config/
 .claude/
-
+.antigravitycli
 
 benchmark-results.json
 *-report.json
