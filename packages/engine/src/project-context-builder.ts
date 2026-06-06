@@ -61,6 +61,10 @@ export function buildProjectContext(
   };
 }
 
+function normalizeTsPath(p: string): string {
+  return p.replace(/\\/g, '/');
+}
+
 function buildProjectFileSet(
   files: ReadonlyArray<string>,
   rootDir: string,
@@ -69,10 +73,10 @@ function buildProjectFileSet(
   const set = new Set<string>();
 
   for (const f of files) {
-    set.add(path.resolve(rootDir, f));
+    set.add(normalizeTsPath(path.resolve(rootDir, f)));
   }
 
-  const normRoot = normaliseDir(rootDir);
+  const normRoot = normalizeTsPath(normaliseDir(rootDir));
   for (const sf of program.getSourceFiles()) {
     if (!sf.isDeclarationFile && sf.fileName.startsWith(normRoot)) {
       set.add(sf.fileName);
@@ -80,6 +84,28 @@ function buildProjectFileSet(
   }
 
   return set;
+}
+
+export interface ImportGraphResult {
+  readonly importGraph: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly projectFiles: ReadonlySet<string>;
+  readonly rootDir: string;
+}
+
+export function buildImportGraphOnly(
+  program: ts.Program,
+  files: ReadonlyArray<string>,
+  rootDir: string
+): ImportGraphResult {
+  const start = performance.now();
+  const projectFileSet = buildProjectFileSet(files, rootDir, program);
+  const { importGraph } = buildImportGraphs(program, projectFileSet);
+  debug(
+    'engine',
+    `Import-graph-only built in ${(performance.now() - start).toFixed(2)}ms` +
+      ` — ${projectFileSet.size} files, ${countEdges(importGraph)} edges`
+  );
+  return { importGraph, projectFiles: projectFileSet, rootDir };
 }
 
 function buildImportGraphs(
@@ -254,14 +280,14 @@ function buildComponentGraph(
 
     const base = path.basename(file, '.ts');
 
-    const htmlPath = path.join(dir, base + '.html');
+    const htmlPath = normalizeTsPath(path.join(dir, base + '.html'));
     let templatePath: string | undefined = projectFileSet.has(htmlPath)
       ? htmlPath
       : undefined;
 
     const stylePaths: string[] = [];
     for (const ext of styleExts) {
-      const stylePath = path.join(dir, base + ext);
+      const stylePath = normalizeTsPath(path.join(dir, base + ext));
       if (projectFileSet.has(stylePath)) stylePaths.push(stylePath);
     }
 
@@ -280,7 +306,7 @@ function buildComponentGraph(
       }
     }
 
-    const specCandidate = path.join(dir, base + '.spec.ts');
+    const specCandidate = normalizeTsPath(path.join(dir, base + '.spec.ts'));
     const specPath = projectFileSet.has(specCandidate)
       ? specCandidate
       : undefined;
@@ -313,7 +339,7 @@ function extractDecoratorAssetPaths(
     if (name === 'templateUrl') {
       const literal = getStringLiteralValue(prop.initializer);
       if (literal) {
-        const resolved = path.resolve(dir, literal);
+        const resolved = normalizeTsPath(path.resolve(dir, literal));
         if (projectFileSet.has(resolved)) templatePath = resolved;
       }
       continue;
@@ -322,7 +348,7 @@ function extractDecoratorAssetPaths(
     if (name === 'styleUrl') {
       const literal = getStringLiteralValue(prop.initializer);
       if (literal) {
-        const resolved = path.resolve(dir, literal);
+        const resolved = normalizeTsPath(path.resolve(dir, literal));
         if (projectFileSet.has(resolved)) stylePaths.push(resolved);
       }
       continue;
@@ -332,7 +358,7 @@ function extractDecoratorAssetPaths(
       for (const element of prop.initializer.elements) {
         const literal = getStringLiteralValue(element);
         if (!literal) continue;
-        const resolved = path.resolve(dir, literal);
+        const resolved = normalizeTsPath(path.resolve(dir, literal));
         if (projectFileSet.has(resolved)) stylePaths.push(resolved);
       }
     }

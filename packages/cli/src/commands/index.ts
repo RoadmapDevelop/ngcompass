@@ -6,10 +6,15 @@ import { registerCacheCommand } from './cache.js';
 import { registerRulesCommand } from './rules.js';
 import { CacheContext } from '@ngcompass/cache';
 
+import { registerCircularCommand } from './circular.js';
+import { registerGraphCommand } from './graph.js';
+
 export function registerCommands(program: Command, cache: CacheContext): void {
   registerInitCommand(program, cache);
   registerAnalyzeCommand(program, cache);
   registerConfigCommand(program, cache);
   registerCacheCommand(program, cache);
   registerRulesCommand(program);
+  registerCircularCommand(program, cache);
+  registerGraphCommand(program, cache);
 }

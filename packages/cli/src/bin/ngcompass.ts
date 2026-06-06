@@ -92,7 +92,7 @@ export async function run(): Promise<void> {
       }
 
       const actionOpts = actionCommand.opts();
-      if (!isBannerSuppressedFormat(actionOpts.format)) {
+      if (!actionOpts.stdout && !isBannerSuppressedFormat(actionOpts.format)) {
         const parent = actionCommand.parent;
         const commandName =
           parent && parent.name() !== 'ngcompass'

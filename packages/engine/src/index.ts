@@ -17,7 +17,11 @@ export {
 export { createAnalysisContext } from './analysis-context.js';
 export type { AnalysisContext } from './analysis-context.js';
 
-export { buildProjectContext } from './project-context-builder.js';
+export {
+  buildProjectContext,
+  buildImportGraphOnly,
+  type ImportGraphResult,
+} from './project-context-builder.js';
 
 export {
   createTypeAwareAnalysisContext,
@@ -48,3 +52,12 @@ export {
 export * from './spinner.js';
 
 export * from './worker-pool.js';
+
+export * from './cycle-detector.js';
+
+export * from './graph-scope.js';
+
+export {
+  buildImportGraphOxc,
+  type OxcGraphOptions,
+} from './import-graph-oxc.js';
