@@ -14,7 +14,7 @@ import {
 import { Spinner } from '../spinner.js';
 import { exitWithError } from './exit.js';
 import { loadConfigurationStep, discoverFilesStep } from './analyze/steps.js';
-import { toJsonGraph } from './circular-export.js';
+import { toJsonGraph } from '../circular-export.js';
 
 type ImportGraph = ReadonlyMap<string, ReadonlySet<string>>;
 

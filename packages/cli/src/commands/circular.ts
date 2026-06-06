@@ -16,13 +16,9 @@ import {
 import { Spinner } from '../spinner.js';
 import { exitWithError } from './exit.js';
 import { loadConfigurationStep, discoverFilesStep } from './analyze/steps.js';
-import {
-  openCircularReport,
-  writeCircularUiReport,
-} from './circular-ui.js';
-import { toJsonGraph } from './circular-export.js';
+import { toJsonGraph } from '../circular-export.js';
 
-type CircularFormat = 'console' | 'ui' | 'json';
+type CircularFormat = 'console' | 'json';
 type ImportGraph = ReadonlyMap<string, ReadonlySet<string>>;
 
 const DEFAULT_DEPTH = 1;
@@ -46,7 +42,7 @@ export function registerCircularCommand(
     .description('Detect circular dependencies in the project import graph')
     .option('-p, --profile <name>', 'Configuration profile to run')
     .option('--force', 'Ignore cached results and re-run all checks')
-    .option('--format <fmt>', 'Reporter format: console | ui | json')
+    .option('--format <fmt>', 'Reporter format: console | json')
     .option('--focus <file>', 'Scope to a file and its import neighborhood')
     .option(
       '--depth <n>',
@@ -133,8 +129,6 @@ export function registerCircularCommand(
             fileCount: files.length,
             generatedAt: new Date(),
           }, rawOptions.output);
-        } else if (format === 'ui') {
-          await emitUiReport(cycles, files.length, rawOptions.output, reporter);
         } else {
           emitConsoleReport(cycles, focusFile, reporter);
         }
@@ -159,14 +153,8 @@ export function registerCircularCommand(
 }
 
 function normalizeFormat(format: string | undefined): CircularFormat {
-  switch (format) {
-    case 'ui':
-      return 'ui';
-    case 'json':
-      return 'json';
-    default:
-      return 'console';
-  }
+  if (format === 'json') return 'json';
+  return 'console';
 }
 
 function parseDepth(raw: string | undefined): number | undefined {
@@ -266,41 +254,6 @@ async function emitJsonExport(
   }
 
   process.stdout.write(content);
-}
-
-async function emitUiReport(
-  cycles: ReadonlyArray<ReadonlyArray<string>>,
-  fileCount: number,
-  outputPath: string | undefined,
-  reporter: Reporter
-): Promise<void> {
-  reporter.step('❯ Writing report...');
-  const reportPath = await writeCircularUiReport(
-    {
-      cycles,
-      rootDir: process.cwd(),
-      fileCount,
-      generatedAt: new Date(),
-    },
-    outputPath
-  );
-
-  const relPath = path.relative(process.cwd(), reportPath) || reportPath;
-  if (cycles.length > 0) {
-    reporter.info(
-      `\n${pc.red('✖')} Found ${cycles.length} circular ${pluralize(cycles.length)}. Report: ${pc.cyan(relPath)}\n`
-    );
-  } else {
-    reporter.info(
-      `\n${pc.green('✔')} No circular dependencies found. Report: ${pc.cyan(relPath)}\n`
-    );
-  }
-
-  try {
-    openCircularReport(reportPath);
-  } catch {
-    reporter.info(pc.dim(`(Open ${relPath} in your browser to view.)`));
-  }
 }
 
 function emitConsoleReport(
