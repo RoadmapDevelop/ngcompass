@@ -55,6 +55,8 @@ export * from './worker-pool.js';
 
 export * from './cycle-detector.js';
 
+export * from './graph-scope.js';
+
 export {
   buildImportGraphOxc,
   type OxcGraphOptions,
