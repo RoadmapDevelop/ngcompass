@@ -61,3 +61,25 @@ export {
   buildImportGraphOxc,
   type OxcGraphOptions,
 } from './import-graph-oxc.js';
+
+export {
+  computeFileComplexity,
+  type FunctionComplexity,
+  type FunctionKind,
+} from './complexity/complexity-analyzer.js';
+
+export {
+  computeProjectComplexity,
+  type ProjectComplexityOptions,
+  type FileComplexity,
+} from './complexity/compute-project-complexity.js';
+
+export {
+  computeFileCallGraph,
+  type FileCallGraph,
+  type CallGraphNode,
+  type CallGraphEdge,
+  type ExternalCall,
+} from './callgraph/call-graph-analyzer.js';
+
+export { analyzeFileCallGraph } from './callgraph/compute-file-call-graph.js';

@@ -149,6 +149,7 @@ export default defineConfig({
 | `ngcompass analyze`       | Run analysis                 |
 | `ngcompass rules`         | List available rules         |
 | `ngcompass rules <name>`  | Inspect one rule             |
+| `ngcompass callgraph <file>` | Build an intra-file call graph |
 | `ngcompass config health` | Validate configuration       |
 | `ngcompass cache info`    | Show cache status            |
 | `ngcompass cache clear`   | Clear cached analysis data   |
@@ -156,18 +157,18 @@ export default defineConfig({
 
 ### Analyze Options
 
-| Option                 | Description                                      |
-| ---------------------- | ------------------------------------------------ |
-| `--format <fmt>`       | `console`, `json`, `sarif`, `html`, or `ui`      |
-| `--output <path>`      | Output path for HTML/UI reports                  |
-| `--compact`            | Use compact issue output                         |
-| `-q, --quiet`          | Show summary counts only                         |
-| `--no-recommendation`  | Hide fix recommendations                         |
-| `--rule <id>`          | Run one rule in isolation                        |
-| `--force`              | Ignore cached results                            |
-| `-p, --profile <name>` | Run a named config profile                       |
-| `--max-workers <n>`    | Limit worker threads                             |
-| `--skip-type-check`    | Skip rules that require TypeScript type checking |
+| Option                         | Description                                             |
+| ------------------------------ | ------------------------------------------------------- |
+| `--format <fmt>`               | `console`, `json`, `sarif`, `html`, or `ui`             |
+| `--output <path>`              | Output path for HTML/UI reports                         |
+| `--compact`                    | Use compact issue output                                |
+| `-q, --quiet`                  | Show summary counts only                                |
+| `--no-recommendation`          | Hide fix recommendations                                |
+| `--rule <id>`                  | Run one rule in isolation                               |
+| `--force`                      | Ignore cached results                                   |
+| `-p, --profile <name>`         | Run a named config profile                              |
+| `--max-workers <n>`            | Limit worker threads                                    |
+| `--skip-type-check`            | Skip rules that require TypeScript type checking        |
 
 ## CI
 
