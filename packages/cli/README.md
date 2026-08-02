@@ -149,6 +149,8 @@ export default defineConfig({
 | `ngcompass analyze`       | Run analysis                 |
 | `ngcompass rules`         | List available rules         |
 | `ngcompass rules <name>`  | Inspect one rule             |
+| `ngcompass complexity`    | Score cyclomatic and cognitive complexity per function |
+| `ngcompass visualize <file>` | Visualize one file as a unit: template, styles, spec and dependencies |
 | `ngcompass config health` | Validate configuration       |
 | `ngcompass cache info`    | Show cache status            |
 | `ngcompass cache clear`   | Clear cached analysis data   |
@@ -156,18 +158,47 @@ export default defineConfig({
 
 ### Analyze Options
 
-| Option                 | Description                                      |
-| ---------------------- | ------------------------------------------------ |
-| `--format <fmt>`       | `console`, `json`, `sarif`, `html`, or `ui`      |
-| `--output <path>`      | Output path for HTML/UI reports                  |
-| `--compact`            | Use compact issue output                         |
-| `-q, --quiet`          | Show summary counts only                         |
-| `--no-recommendation`  | Hide fix recommendations                         |
-| `--rule <id>`          | Run one rule in isolation                        |
-| `--force`              | Ignore cached results                            |
-| `-p, --profile <name>` | Run a named config profile                       |
-| `--max-workers <n>`    | Limit worker threads                             |
-| `--skip-type-check`    | Skip rules that require TypeScript type checking |
+| Option                         | Description                                             |
+| ------------------------------ | ------------------------------------------------------- |
+| `--format <fmt>`               | `console`, `json`, `sarif`, `html`, or `ui`             |
+| `--output <path>`              | Output path for HTML/UI reports                         |
+| `--compact`                    | Use compact issue output                                |
+| `-q, --quiet`                  | Show summary counts only                                |
+| `--no-recommendation`          | Hide fix recommendations                                |
+| `--rule <id>`                  | Run one rule in isolation                               |
+| `--force`                      | Ignore cached results                                   |
+| `-p, --profile <name>`         | Run a named config profile                              |
+| `--max-workers <n>`            | Limit worker threads                                    |
+| `--skip-type-check`            | Skip rules that require TypeScript type checking        |
+
+### Visualize Options
+
+`ngcompass visualize <file>` treats a single file as a *unit*. It anchors on the TypeScript file — passing the template, stylesheet, or spec resolves back to it — then discovers the sibling files the component declares or that sit beside it by convention, plus one container per injected dependency.
+
+Lanes render per file kind; boxes are class members, template references to those members, stylesheet selectors, and tests. Arrows follow dataflow: bindings and interpolations point from the class into the template, event handlers point back, and calls point from caller to callee.
+
+| Option            | Description                                                          |
+| ----------------- | -------------------------------------------------------------------- |
+| `--format <fmt>`  | `html`, `json`, or `console` (default: `html`)                        |
+| `--output <path>` | Output path (default: `ngcompass-visualize.html` / `.json`)           |
+| `--stdout`        | Write JSON to stdout instead of a file                                |
+
+A lane is omitted when the file simply does not exist, and flagged when the decorator declares a `templateUrl` or `styleUrls` entry that is missing from disk.
+
+Current limits: dependency members are inferred from how the entry file uses them, so imports resolved through `tsconfig` path aliases show members without a verified source location; stylesheet selectors are listed but carry no edges; and template member extraction covers `@if`/`@for` control flow, bindings, and interpolations, but not the legacy `*ngFor` microsyntax.
+
+### Complexity Options
+
+`ngcompass complexity` bypasses the rule pipeline. It reuses config loading and file discovery, scores every function and method for both cyclomatic and cognitive complexity, and emits a JSON report whose files are ordered worst-first with their functions ranked inside each file.
+
+| Option                 | Description                                                              |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `-p, --profile <name>` | Run a named config profile                                               |
+| `--force`              | Ignore cached results and re-run all checks                              |
+| `--min <n>`            | Only include functions whose worst metric is at least `n` (default: `0`) |
+| `--sort <metric>`      | Ranking metric: `cyclomatic` or `cognitive` (default: `cognitive`)       |
+| `--output <path>`      | Output path for the JSON file (default: `ngcompass-complexity.json`)      |
+| `--stdout`             | Write JSON to stdout instead of a file                                   |
 
 ## CI
 

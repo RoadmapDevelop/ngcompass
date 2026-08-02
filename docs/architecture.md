@@ -203,6 +203,28 @@ See Section 11 for type-aware execution semantics.
 | ----------------- | ------------------------------------------------------------------------------------- |
 | `--preset <name>` | Filter by preset: `recommended` \| `strict` \| `performance` \| `reactivity` \| `all` |
 
+**`complexity`** — report cyclomatic and cognitive complexity per function, grouped by file.
+
+This command bypasses the rule pipeline. It reuses configuration loading and file discovery, parses each source file with the Oxc parser, scores every function/method (class methods, accessors, constructors, function declarations/expressions, and arrows) for both cyclomatic and cognitive complexity, then emits a JSON report whose files are ordered worst-first with their functions ranked inside each file.
+
+| Flag                   | Description                                                                |
+| ---------------------- | -------------------------------------------------------------------------- |
+| `-p, --profile <name>` | Configuration profile to run                                               |
+| `--force`              | Ignore cached results and re-run all checks                                |
+| `--min <n>`            | Only include functions whose worst metric is at least `n` (default: `0`)   |
+| `--sort <metric>`      | Ranking metric: `cyclomatic` \| `cognitive` (default: `cognitive`)         |
+| `--output <path>`      | Output path for the JSON file (default: `ngcompass-complexity.json`)       |
+| `--stdout`             | Write JSON to stdout instead of a file                                     |
+
+**`callgraph <file>`** — build an intra-file call graph for a single source file.
+
+This command also bypasses the rule pipeline and operates on one explicit file (no configuration loading, file discovery, or cache). It parses the file with the Oxc parser, collects every function/method as a node, then attributes each call site to its innermost enclosing function and resolves the callee by name (`foo()`, `this.foo()`, `obj.foo()`) to a definition in the same file. Calls that resolve to multiple same-named definitions are emitted as `ambiguous` edges; calls to imported or undefined symbols are listed as external calls. Resolution is syntax-only — no type checker and no cross-file resolution.
+
+| Flag              | Description                                                          |
+| ----------------- | ------------------------------------------------------------------- |
+| `--output <path>` | Output path for the JSON file (default: `ngcompass-callgraph.json`) |
+| `--stdout`        | Write JSON to stdout instead of a file                              |
+
 ## 6. Configuration Architecture
 
 Configuration is handled by `@ngcompass/config`. Its public entry point is `resolveConfig`.
