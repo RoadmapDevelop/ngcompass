@@ -28,6 +28,43 @@ const w = (line = '') => process.stdout.write(`${line}\n`);
 
 const REQUIRED_FIELDS = ['name', 'version', 'description', 'license'];
 
+const CLI_PACKAGE_NAME = 'ngcompass';
+const CLI_BIN_NAME = 'ngcompass';
+const EXPECTED_CLI_COMMANDS = [
+  'init',
+  'analyze',
+  'config',
+  'cache',
+  'rules',
+  'circular',
+  'graph',
+  'complexity',
+  'visualize',
+];
+
+function registersCommand(bundle, commandName) {
+  return new RegExp(`command\\(["']${commandName}(?=["' ])`).test(bundle);
+}
+
+function validateCliCommands(dir, pkg) {
+  if (pkg.name !== CLI_PACKAGE_NAME) return [];
+
+  const binPath = pkg.bin?.[CLI_BIN_NAME];
+  if (typeof binPath !== 'string') return [];
+
+  const fullBinPath = path.join(dir, binPath);
+  if (!fs.existsSync(fullBinPath)) return [];
+
+  const bundle = fs.readFileSync(fullBinPath, 'utf8');
+
+  return EXPECTED_CLI_COMMANDS.filter(
+    (name) => !registersCommand(bundle, name)
+  ).map(
+    (name) =>
+      `shipped CLI bundle (${binPath}) does not register the "${name}" command`
+  );
+}
+
 function getPublishablePackages() {
   return fs
     .readdirSync(PACKAGES_DIR)
@@ -147,6 +184,8 @@ function validatePackage({ name, dir, pkg }) {
       );
     }
   }
+
+  failures.push(...validateCliCommands(dir, pkg));
 
   return failures;
 }
