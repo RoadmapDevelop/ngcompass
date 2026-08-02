@@ -1,6 +1,6 @@
 ﻿{
   "name": "@ngcompass/engine",
-  "version": "0.2.2-beta",
+  "version": "0.2.3-beta",
   "description": "Rule execution engine for ngcompass",
   "sideEffects": false,
   "main": "./dist/index.cjs",

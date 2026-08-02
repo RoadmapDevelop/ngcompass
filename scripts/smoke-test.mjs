@@ -98,6 +98,44 @@ const ZERO_ANGULAR_TMP = path.join(
   `ngcompass-zero-${process.pid}`
 );
 
+const CYCLE_TMP = path.join(os.tmpdir(), `ngcompass-cycle-${process.pid}`);
+
+async function setupCycleFixture() {
+  fs.mkdirSync(path.join(CYCLE_TMP, 'src'), { recursive: true });
+
+  await runCli(['init', '--cwd', CYCLE_TMP, '--force']);
+
+  fs.writeFileSync(
+    path.join(CYCLE_TMP, 'src', 'alpha.ts'),
+    [
+      `import { beta } from './beta.js';`,
+      `export const alpha = (): number => beta() + 1;`,
+    ].join('\n')
+  );
+
+  fs.writeFileSync(
+    path.join(CYCLE_TMP, 'src', 'beta.ts'),
+    [
+      `import { alpha } from './alpha.js';`,
+      `export const beta = (): number => (alpha ? 2 : 3);`,
+    ].join('\n')
+  );
+}
+
+const FIXTURE_ENTRY = 'src/app.component.ts';
+
+function readJsonFile(file) {
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+}
+
+function parseJsonStdout(stdout, label) {
+  try {
+    return { value: JSON.parse(stdout.trim()) };
+  } catch {
+    return { error: `${label} is not valid JSON: ${stdout.slice(0, 200)}` };
+  }
+}
+
 const tests = [
   {
     name: '--version → prints version and exits 0',
@@ -109,7 +147,17 @@ const tests = [
     name: '--help → shows top-level help with command list',
     args: ['--help'],
     exitCodes: [0],
-    stdout: [/ngcompass/i, /analyze/, /rules/, /cache/, /init/],
+    stdout: [
+      /ngcompass/i,
+      /analyze/,
+      /rules/,
+      /cache/,
+      /init/,
+      /circular/,
+      /complexity/,
+      /graph/,
+      /visualize/,
+    ],
   },
 
   {
@@ -149,6 +197,30 @@ const tests = [
     exitCodes: [0],
     stdout: [/--force/, /--cwd/],
   },
+  {
+    name: 'circular --help → documents every flag',
+    args: ['circular', '--help'],
+    exitCodes: [0],
+    stdout: [/--profile/, /--force/, /--format/, /--focus/, /--depth/, /--output/],
+  },
+  {
+    name: 'complexity --help → documents every flag',
+    args: ['complexity', '--help'],
+    exitCodes: [0],
+    stdout: [/--profile/, /--force/, /--min/, /--sort/, /--output/, /--stdout/],
+  },
+  {
+    name: 'graph --help → documents every flag',
+    args: ['graph', '--help'],
+    exitCodes: [0],
+    stdout: [/--profile/, /--force/, /--focus/, /--depth/, /--output/, /--stdout/],
+  },
+  {
+    name: 'visualize --help → documents argument and every flag',
+    args: ['visualize', '--help'],
+    exitCodes: [0],
+    stdout: [/<file>/, /--format/, /--output/, /--stdout/],
+  },
 
   {
     name: 'banner: analyze → ANALYZE label + version + cwd on stdout',
@@ -174,6 +246,78 @@ const tests = [
     args: ['init', '--cwd', INIT_TMP, '--force'],
     exitCodes: [0],
     stdout: [/INIT/, VERSION_RE],
+  },
+  {
+    name: 'banner: circular → CIRCULAR label + version on stdout',
+    args: ['circular'],
+    exitCodes: [0, 1],
+    cwd: FIXTURE_TMP,
+    stdout: [/CIRCULAR/, VERSION_RE],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'banner: complexity → COMPLEXITY label + version on stdout',
+    args: ['complexity'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    stdout: [/COMPLEXITY/, VERSION_RE],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'banner: graph → GRAPH label + version on stdout',
+    args: ['graph'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    stdout: [/GRAPH/, VERSION_RE],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'banner: visualize → VISUALIZE label + version on stdout',
+    args: ['visualize', FIXTURE_ENTRY],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    stdout: [/VISUALIZE/, VERSION_RE],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'banner: absent for circular --format json',
+    args: ['circular', '--format', 'json'],
+    exitCodes: [0, 1],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      if (/CIRCULAR/.test(r.stdout)) return 'banner leaked into JSON stdout';
+      return null;
+    },
+  },
+  {
+    name: 'banner: absent for complexity --stdout',
+    args: ['complexity', '--stdout'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      if (/COMPLEXITY/.test(r.stdout)) return 'banner leaked into JSON stdout';
+      return null;
+    },
+  },
+  {
+    name: 'banner: absent for graph --stdout',
+    args: ['graph', '--stdout'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      if (/GRAPH/.test(r.stdout)) return 'banner leaked into JSON stdout';
+      return null;
+    },
+  },
+  {
+    name: 'banner: absent for visualize --stdout',
+    args: ['visualize', FIXTURE_ENTRY, '--stdout'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      if (/VISUALIZE/.test(r.stdout)) return 'banner leaked into JSON stdout';
+      return null;
+    },
   },
   {
     name: 'banner: absent for --format json (no banner leaking into JSON stdout)',
@@ -549,6 +693,345 @@ const tests = [
       return null;
     },
   },
+
+  {
+    name: 'circular → exit 0 on a project with no cycles',
+    args: ['circular'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    combined: [/No circular dependencies found/i],
+  },
+  {
+    name: 'circular → exit 1 and reports the cycle on a cyclic project',
+    args: ['circular'],
+    exitCodes: [1],
+    cwd: CYCLE_TMP,
+    notCombined: [CRASH_RE],
+    combined: [/Found 1 circular dependency/i, /alpha\.ts/, /beta\.ts/],
+  },
+  {
+    name: 'circular --format json → stdout is a graph with cycles array',
+    args: ['circular', '--format', 'json'],
+    exitCodes: [1],
+    cwd: CYCLE_TMP,
+    validate: (r) => {
+      const parsed = parseJsonStdout(r.stdout, 'circular --format json stdout');
+      if (parsed.error) return parsed.error;
+      const graph = parsed.value;
+      if (!Array.isArray(graph.nodes)) return 'JSON output missing nodes array';
+      if (!Array.isArray(graph.edges)) return 'JSON output missing edges array';
+      if (graph.cycleCount !== 1)
+        return `expected cycleCount 1, got ${graph.cycleCount}`;
+      if (!Array.isArray(graph.cycles) || graph.cycles.length !== 1)
+        return 'JSON output missing the detected cycle';
+      return null;
+    },
+  },
+  {
+    name: 'circular --focus <file> --depth 1 → still detects the local cycle',
+    args: ['circular', '--focus', 'src/alpha.ts', '--depth', '1'],
+    exitCodes: [1],
+    cwd: CYCLE_TMP,
+    notCombined: [CRASH_RE],
+    combined: [/alpha\.ts/],
+  },
+  {
+    name: 'circular --focus <unknown> → exit 1 with no-match error',
+    args: ['circular', '--focus', 'this-file-does-not-exist-xyz.ts'],
+    exitCodes: [1],
+    cwd: CYCLE_TMP,
+    combined: [/no file in the import graph matches/i],
+  },
+  {
+    name: 'circular --depth <invalid> → exit 1 with validation error',
+    args: ['circular', '--depth', 'abc'],
+    exitCodes: [1],
+    cwd: CYCLE_TMP,
+    combined: [/--depth must be a non-negative integer/i],
+  },
+  {
+    name: 'circular --format json --output <path> → writes the graph to a file',
+    args: [
+      'circular',
+      '--format',
+      'json',
+      '--output',
+      path.join(CYCLE_TMP, 'circular-report.json'),
+    ],
+    exitCodes: [1],
+    cwd: CYCLE_TMP,
+    notCombined: [CRASH_RE],
+    validate: () => {
+      const file = path.join(CYCLE_TMP, 'circular-report.json');
+      if (!fs.existsSync(file)) return 'circular-report.json was not created';
+      const parsed = readJsonFile(file);
+      if (parsed.cycleCount !== 1)
+        return `exported file has cycleCount ${parsed.cycleCount}, expected 1`;
+      return null;
+    },
+  },
+
+  {
+    name: 'complexity → writes ngcompass-complexity.json with a summary',
+    args: ['complexity'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    prepare: () =>
+      fs.rmSync(path.join(FIXTURE_TMP, 'ngcompass-complexity.json'), {
+        force: true,
+      }),
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'ngcompass-complexity.json');
+      if (!fs.existsSync(file))
+        return 'ngcompass-complexity.json was not created';
+      const parsed = readJsonFile(file);
+      if (!parsed.summary) return 'complexity report missing summary';
+      if (!Array.isArray(parsed.files))
+        return 'complexity report missing files array';
+      if (parsed.summary.functionCount < 1)
+        return 'complexity report found no functions in the fixture';
+      return null;
+    },
+  },
+  {
+    name: 'complexity --stdout → stdout is valid complexity JSON',
+    args: ['complexity', '--stdout'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      const parsed = parseJsonStdout(r.stdout, 'complexity --stdout stdout');
+      if (parsed.error) return parsed.error;
+      if (!parsed.value.summary) return 'complexity JSON missing summary';
+      if (!Array.isArray(parsed.value.files))
+        return 'complexity JSON missing files array';
+      return null;
+    },
+  },
+  {
+    name: 'complexity --sort cyclomatic → ranks by the requested metric',
+    args: ['complexity', '--sort', 'cyclomatic', '--stdout'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      const parsed = parseJsonStdout(r.stdout, 'complexity --sort stdout');
+      if (parsed.error) return parsed.error;
+      if (parsed.value.sortedBy !== 'cyclomatic')
+        return `sortedBy is "${parsed.value.sortedBy}", expected "cyclomatic"`;
+      return null;
+    },
+  },
+  {
+    name: 'complexity --min <high> → reports nothing matched',
+    args: ['complexity', '--min', '9999'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    combined: [/No functions matched/i],
+  },
+  {
+    name: 'complexity --sort <invalid> → exit 1 with validation error',
+    args: ['complexity', '--sort', 'totally-invalid'],
+    exitCodes: [1],
+    cwd: FIXTURE_TMP,
+    combined: [/--sort must be/i],
+  },
+  {
+    name: 'complexity --min <invalid> → exit 1 with validation error',
+    args: ['complexity', '--min', 'abc'],
+    exitCodes: [1],
+    cwd: FIXTURE_TMP,
+    combined: [/--min must be a non-negative integer/i],
+  },
+  {
+    name: 'complexity --output <custom> → writes to the specified path',
+    args: [
+      'complexity',
+      '--output',
+      path.join(FIXTURE_TMP, 'custom-complexity.json'),
+    ],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'custom-complexity.json');
+      if (!fs.existsSync(file)) return 'custom-complexity.json was not created';
+      return null;
+    },
+  },
+
+  {
+    name: 'graph → writes ngcompass-graph.json with nodes and edges',
+    args: ['graph'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    prepare: () =>
+      fs.rmSync(path.join(FIXTURE_TMP, 'ngcompass-graph.json'), {
+        force: true,
+      }),
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'ngcompass-graph.json');
+      if (!fs.existsSync(file)) return 'ngcompass-graph.json was not created';
+      const parsed = readJsonFile(file);
+      if (!Array.isArray(parsed.nodes)) return 'graph export missing nodes';
+      if (!Array.isArray(parsed.edges)) return 'graph export missing edges';
+      if (parsed.nodeCount < 1) return 'graph export contains no nodes';
+      return null;
+    },
+  },
+  {
+    name: 'graph --stdout → stdout is a valid graph JSON',
+    args: ['graph', '--stdout'],
+    exitCodes: [0],
+    cwd: CYCLE_TMP,
+    validate: (r) => {
+      const parsed = parseJsonStdout(r.stdout, 'graph --stdout stdout');
+      if (parsed.error) return parsed.error;
+      if (!Array.isArray(parsed.value.nodes))
+        return 'graph JSON missing nodes array';
+      if (parsed.value.edgeCount < 1)
+        return 'graph JSON found no edges in a project that has imports';
+      return null;
+    },
+  },
+  {
+    name: 'graph --focus <file> --depth 1 → scopes the export to the focus',
+    args: ['graph', '--focus', 'src/alpha.ts', '--depth', '1', '--stdout'],
+    exitCodes: [0],
+    cwd: CYCLE_TMP,
+    validate: (r) => {
+      const parsed = parseJsonStdout(r.stdout, 'graph --focus stdout');
+      if (parsed.error) return parsed.error;
+      if (parsed.value.focus !== 'src/alpha.ts')
+        return `focus is "${parsed.value.focus}", expected "src/alpha.ts"`;
+      if (parsed.value.depth !== 1)
+        return `depth is ${parsed.value.depth}, expected 1`;
+      return null;
+    },
+  },
+  {
+    name: 'graph --focus <unknown> → exit 1 with no-match error',
+    args: ['graph', '--focus', 'this-file-does-not-exist-xyz.ts'],
+    exitCodes: [1],
+    cwd: FIXTURE_TMP,
+    combined: [/no file in the import graph matches/i],
+  },
+  {
+    name: 'graph --depth <invalid> → exit 1 with validation error',
+    args: ['graph', '--depth', 'abc'],
+    exitCodes: [1],
+    cwd: FIXTURE_TMP,
+    combined: [/--depth must be a non-negative integer/i],
+  },
+  {
+    name: 'graph --output <custom> → writes to the specified path',
+    args: ['graph', '--output', path.join(FIXTURE_TMP, 'custom-graph.json')],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'custom-graph.json');
+      if (!fs.existsSync(file)) return 'custom-graph.json was not created';
+      return null;
+    },
+  },
+
+  {
+    name: 'visualize <file> → writes ngcompass-visualize.html',
+    args: ['visualize', FIXTURE_ENTRY],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    prepare: () =>
+      fs.rmSync(path.join(FIXTURE_TMP, 'ngcompass-visualize.html'), {
+        force: true,
+      }),
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'ngcompass-visualize.html');
+      if (!fs.existsSync(file))
+        return 'ngcompass-visualize.html was not created';
+      const size = fs.statSync(file).size;
+      if (size < 100)
+        return `ngcompass-visualize.html is suspiciously small (${size} bytes)`;
+      return null;
+    },
+  },
+  {
+    name: 'visualize --format json → writes ngcompass-visualize.json',
+    args: ['visualize', FIXTURE_ENTRY, '--format', 'json'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    prepare: () =>
+      fs.rmSync(path.join(FIXTURE_TMP, 'ngcompass-visualize.json'), {
+        force: true,
+      }),
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'ngcompass-visualize.json');
+      if (!fs.existsSync(file))
+        return 'ngcompass-visualize.json was not created';
+      const parsed = readJsonFile(file);
+      if (!Array.isArray(parsed.lanes)) return 'unit export missing lanes';
+      if (!Array.isArray(parsed.edges)) return 'unit export missing edges';
+      return null;
+    },
+  },
+  {
+    name: 'visualize --format console → prints the unit summary',
+    args: ['visualize', FIXTURE_ENTRY, '--format', 'console'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    combined: [/Unit/, /lanes/],
+  },
+  {
+    name: 'visualize --stdout → stdout is a valid unit JSON',
+    args: ['visualize', FIXTURE_ENTRY, '--stdout'],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    validate: (r) => {
+      const parsed = parseJsonStdout(r.stdout, 'visualize --stdout stdout');
+      if (parsed.error) return parsed.error;
+      if (!Array.isArray(parsed.value.lanes))
+        return 'unit JSON missing lanes array';
+      if (!parsed.value.summary) return 'unit JSON missing summary';
+      return null;
+    },
+  },
+  {
+    name: 'visualize --output <custom> → writes to the specified path',
+    args: [
+      'visualize',
+      FIXTURE_ENTRY,
+      '--output',
+      path.join(FIXTURE_TMP, 'custom-unit.html'),
+    ],
+    exitCodes: [0],
+    cwd: FIXTURE_TMP,
+    notCombined: [CRASH_RE],
+    validate: () => {
+      const file = path.join(FIXTURE_TMP, 'custom-unit.html');
+      if (!fs.existsSync(file)) return 'custom-unit.html was not created';
+      return null;
+    },
+  },
+  {
+    name: 'visualize --format <invalid> → exit 1 with unknown-format error',
+    args: ['visualize', FIXTURE_ENTRY, '--format', 'totally-invalid'],
+    exitCodes: [1],
+    cwd: FIXTURE_TMP,
+    combined: [/unknown format/i],
+  },
+  {
+    name: 'visualize <missing file> → exit 1 without crashing',
+    args: ['visualize', 'src/this-file-does-not-exist-xyz.ts'],
+    exitCodes: [1],
+    cwd: FIXTURE_TMP,
+    combined: [/visualize:/i],
+    notCombined: [CRASH_RE],
+  },
 ];
 
 async function runTests() {
@@ -563,6 +1046,7 @@ async function runTests() {
   }
 
   await setupFixture();
+  await setupCycleFixture();
 
   fs.mkdirSync(path.join(ZERO_ANGULAR_TMP, 'src'), { recursive: true });
   await runCli(['init', '--cwd', ZERO_ANGULAR_TMP, '--force']);
@@ -581,6 +1065,8 @@ async function runTests() {
   const results = [];
 
   for (const test of tests) {
+    if (test.prepare) await test.prepare();
+
     const { exitCode, stdout, stderr, combined } = await runCli(
       test.args,
       test.cwd ?? ROOT
@@ -658,7 +1144,7 @@ async function runTests() {
 
   w('');
 
-  for (const dir of [INIT_TMP, FIXTURE_TMP, ZERO_ANGULAR_TMP]) {
+  for (const dir of [INIT_TMP, FIXTURE_TMP, ZERO_ANGULAR_TMP, CYCLE_TMP]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
     } catch {}
