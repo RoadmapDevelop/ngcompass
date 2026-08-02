@@ -19,6 +19,7 @@ export {
 } from './interfaces.js';
 export * from './errors.js';
 export * from './types.js';
+export * from './unit-graph.js';
 export * from './ast/utils.js';
 export * from './logger.js';
 export * from './utils/stable-serialize.js';

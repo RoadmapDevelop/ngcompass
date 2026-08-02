@@ -1,5 +1,5 @@
 import { promises as fs } from 'node:fs';
-import { Locator } from '@ngcompass/common';
+import { debug, Locator } from '@ngcompass/common';
 import { parseTs } from '@ngcompass/ast';
 import {
   computeFileCallGraph,
@@ -12,14 +12,16 @@ export async function analyzeFileCallGraph(
   let content: string;
   try {
     content = await fs.readFile(absFile, 'utf8');
-  } catch {
+  } catch (error: unknown) {
+    debug('engine', `Callgraph could not read ${absFile}: ${String(error)}`);
     return null;
   }
 
   try {
     const { program } = parseTs(content, absFile);
     return computeFileCallGraph(program, new Locator(content));
-  } catch {
+  } catch (error: unknown) {
+    debug('engine', `Callgraph could not parse ${absFile}: ${String(error)}`);
     return null;
   }
 }

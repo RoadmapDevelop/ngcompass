@@ -20,6 +20,7 @@ const DEFAULT_OUTPUT_PATH = 'ngcompass-complexity.json';
 const DEFAULT_SORT: SortMetric = 'cognitive';
 const CONSOLE_FILE_LIMIT = 15;
 const CONSOLE_FUNCTION_LIMIT = 5;
+const TWO_DECIMAL_FACTOR = 100;
 
 interface ComplexityOptions {
   readonly profile?: string;
@@ -134,12 +135,12 @@ export function registerComplexityCommand(
           return;
         }
 
+        printSummary(report, reporter);
         await writeJsonFile(
           toComplexityJson(report, process.cwd()),
           rawOptions.output,
           reporter
         );
-        printSummary(report, reporter);
       } catch (error: unknown) {
         reporter.error(
           error instanceof Error ? error : new Error(String(error))
@@ -198,6 +199,48 @@ function worstMetric(fn: FunctionComplexity): number {
   return Math.max(fn.cyclomatic, fn.cognitive);
 }
 
+function buildFileReport(
+  file: FileComplexity,
+  sort: SortMetric,
+  min: number
+): FileReport | null {
+  const included = file.functions.filter((fn) => worstMetric(fn) >= min);
+  if (included.length === 0) return null;
+
+  const ranked = [...included].sort(
+    (a, b) => metricOf(b, sort) - metricOf(a, sort) || worstMetric(b) - worstMetric(a)
+  );
+
+  let fileCyclomatic = 0;
+  let fileCognitive = 0;
+  let maxCyclomatic = 0;
+  let maxCognitive = 0;
+  for (const fn of ranked) {
+    fileCyclomatic += fn.cyclomatic;
+    fileCognitive += fn.cognitive;
+    if (fn.cyclomatic > maxCyclomatic) maxCyclomatic = fn.cyclomatic;
+    if (fn.cognitive > maxCognitive) maxCognitive = fn.cognitive;
+  }
+
+  return {
+    filePath: file.filePath,
+    fileCyclomatic,
+    fileCognitive,
+    maxCyclomatic,
+    maxCognitive,
+    functionCount: ranked.length,
+    functions: ranked,
+  };
+}
+
+function sortFileReports(files: FileReport[], sort: SortMetric): void {
+  const fileMetric = (file: FileReport): number =>
+    sort === 'cyclomatic' ? file.maxCyclomatic : file.maxCognitive;
+  const fileSum = (file: FileReport): number =>
+    sort === 'cyclomatic' ? file.fileCyclomatic : file.fileCognitive;
+  files.sort((a, b) => fileMetric(b) - fileMetric(a) || fileSum(b) - fileSum(a));
+}
+
 function buildReport(
   fileComplexities: readonly FileComplexity[],
   sort: SortMetric,
@@ -211,46 +254,18 @@ function buildReport(
   let sumCognitive = 0;
 
   for (const file of fileComplexities) {
-    const included = file.functions.filter((fn) => worstMetric(fn) >= min);
-    if (included.length === 0) continue;
+    const report = buildFileReport(file, sort, min);
+    if (!report) continue;
 
-    const ranked = [...included].sort(
-      (a, b) => metricOf(b, sort) - metricOf(a, sort) || worstMetric(b) - worstMetric(a)
-    );
-
-    let fileCyclomatic = 0;
-    let fileCognitive = 0;
-    let fileMaxCyclomatic = 0;
-    let fileMaxCognitive = 0;
-    for (const fn of ranked) {
-      fileCyclomatic += fn.cyclomatic;
-      fileCognitive += fn.cognitive;
-      if (fn.cyclomatic > fileMaxCyclomatic) fileMaxCyclomatic = fn.cyclomatic;
-      if (fn.cognitive > fileMaxCognitive) fileMaxCognitive = fn.cognitive;
-    }
-
-    functionCount += ranked.length;
-    sumCyclomatic += fileCyclomatic;
-    sumCognitive += fileCognitive;
-    if (fileMaxCyclomatic > maxCyclomatic) maxCyclomatic = fileMaxCyclomatic;
-    if (fileMaxCognitive > maxCognitive) maxCognitive = fileMaxCognitive;
-
-    files.push({
-      filePath: file.filePath,
-      fileCyclomatic,
-      fileCognitive,
-      maxCyclomatic: fileMaxCyclomatic,
-      maxCognitive: fileMaxCognitive,
-      functionCount: ranked.length,
-      functions: ranked,
-    });
+    files.push(report);
+    functionCount += report.functionCount;
+    sumCyclomatic += report.fileCyclomatic;
+    sumCognitive += report.fileCognitive;
+    if (report.maxCyclomatic > maxCyclomatic) maxCyclomatic = report.maxCyclomatic;
+    if (report.maxCognitive > maxCognitive) maxCognitive = report.maxCognitive;
   }
 
-  const fileMetric = (file: FileReport): number =>
-    sort === 'cyclomatic' ? file.maxCyclomatic : file.maxCognitive;
-  const fileSum = (file: FileReport): number =>
-    sort === 'cyclomatic' ? file.fileCyclomatic : file.fileCognitive;
-  files.sort((a, b) => fileMetric(b) - fileMetric(a) || fileSum(b) - fileSum(a));
+  sortFileReports(files, sort);
 
   return {
     sortedBy: sort,
@@ -267,7 +282,7 @@ function buildReport(
 
 function roundAverage(sum: number, count: number): number {
   if (count === 0) return 0;
-  return Math.round((sum / count) * 100) / 100;
+  return Math.round((sum / count) * TWO_DECIMAL_FACTOR) / TWO_DECIMAL_FACTOR;
 }
 
 function toComplexityJson(report: ComplexityReport, rootDir: string): string {
@@ -283,7 +298,6 @@ function toComplexityJson(report: ComplexityReport, rootDir: string): string {
       maxCognitive: report.maxCognitive,
       avgCyclomatic: report.avgCyclomatic,
       avgCognitive: report.avgCognitive,
-      functionsOverMin: report.functionCount,
     },
     files: report.files.map((file) => ({
       filePath: file.filePath,

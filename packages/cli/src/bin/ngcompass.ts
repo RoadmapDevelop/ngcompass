@@ -60,13 +60,23 @@ const printRunBanner = async (commandName: string): Promise<void> => {
   );
 };
 
-const isBannerSuppressedFormat = (format: unknown): boolean => {
-  return (
-    format === 'json' ||
-    format === 'sarif' ||
-    format === 'html' ||
-    format === 'ui'
-  );
+const STDOUT_FORMATS: ReadonlySet<string> = new Set([
+  'json',
+  'sarif',
+  'html',
+  'ui',
+]);
+
+const FILE_OUTPUT_COMMANDS: ReadonlySet<string> = new Set(['visualize']);
+
+const isBannerSuppressed = (
+  commandName: string,
+  stdout: unknown,
+  format: unknown
+): boolean => {
+  if (stdout === true) return true;
+  if (FILE_OUTPUT_COMMANDS.has(commandName)) return false;
+  return typeof format === 'string' && STDOUT_FORMATS.has(format);
 };
 
 export async function run(): Promise<void> {
@@ -92,12 +102,15 @@ export async function run(): Promise<void> {
       }
 
       const actionOpts = actionCommand.opts();
-      if (!actionOpts.stdout && !isBannerSuppressedFormat(actionOpts.format)) {
-        const parent = actionCommand.parent;
-        const commandName =
-          parent && parent.name() !== 'ngcompass'
-            ? parent.name()
-            : actionCommand.name();
+      const parent = actionCommand.parent;
+      const commandName =
+        parent && parent.name() !== 'ngcompass'
+          ? parent.name()
+          : actionCommand.name();
+
+      if (
+        !isBannerSuppressed(commandName, actionOpts.stdout, actionOpts.format)
+      ) {
         await printRunBanner(commandName);
       }
     });

@@ -34,6 +34,11 @@ export {
 } from './file-type.js';
 
 export {
+  extractStyleUrls,
+  extractTemplateUrl,
+} from './decorator-references.js';
+
+export {
   discoverResources,
   getSpecFile,
   getStyleFiles,

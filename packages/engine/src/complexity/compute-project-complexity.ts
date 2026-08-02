@@ -47,7 +47,8 @@ async function analyzeFile(
   let content: string;
   try {
     content = await fs.readFile(file, 'utf8');
-  } catch {
+  } catch (error: unknown) {
+    debug('engine', `Complexity skipped unreadable file ${file}: ${String(error)}`);
     return null;
   }
 
@@ -56,7 +57,8 @@ async function analyzeFile(
     const functions = computeFileComplexity(program, new Locator(content));
     if (functions.length === 0) return null;
     return { filePath: toRelative(file, rootDir), functions };
-  } catch {
+  } catch (error: unknown) {
+    debug('engine', `Complexity skipped unparseable file ${file}: ${String(error)}`);
     return null;
   }
 }

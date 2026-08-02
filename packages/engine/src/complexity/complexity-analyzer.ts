@@ -1,13 +1,19 @@
 import type { Program } from 'oxc-parser';
 import { Locator } from '@ngcompass/common';
+import {
+  type AstNodeLike,
+  type FunctionKind,
+  FUNCTION_TYPES,
+  NAMED_MEMBER_PARENTS,
+  NON_CHILD_KEYS,
+  appendChildNodes,
+  isNode,
+  resolveFunctionName,
+  spanOffset,
+  walkWithParent,
+} from '../shared/ast-functions.js';
 
-export type FunctionKind =
-  | 'function'
-  | 'method'
-  | 'getter'
-  | 'setter'
-  | 'constructor'
-  | 'arrow';
+export type { FunctionKind } from '../shared/ast-functions.js';
 
 export interface FunctionComplexity {
   readonly name: string;
@@ -19,29 +25,6 @@ export interface FunctionComplexity {
   readonly cyclomatic: number;
   readonly cognitive: number;
 }
-
-interface AstNodeLike {
-  readonly type: string;
-  readonly [key: string]: unknown;
-}
-
-const ANONYMOUS_NAME = '<anonymous>';
-
-const NON_CHILD_KEYS: ReadonlySet<string> = new Set([
-  'type',
-  'start',
-  'end',
-  'span',
-  'loc',
-  'range',
-  'parent',
-]);
-
-const FUNCTION_TYPES: ReadonlySet<string> = new Set([
-  'FunctionDeclaration',
-  'FunctionExpression',
-  'ArrowFunctionExpression',
-]);
 
 const CYCLOMATIC_DECISIONS: ReadonlySet<string> = new Set([
   'IfStatement',
@@ -64,120 +47,6 @@ const LOOP_TYPES: ReadonlySet<string> = new Set([
 
 const LOGICAL_OPERATORS: ReadonlySet<string> = new Set(['&&', '||', '??']);
 
-const NAMED_MEMBER_PARENTS: ReadonlySet<string> = new Set([
-  'MethodDefinition',
-  'PropertyDefinition',
-  'Property',
-]);
-
-function spanOffset(node: AstNodeLike, key: 'start' | 'end'): number {
-  const direct = node[key];
-  if (typeof direct === 'number') return direct;
-  const span = node.span;
-  if (typeof span === 'object' && span !== null) {
-    const value = (span as { readonly [k: string]: unknown })[key];
-    if (typeof value === 'number') return value;
-  }
-  return 0;
-}
-
-function isNode(value: unknown): value is AstNodeLike {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { type?: unknown }).type === 'string'
-  );
-}
-
-function* childNodesOf(node: AstNodeLike): Iterable<AstNodeLike> {
-  for (const key in node) {
-    if (NON_CHILD_KEYS.has(key)) continue;
-    const value = node[key];
-    if (Array.isArray(value)) {
-      for (const element of value) {
-        if (isNode(element)) yield element;
-      }
-    } else if (isNode(value)) {
-      yield value;
-    }
-  }
-}
-
-function keyName(key: unknown): string {
-  if (!isNode(key)) return ANONYMOUS_NAME;
-  if (key.type === 'Identifier' && typeof key.name === 'string') return key.name;
-  if (key.type === 'PrivateIdentifier' && typeof key.name === 'string') {
-    return `#${key.name}`;
-  }
-  if (
-    (key.type === 'Literal' || key.type === 'StringLiteral') &&
-    typeof key.value === 'string'
-  ) {
-    return key.value;
-  }
-  return ANONYMOUS_NAME;
-}
-
-function identifierName(id: unknown): string {
-  if (isNode(id) && id.type === 'Identifier' && typeof id.name === 'string') {
-    return id.name;
-  }
-  return '';
-}
-
-function assignmentTargetName(target: unknown): string {
-  if (!isNode(target)) return ANONYMOUS_NAME;
-  if (target.type === 'Identifier' && typeof target.name === 'string') {
-    return target.name;
-  }
-  if (
-    target.type === 'MemberExpression' ||
-    target.type === 'StaticMemberExpression'
-  ) {
-    return keyName(target.property);
-  }
-  return ANONYMOUS_NAME;
-}
-
-function baseKind(type: string): FunctionKind {
-  return type === 'ArrowFunctionExpression' ? 'arrow' : 'function';
-}
-
-function methodKind(rawKind: unknown): FunctionKind {
-  if (rawKind === 'get') return 'getter';
-  if (rawKind === 'set') return 'setter';
-  if (rawKind === 'constructor') return 'constructor';
-  return 'method';
-}
-
-function resolveNameAndKind(
-  node: AstNodeLike,
-  parent: AstNodeLike | undefined
-): { readonly name: string; readonly kind: FunctionKind } {
-  if (parent) {
-    if (parent.type === 'MethodDefinition') {
-      return { name: keyName(parent.key), kind: methodKind(parent.kind) };
-    }
-    if (parent.type === 'PropertyDefinition') {
-      return { name: keyName(parent.key), kind: baseKind(node.type) };
-    }
-    if (parent.type === 'Property') {
-      if (parent.kind === 'get') return { name: keyName(parent.key), kind: 'getter' };
-      if (parent.kind === 'set') return { name: keyName(parent.key), kind: 'setter' };
-      const kind = parent.method === true ? 'method' : baseKind(node.type);
-      return { name: keyName(parent.key), kind };
-    }
-    if (parent.type === 'VariableDeclarator') {
-      return { name: identifierName(parent.id) || ANONYMOUS_NAME, kind: baseKind(node.type) };
-    }
-    if (parent.type === 'AssignmentExpression' && parent.operator === '=') {
-      return { name: assignmentTargetName(parent.left), kind: baseKind(node.type) };
-    }
-  }
-  const ownName = identifierName(node.id);
-  return { name: ownName || ANONYMOUS_NAME, kind: baseKind(node.type) };
-}
-
 function computeCyclomatic(body: AstNodeLike): number {
   let count = 1;
   const stack: AstNodeLike[] = [body];
@@ -185,7 +54,6 @@ function computeCyclomatic(body: AstNodeLike): number {
   while (stack.length > 0) {
     const node = stack.pop();
     if (!node) continue;
-
     if (node !== body && FUNCTION_TYPES.has(node.type)) continue;
 
     const type = node.type;
@@ -199,9 +67,7 @@ function computeCyclomatic(body: AstNodeLike): number {
       }
     }
 
-    for (const child of childNodesOf(node)) {
-      stack.push(child);
-    }
+    appendChildNodes(node, stack);
   }
 
   return count;
@@ -210,13 +76,25 @@ function computeCyclomatic(body: AstNodeLike): number {
 function computeCognitive(body: AstNodeLike): number {
   let total = 0;
 
+  const visitChildren = (node: AstNodeLike, nesting: number): void => {
+    for (const key in node) {
+      if (NON_CHILD_KEYS.has(key)) continue;
+      const value = node[key];
+      if (Array.isArray(value)) {
+        for (let i = 0; i < value.length; i++) visit(value[i], nesting, null);
+      } else {
+        visit(value, nesting, null);
+      }
+    }
+  };
+
   const visitNested = (node: AstNodeLike, nesting: number): void => {
     for (const key in node) {
       if (NON_CHILD_KEYS.has(key)) continue;
       const childNesting = key === 'body' ? nesting + 1 : nesting;
       const value = node[key];
       if (Array.isArray(value)) {
-        for (const element of value) visit(element, childNesting, null);
+        for (let i = 0; i < value.length; i++) visit(value[i], childNesting, null);
       } else {
         visit(value, childNesting, null);
       }
@@ -236,6 +114,41 @@ function computeCognitive(body: AstNodeLike): number {
     visit(alternate, nesting + 1, null);
   };
 
+  const visitIf = (value: AstNodeLike, nesting: number): void => {
+    total += 1 + nesting;
+    visit(value.test, nesting, null);
+    visit(value.consequent, nesting + 1, null);
+    visitElse(value.alternate, nesting);
+  };
+
+  const visitConditional = (value: AstNodeLike, nesting: number): void => {
+    total += 1 + nesting;
+    visit(value.test, nesting, null);
+    visit(value.consequent, nesting + 1, null);
+    visit(value.alternate, nesting + 1, null);
+  };
+
+  const visitSwitch = (value: AstNodeLike, nesting: number): void => {
+    total += 1 + nesting;
+    visit(value.discriminant, nesting, null);
+    if (Array.isArray(value.cases)) {
+      for (let i = 0; i < value.cases.length; i++) {
+        visit(value.cases[i], nesting + 1, null);
+      }
+    }
+  };
+
+  const visitLogical = (
+    value: AstNodeLike,
+    nesting: number,
+    parentOperator: string | null
+  ): void => {
+    const operator = typeof value.operator === 'string' ? value.operator : null;
+    if (operator !== null && operator !== parentOperator) total += 1;
+    visit(value.left, nesting, operator);
+    visit(value.right, nesting, operator);
+  };
+
   const visit = (
     value: unknown,
     nesting: number,
@@ -244,56 +157,18 @@ function computeCognitive(body: AstNodeLike): number {
     if (!isNode(value)) return;
     const type = value.type;
     if (FUNCTION_TYPES.has(type)) return;
-
-    switch (type) {
-      case 'IfStatement': {
-        total += 1 + nesting;
-        visit(value.test, nesting, null);
-        visit(value.consequent, nesting + 1, null);
-        visitElse(value.alternate, nesting);
-        return;
-      }
-      case 'ConditionalExpression': {
-        total += 1 + nesting;
-        visit(value.test, nesting, null);
-        visit(value.consequent, nesting + 1, null);
-        visit(value.alternate, nesting + 1, null);
-        return;
-      }
-      case 'SwitchStatement': {
-        total += 1 + nesting;
-        visit(value.discriminant, nesting, null);
-        if (Array.isArray(value.cases)) {
-          for (const switchCase of value.cases) visit(switchCase, nesting + 1, null);
-        }
-        return;
-      }
-      case 'LogicalExpression': {
-        const operator =
-          typeof value.operator === 'string' ? value.operator : null;
-        if (operator !== null && operator !== parentLogicalOperator) {
-          total += 1;
-        }
-        visit(value.left, nesting, operator);
-        visit(value.right, nesting, operator);
-        return;
-      }
-      case 'CatchClause': {
-        total += 1 + nesting;
-        visitNested(value, nesting);
-        return;
-      }
-      default: {
-        if (LOOP_TYPES.has(type)) {
-          total += 1 + nesting;
-          visitNested(value, nesting);
-          return;
-        }
-        for (const child of childNodesOf(value)) {
-          visit(child, nesting, null);
-        }
-      }
+    if (type === 'IfStatement') return visitIf(value, nesting);
+    if (type === 'ConditionalExpression') return visitConditional(value, nesting);
+    if (type === 'SwitchStatement') return visitSwitch(value, nesting);
+    if (type === 'LogicalExpression') {
+      return visitLogical(value, nesting, parentLogicalOperator);
     }
+    if (type === 'CatchClause' || LOOP_TYPES.has(type)) {
+      total += 1 + nesting;
+      visitNested(value, nesting);
+      return;
+    }
+    visitChildren(value, nesting);
   };
 
   visit(body, 0, null);
@@ -313,7 +188,7 @@ function recordFunction(
   const body = functionBody(node);
   if (!body) return;
 
-  const { name, kind } = resolveNameAndKind(node, parent);
+  const { name, kind } = resolveFunctionName(node, parent);
 
   const locationNode =
     parent && NAMED_MEMBER_PARENTS.has(parent.type) ? parent : node;
@@ -332,27 +207,16 @@ function recordFunction(
   });
 }
 
-function collectFunctions(
-  node: AstNodeLike,
-  parent: AstNodeLike | undefined,
-  locator: Locator,
-  out: FunctionComplexity[]
-): void {
-  if (FUNCTION_TYPES.has(node.type)) {
-    recordFunction(node, parent, locator, out);
-  }
-  for (const child of childNodesOf(node)) {
-    collectFunctions(child, node, locator, out);
-  }
-}
-
 export function computeFileComplexity(
   program: Program,
   locator: Locator
 ): readonly FunctionComplexity[] {
   const out: FunctionComplexity[] = [];
-  if (isNode(program)) {
-    collectFunctions(program, undefined, locator, out);
-  }
+  if (!isNode(program)) return out;
+
+  walkWithParent(program, undefined, (node, parent) => {
+    if (FUNCTION_TYPES.has(node.type)) recordFunction(node, parent, locator, out);
+  });
+
   return out;
 }

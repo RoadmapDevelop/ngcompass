@@ -98,6 +98,19 @@ describe('computeFileCallGraph', () => {
     expect(graph.nodes.some((n) => n.name === 'run callback')).toBe(false);
   });
 
+  it('links a top-level call to a same-file definition instead of marking it external', () => {
+    const graph = analyze(`
+      function helper() { return 1; }
+      helper();
+    `);
+
+    const helper = nodeByName(graph, 'helper');
+    const edge = graph.edges.find((e) => e.to === helper.id);
+
+    expect(edge?.from).toBeNull();
+    expect(graph.externalCalls.some((c) => c.callName === 'helper')).toBe(false);
+  });
+
   it('flags edges as ambiguous when multiple definitions share a name', () => {
     const graph = analyze(`
       class A { run() { return this.step(); } step() { return 1; } }

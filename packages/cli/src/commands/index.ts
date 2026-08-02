@@ -9,7 +9,7 @@ import { CacheContext } from '@ngcompass/cache';
 import { registerCircularCommand } from './circular.js';
 import { registerGraphCommand } from './graph.js';
 import { registerComplexityCommand } from './complexity.js';
-import { registerCallGraphCommand } from './callgraph.js';
+import { registerVisualizeCommand } from './visualize.js';
 
 export function registerCommands(program: Command, cache: CacheContext): void {
   registerInitCommand(program, cache);
@@ -20,5 +20,5 @@ export function registerCommands(program: Command, cache: CacheContext): void {
   registerCircularCommand(program, cache);
   registerGraphCommand(program, cache);
   registerComplexityCommand(program, cache);
-  registerCallGraphCommand(program);
+  registerVisualizeCommand(program);
 }
