@@ -109,6 +109,26 @@ export async function discoverFilesStep(
   return scanResult.data.files;
 }
 
+function reportAngularVersionGating(
+  angularVersion: string | null,
+  skippedByVersion: ReadonlyArray<string>,
+  reporter: Reporter
+): void {
+  if (angularVersion === null) {
+    reporter.info(
+      '❯ Angular version could not be determined - running all rules. Set "angularVersion" in your config to enable version-aware rule selection.'
+    );
+    return;
+  }
+
+  if (skippedByVersion.length === 0) return;
+
+  reporter.info(
+    `❯ Angular ${angularVersion} detected - ${skippedByVersion.length} rules skipped (require a newer Angular)`
+  );
+  reporter.debug(`Skipped by version: ${skippedByVersion.join(', ')}`);
+}
+
 export async function resolveRulesStep(
   config: NormalizedAnalyzerConfig,
   options: AnalyzeOptions,
@@ -141,6 +161,11 @@ export async function resolveRulesStep(
   const enabledRules = getEnabledRules(rulesResult.data.rules);
   reporter.info(
     `❯ Loaded ${enabledRules.size} active rules in ${(performance.now() - tStart).toFixed(0)}ms`
+  );
+  reportAngularVersionGating(
+    config.angularVersion,
+    rulesResult.data.metadata.skippedByVersion,
+    reporter
   );
   reporter.debug(
     `Rule resolution: ${(performance.now() - tStart).toFixed(2)}ms`

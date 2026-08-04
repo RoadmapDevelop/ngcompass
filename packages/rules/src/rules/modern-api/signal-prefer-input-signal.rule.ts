@@ -77,5 +77,5 @@ export const signalPreferInputSignalRule = createAnyAngularClassRule(
     }
     return failures.length > 0 ? failures : null;
   },
-  { requires: { projectContext: true } }
+  { requires: { projectContext: true }, minAngularVersion: '17.1' }
 );

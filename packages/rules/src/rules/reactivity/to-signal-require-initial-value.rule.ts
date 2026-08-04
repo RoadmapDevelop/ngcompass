@@ -47,5 +47,6 @@ export const toSignalRequireInitialValueRule = createCallExpressionRule(
     }
 
     return null;
-  }
+  },
+  { minAngularVersion: '16.0' }
 );

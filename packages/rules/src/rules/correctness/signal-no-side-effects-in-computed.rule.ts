@@ -51,7 +51,7 @@ export const signalNoSideEffectsInComputedRule = createCallExpressionRule(
 
     return createFailure(violation, call, context);
   },
-  { requires: { typeChecker: true } }
+  { requires: { typeChecker: true }, minAngularVersion: '16.0' }
 );
 
 function findFirstViolation(

@@ -58,7 +58,17 @@ describe('Analyze Command', () => {
     rulesMap.set('test-rule', { id: 'test-rule' });
     vi.spyOn(rulesModule, 'resolveRules').mockResolvedValue({
       ok: true,
-      data: { rules: {} },
+      data: {
+        rules: {},
+        metadata: {
+          totalRules: 0,
+          enabledRules: 0,
+          disabledRules: 0,
+          presetsLoaded: [],
+          resolutionTime: 0,
+          skippedByVersion: [],
+        },
+      },
     } as any);
     vi.spyOn(rulesModule, 'getEnabledRules').mockReturnValue(rulesMap);
 

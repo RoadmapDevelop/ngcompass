@@ -72,5 +72,6 @@ export const noContentDecoratorRule = createAnyAngularClassRule(
     }
 
     return failures.length > 0 ? failures : null;
-  }
+  },
+  { minAngularVersion: '17.2' }
 );

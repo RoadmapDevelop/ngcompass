@@ -42,5 +42,6 @@ export const templatePreferControlFlowRule = createTemplateAttributeRule(
   },
   {
     requires: { htmlAst: true },
+    minAngularVersion: '17.0',
   }
 );

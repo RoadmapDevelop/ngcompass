@@ -1,4 +1,5 @@
 export * from './actions/healthcheck.js';
+export * from './angular/detect-version.js';
 export * from './actions/init.js';
 export * from './define-config.js';
 export * from './health/index.js';

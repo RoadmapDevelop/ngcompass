@@ -106,5 +106,6 @@ export const signalAvoidUntrackedRule = createCallExpressionRule(
       severity: 'warn',
       fix: RECOMMENDATIONS['signal-avoid-untracked-overuse'],
     };
-  }
+  },
+  { minAngularVersion: '16.0' }
 );
