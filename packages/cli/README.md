@@ -5,7 +5,7 @@
     <a href="https://www.npmjs.com/package/ngcompass"><img src="https://img.shields.io/npm/v/ngcompass/beta?label=beta&color=ec4899&style=flat-square" alt="npm beta"></a>
     <img src="https://img.shields.io/badge/Angular-v15%2B-dd0031?style=flat-square" alt="Angular v15+">
     <img src="https://img.shields.io/badge/Node.js-20%2B-339933?style=flat-square" alt="Node.js 20+">
-    <img src="https://img.shields.io/badge/license-PolyForm%20Shield%201.0.0-6366f1?style=flat-square" alt="PolyForm Shield 1.0.0">
+    <img src="https://img.shields.io/badge/license-MIT-6366f1?style=flat-square" alt="MIT">
   </p>
 </div>
 
