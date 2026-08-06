@@ -98,5 +98,5 @@ export const rxjsRequireTakeUntilDestroyedRule = createCallExpressionRule(
       fix: RECOMMENDATIONS['rxjs-require-takeUntilDestroyed'],
     };
   },
-  { requires: { typeChecker: true } }
+  { requires: { typeChecker: true }, minAngularVersion: '16.0' }
 );

@@ -49,7 +49,7 @@ export const signalPreferOutputFunctionRule = createAnyAngularClassRule(
     }
     return failures.length > 0 ? failures : null;
   },
-  { requires: { typeChecker: true } }
+  { requires: { typeChecker: true }, minAngularVersion: '17.3' }
 );
 
 function hasAngularOutputDecorator(

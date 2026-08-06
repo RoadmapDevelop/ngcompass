@@ -123,5 +123,6 @@ export const signalEffectDestroyScopedRule = createAnyAngularClassRule(
     }
 
     return failures.length > 0 ? failures : null;
-  }
+  },
+  { minAngularVersion: '16.0' }
 );

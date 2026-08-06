@@ -72,5 +72,6 @@ export const noViewDecoratorRule = createAnyAngularClassRule(
     }
 
     return failures.length > 0 ? failures : null;
-  }
+  },
+  { minAngularVersion: '17.2' }
 );

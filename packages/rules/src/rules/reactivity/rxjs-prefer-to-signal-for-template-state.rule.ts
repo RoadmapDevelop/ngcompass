@@ -58,7 +58,10 @@ export const rxjsPreferToSignalRule = createAnyAngularClassRule(
 
     return failures.length ? failures : null;
   },
-  { requires: { projectContext: true, htmlAst: true, typeChecker: true } }
+  {
+    requires: { projectContext: true, htmlAst: true, typeChecker: true },
+    minAngularVersion: '16.0',
+  }
 );
 
 function getMemberName(member: ts.PropertyDeclaration): string | undefined {

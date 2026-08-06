@@ -12,6 +12,7 @@ import {
   type RulesConfig,
 } from '@ngcompass/common';
 import { getRuleMetadata, isKnownRule } from '../registry/rule-registry.js';
+import { decideVersionGate } from './angular-version.js';
 import { resolveExtendsChain } from './loader.js';
 import { applyOverrides, mergeRulesConfigs } from './merger.js';
 import { isRuleEnabled } from './normalize.js';
@@ -44,6 +45,8 @@ export const resolveRules = async (
     debug('loader', `Final merged rules: ${finalRules.size} rules`);
 
     const resolvedRules = new Map<string, ResolvedRule>();
+    const skippedByVersion: string[] = [];
+    const userConfiguredRules = config.rules ?? {};
     let enabledCount = 0;
     let disabledCount = 0;
     let unknownRules = 0;
@@ -59,6 +62,28 @@ export const resolveRules = async (
       }
 
       const metadata = getRuleMetadata(ruleName)!;
+      const gate = decideVersionGate(
+        metadata,
+        config.angularVersion,
+        Object.hasOwn(userConfiguredRules, ruleName)
+      );
+
+      if (gate === 'skip') {
+        debug(
+          'loader',
+          `Skipping "${ruleName}": requires Angular ${metadata.minAngularVersion}, detected ${config.angularVersion}`
+        );
+        skippedByVersion.push(ruleName);
+        continue;
+      }
+
+      if (gate === 'invalid-floor') {
+        debug(
+          'loader',
+          `Warning: Rule "${ruleName}" declares an unparseable minAngularVersion ("${metadata.minAngularVersion}") and will always run`
+        );
+      }
+
       resolvedRules.set(ruleName, {
         name: ruleName,
         severity: ruleConfig.severity,
@@ -77,6 +102,7 @@ export const resolveRules = async (
     debug('loader', `  Enabled: ${enabledCount}`);
     debug('loader', `  Disabled: ${disabledCount}`);
     debug('loader', `  Unknown (skipped): ${unknownRules}`);
+    debug('loader', `  Skipped by Angular version: ${skippedByVersion.length}`);
     debug('loader', `  Resolution time: ${resolutionTime.toFixed(1)}ms`);
 
     return Ok({
@@ -87,6 +113,7 @@ export const resolveRules = async (
         disabledRules: disabledCount,
         presetsLoaded: presets.map((p) => p.name),
         resolutionTime,
+        skippedByVersion,
       },
     });
   } catch (error) {

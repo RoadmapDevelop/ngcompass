@@ -94,6 +94,10 @@ export {
   mergeRulesConfigs,
   applyOverrides,
 } from './resolution/merger.js';
+export {
+  decideVersionGate,
+  type VersionGateDecision,
+} from './resolution/angular-version.js';
 
 export {
   builtinPresets,

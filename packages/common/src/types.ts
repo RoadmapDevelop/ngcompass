@@ -68,6 +68,7 @@ export interface RuleMetadata {
   readonly dependencyType: RuleDependencyType;
   readonly requires: RuleAstRequirements;
   readonly filePatterns?: RuleFilePatterns;
+  readonly minAngularVersion?: string;
 }
 
 export interface ResolvedRule {
@@ -106,6 +107,7 @@ export interface RuleResolutionResult {
     readonly disabledRules: number;
     readonly presetsLoaded: ReadonlyArray<string>;
     readonly resolutionTime: number;
+    readonly skippedByVersion: ReadonlyArray<string>;
   };
 }
 

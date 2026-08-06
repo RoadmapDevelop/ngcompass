@@ -61,6 +61,8 @@ const BaseAnalyzerConfigSchema = z.object({
     .optional(),
 
   parserOptions: ParserOptionsSchema.optional(),
+
+  angularVersion: z.string().optional(),
 });
 
 export type AnalyzerConfig = z.infer<typeof BaseAnalyzerConfigSchema> & {
@@ -94,5 +96,6 @@ export const AnalyzerConfigSchema = BaseAnalyzerConfigSchema.extend({
     rules: data.rules ?? {},
     overrides: data.overrides ?? [],
     ignorePatterns: data.ignorePatterns ?? [],
+    angularVersion: data.angularVersion ?? null,
   };
 });

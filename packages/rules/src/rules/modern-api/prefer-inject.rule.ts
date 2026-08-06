@@ -59,7 +59,7 @@ export const preferInjectRule = createAnyAngularClassRule(
       codeExample: CODE_EXAMPLES[RULE_NAME],
     };
   },
-  { requires: { typeChecker: true } }
+  { requires: { typeChecker: true }, minAngularVersion: '14.0' }
 );
 
 function isDiParameter(

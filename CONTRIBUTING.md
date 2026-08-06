@@ -269,4 +269,4 @@ When unsure, ask in the PR.
 ## License
 
 By contributing, you agree that your contribution is provided under this
-project's license: PolyForm Shield 1.0.0. See [LICENSE](LICENSE).
+project's license: MIT. See [LICENSE](LICENSE).

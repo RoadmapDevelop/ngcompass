@@ -26,6 +26,7 @@ export interface ValidationContext {
 
 export interface ConfigBlock {
   maxWorkers?: number;
+  angularVersion?: string | null;
   cache?:
     | boolean
     | {

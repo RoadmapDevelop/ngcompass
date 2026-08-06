@@ -8,6 +8,12 @@ import {
 } from '@ngcompass/common';
 import type { ConfigValidationResult } from '@ngcompass/common';
 
+import * as path from 'node:path';
+
+import {
+  detectAngularVersion,
+  type AngularVersionDetection,
+} from '../angular/detect-version.js';
 import { createDefaultContext } from '../health/context.js';
 import { validateConfiguration } from '../health/validator.js';
 import { findAndLoadConfig, type ConfigDiscoveryResult } from './discovery.js';
@@ -32,8 +38,21 @@ export const resolveConfig = async (
   );
 
   const loaded = await findAndLoadConfig(cwd);
+  const detection = detectAngularVersion(
+    resolveAnchorDir(loaded, cwd),
+    readConfiguredAngularVersion(loaded)
+  );
+  debug(
+    'loader',
+    `Angular version: ${detection.version ?? 'unknown'} (source: ${detection.source})${detection.reason ? ` - ${detection.reason}` : ''}`
+  );
 
-  const { hash, cachedResult } = await tryLoadFromCache(loaded, profile, cache);
+  const { hash, cachedResult } = await tryLoadFromCache(
+    loaded,
+    profile,
+    detection,
+    cache
+  );
   if (cachedResult) {
     const resolutionTime = timeEnd('config-resolution');
     debug(
@@ -44,7 +63,8 @@ export const resolveConfig = async (
   }
   debug('loader', 'Cache MISS - running validation');
 
-  const result = await runValidation(loaded, profile, cache);
+  const validated = await runValidation(loaded, profile, cache);
+  const result = applyDetectedAngularVersion(validated, detection.version);
   debug(
     'loader',
     `Validation complete: ${result.report.valid ? 'valid' : `invalid (${result.report.issues.length} issues)`}`
@@ -61,9 +81,35 @@ export const resolveConfig = async (
   return result;
 };
 
+function resolveAnchorDir(
+  loaded: ConfigDiscoveryResult | null,
+  cwd: string
+): string {
+  return loaded?.filepath ? path.dirname(loaded.filepath) : cwd;
+}
+
+function readConfiguredAngularVersion(
+  loaded: ConfigDiscoveryResult | null
+): string | undefined {
+  const raw = loaded?.config;
+  if (typeof raw !== 'object' || raw === null) return undefined;
+
+  const value = (raw as Record<string, unknown>).angularVersion;
+  return typeof value === 'string' ? value : undefined;
+}
+
+function applyDetectedAngularVersion(
+  result: ConfigValidationResult,
+  version: string | null
+): ConfigValidationResult {
+  if (!result.config) return result;
+  return { ...result, config: { ...result.config, angularVersion: version } };
+}
+
 async function tryLoadFromCache(
   loaded: ConfigDiscoveryResult | null,
   profile: string | undefined,
+  detection: AngularVersionDetection,
   cache?: CacheContext
 ): Promise<{ hash?: string; cachedResult?: ConfigValidationResult }> {
   if (!cache) return {};
@@ -73,6 +119,7 @@ async function tryLoadFromCache(
     profile ?? '',
     PACKAGE_VERSION,
     CACHE_VERSION,
+    detection.version ?? 'unknown',
   ].join('::');
 
   const hash = cache.computeHash(hashInput);

@@ -68,6 +68,7 @@ export class RuleRegistry {
       dependencyType: overrides.dependencyType ?? 'standalone',
       requires: { tsAst: true, ...overrides.requires },
       filePatterns: overrides.filePatterns,
+      minAngularVersion: overrides.minAngularVersion,
     };
   }
 

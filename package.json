@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "ngcompass",
   "version": "0.2.3-beta",
   "private": true,
@@ -45,7 +45,7 @@
     "ssr"
   ],
   "author": "ngcompass",
-  "license": "PolyForm-Shield-1.0.0",
+  "license": "MIT",
   "engines": {
     "node": "^20.19.0 || >=22.12.0",
     "pnpm": ">=8.0.0"

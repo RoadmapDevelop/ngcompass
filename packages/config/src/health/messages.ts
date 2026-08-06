@@ -11,6 +11,14 @@ export const MESSAGES = {
     severity: 'error',
   }),
 
+  INVALID_ANGULAR_VERSION: (val: string): IssueTemplate => ({
+    code: 'invalid-angular-version',
+    message: `Value for 'angularVersion' must be a plain version number. Received: "${val}".`,
+    suggestion:
+      'Use a major or major.minor version without a range prefix. Example: "17" or "17.2".',
+    severity: 'error',
+  }),
+
   WORKERS_BELOW_MINIMUM: {
     code: 'workers-below-minimum',
     message: "Value for 'maxWorkers' must be at least 1.",

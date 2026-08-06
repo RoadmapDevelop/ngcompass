@@ -68,7 +68,7 @@ Rules receive pre-filtered nodes in `handle(node, context)`. They must be statel
 
 ## License
 
-PolyForm Shield 1.0.0. Free for any use except building a competing product. See `LICENSE`.
+MIT. See `LICENSE`.
 
 ---
 

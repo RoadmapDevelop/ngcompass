@@ -1,4 +1,4 @@
-import type { ConfigIssue } from '@ngcompass/common';
+import { parseAngularVersion, type ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
 import type {
   ConfigBlock,
@@ -48,6 +48,16 @@ export function validateConfigBlock(
         path: [...basePath, 'cache', 'ttl'],
       });
     }
+  }
+
+  if (
+    typeof block.angularVersion === 'string' &&
+    parseAngularVersion(block.angularVersion) === null
+  ) {
+    issues.push({
+      ...MESSAGES.INVALID_ANGULAR_VERSION(block.angularVersion),
+      path: [...basePath, 'angularVersion'],
+    });
   }
 
   return { issues };

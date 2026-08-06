@@ -76,7 +76,7 @@ export const signalPreferComputedRule = createCallExpressionRule(
       fix: RECOMMENDATIONS[RULE_NAME],
     };
   },
-  { requires: { typeChecker: true } }
+  { requires: { typeChecker: true }, minAngularVersion: '16.0' }
 );
 
 function analyzeEffectBody(node: ts.Node, ctx: Ctx): EffectShape {

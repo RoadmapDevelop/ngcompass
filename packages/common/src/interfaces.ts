@@ -90,6 +90,8 @@ export interface AnalyzerConfig {
   profiles?: Record<string, ProfileConfig>;
 
   telemetry?: TelemetryConfig;
+
+  angularVersion?: string;
 }
 
 export interface ConfigIssue {
@@ -125,6 +127,7 @@ export interface NormalizedAnalyzerConfig extends Omit<
   | 'failOnSeverity'
   | 'maxWarnings'
   | 'rules'
+  | 'angularVersion'
 > {
   cache: Required<CacheOptions>;
 
@@ -137,6 +140,8 @@ export interface NormalizedAnalyzerConfig extends Omit<
   maxWarnings: number;
 
   rules: Record<string, RuleConfig>;
+
+  angularVersion: string | null;
 }
 
 export interface ConfigValidationResult {

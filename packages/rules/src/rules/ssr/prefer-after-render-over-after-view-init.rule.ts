@@ -54,7 +54,7 @@ export const preferAfterRenderOverAfterViewInitRule = createAnyAngularClassRule(
     }
     return failures.length ? failures : null;
   },
-  { requires: { typeChecker: true } }
+  { requires: { typeChecker: true }, minAngularVersion: '16.0' }
 );
 
 function bodyTouchesDom(node: ts.Node, typeChecker: ts.TypeChecker): boolean {

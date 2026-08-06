@@ -25,3 +25,4 @@ export * from './logger.js';
 export * from './utils/stable-serialize.js';
 export * from './utils/locator.js';
 export * from './utils/format.js';
+export * from './utils/angular-version.js';
