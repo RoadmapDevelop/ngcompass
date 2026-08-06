@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "ngcompass",
   "version": "0.2.3-beta",
   "description": "Command line interface for ngcompass",
@@ -62,7 +62,7 @@
     "cli"
   ],
   "author": "ngcompass",
-  "license": "PolyForm-Shield-1.0.0",
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   },

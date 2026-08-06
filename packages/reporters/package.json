@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@ngcompass/reporters",
   "version": "0.2.3-beta",
   "description": "Reporters for ngcompass analysis results",
@@ -43,7 +43,7 @@
     "reporters"
   ],
   "author": "ngcompass",
-  "license": "PolyForm-Shield-1.0.0",
+  "license": "MIT",
   "publishConfig": {
     "access": "public"
   },
