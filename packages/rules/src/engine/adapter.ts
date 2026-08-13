@@ -1,9 +1,7 @@
 import { debug, type RuleContext, type RuleResult } from '@ngcompass/common';
 import { runSinglePassAnalysis, type RuleHandler } from '@ngcompass/engine';
-import {
-  getGlobalRegistry,
-  type RulePlugin,
-} from '../registry/rule-registry.js';
+import { getGlobalRegistry } from '../registry/rule-registry.js';
+import type { RulePlugin } from '../models/index.js';
 
 export const registerNewEngineRule = (
   handler: RuleHandler<unknown>,

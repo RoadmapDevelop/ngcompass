@@ -4,11 +4,11 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   ensureRuleSourceFile,
   getNodeStart,
   isCalleeNamed,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'signal-prefer-computed-over-sync-effect';
 

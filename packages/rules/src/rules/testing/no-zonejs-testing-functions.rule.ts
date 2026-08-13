@@ -2,7 +2,11 @@ import { CallExpression } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
-import { AstNode, getNodeStart, unwrapNode } from '../../rule-utils';
+import {
+  getNodeStart,
+  unwrapNode,
+} from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'no-zonejs-testing-functions';
 

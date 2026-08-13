@@ -3,7 +3,6 @@ import { CallExpression } from '@ngcompass/ast';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   getObjectProperty,
   isLiteralTrue,
   isLiteralNullOrUndefined,
@@ -11,6 +10,7 @@ import {
   getNodeStart,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'toSignal-require-initialValue';
 

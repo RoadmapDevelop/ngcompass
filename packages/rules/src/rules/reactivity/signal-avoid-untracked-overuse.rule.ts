@@ -3,13 +3,13 @@ import { CallExpression } from '@ngcompass/ast';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   getCalleeName,
   getNodeStart,
   isCalleeNamed,
   childNodes,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RENDER_HOOKS = new Set(['afterRender', 'afterNextRender']);
 const RENDER_HOOK_PATTERN = /\bafterNextRender\s*\(|\bafterRender\s*\(/;

@@ -66,9 +66,8 @@ export {
   RuleRegistry,
   getGlobalRegistry,
   resetGlobalRegistry,
-  type RulePlugin,
-  type RegisterOptions,
 } from './registry/rule-registry.js';
+export type { RegisterOptions, RulePlugin } from './models/index.js';
 
 export { registerAllBuiltinRules } from './registry/register-all.js';
 export {
@@ -94,10 +93,8 @@ export {
   mergeRulesConfigs,
   applyOverrides,
 } from './resolution/merger.js';
-export {
-  decideVersionGate,
-  type VersionGateDecision,
-} from './resolution/angular-version.js';
+export { decideVersionGate } from './resolution/angular-version.js';
+export type { VersionGateDecision } from './models/index.js';
 
 export {
   builtinPresets,
@@ -108,3 +105,4 @@ export {
 
 export * from './recommendations.js';
 export * from './rule-utils.js';
+export type { AstNode, MaybeAstNode } from './models/index.js';

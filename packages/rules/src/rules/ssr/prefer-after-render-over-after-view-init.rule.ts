@@ -4,11 +4,11 @@ import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from '../../recommendations';
 import {
-  AstNode,
   ensureRuleSourceFile,
   getNodeStart,
   isDomLibSymbol,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'prefer-after-render-over-after-view-init';
 const LIFECYCLE_HOOKS = new Set(['ngAfterViewInit', 'ngAfterContentInit']);

@@ -3,7 +3,11 @@ import { CallExpression } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
-import { AstNode, getNodeStart, isCalleeNamed } from '../../rule-utils';
+import {
+  getNodeStart,
+  isCalleeNamed,
+} from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'signal-no-side-effects-in-computed';
 

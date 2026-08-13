@@ -4,7 +4,6 @@ import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from '../../recommendations';
 import {
-  AstNode,
   childNodes,
   ensureRuleSourceFile,
   getClassBody,
@@ -14,6 +13,7 @@ import {
   isMemberExpressionLike,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'no-document-access';
 

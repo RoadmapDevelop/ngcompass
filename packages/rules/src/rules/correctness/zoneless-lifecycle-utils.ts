@@ -3,12 +3,12 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   getClassBody,
   getMethodName,
   getNodeStart,
   isMethodDefinition,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 import type { RuleHandler } from '@ngcompass/engine';
 import type { AnyAngularClassNode as ClassStreamNode } from '@ngcompass/ast';
 

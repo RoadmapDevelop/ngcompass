@@ -1,4 +1,5 @@
-import type { PluginManifest, RuleListEntry } from '@ngcompass/common';
+import type { RuleListEntry } from '@ngcompass/common';
+import type { RegisterOptions, RulePlugin } from '../models/index.js';
 import type { RuleHandler } from '@ngcompass/engine';
 import { RuleMetadata, RuleRegistryEntry } from '@ngcompass/common';
 import { RECOMMENDATIONS } from '../recommendations.js';
@@ -6,20 +7,6 @@ import { getPresetsForRule } from '../presets/index.js';
 import { allPreset } from '../presets/all.js';
 
 const DEFAULT_RULE_CONFIG = { severity: 'warn' as const, options: {} };
-
-export interface RulePlugin {
-  readonly name: string;
-
-  readonly handler: RuleHandler<unknown>;
-
-  readonly meta?: Partial<RuleMetadata>;
-
-  readonly manifest?: PluginManifest;
-}
-
-export interface RegisterOptions {
-  allowOverride?: boolean;
-}
 
 export class RuleRegistry {
   private readonly _handlers = new Map<string, RuleHandler<unknown>>();

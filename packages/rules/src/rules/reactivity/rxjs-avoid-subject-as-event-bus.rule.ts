@@ -3,8 +3,6 @@ import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from '../../recommendations';
 import {
-  AstNode,
-  MaybeAstNode,
   childNodes,
   getClassBody,
   getConstructorMember,
@@ -16,6 +14,7 @@ import {
   isMethodDefinition,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode, MaybeAstNode } from '../../models/index.js';
 
 const RULE_NAME = 'rxjs-avoid-subject-as-event-bus';
 

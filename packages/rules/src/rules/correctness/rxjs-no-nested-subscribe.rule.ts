@@ -3,13 +3,13 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   childNodes,
   getNodeStart,
   getStaticPropertyName,
   isMemberExpressionLike,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'rxjs-no-nested-subscribe';
 const SUBSCRIBE_METHOD = 'subscribe';

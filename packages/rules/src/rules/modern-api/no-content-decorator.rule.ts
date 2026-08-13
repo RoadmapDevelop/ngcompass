@@ -3,11 +3,11 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   getClassBody,
   getNodeStart,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'no-content-decorator';
 const CONTENT_DECORATORS = new Set(['ContentChild', 'ContentChildren']);

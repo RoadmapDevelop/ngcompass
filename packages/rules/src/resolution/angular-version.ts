@@ -3,8 +3,7 @@ import {
   parseAngularVersion,
   type RuleMetadata,
 } from '@ngcompass/common';
-
-export type VersionGateDecision = 'run' | 'skip' | 'invalid-floor';
+import type { VersionGateDecision } from '../models/index.js';
 
 export const decideVersionGate = (
   metadata: RuleMetadata,

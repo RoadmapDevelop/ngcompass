@@ -12,16 +12,10 @@ import {
 } from './engine/adapter.js';
 import { registerAllBuiltinRules } from './registry/register-all.js';
 import { buildWorkerFileProgress } from './workers/progress.js';
-
-export interface ExecutionWorkerData {
-  rootDir: string;
-  tasks: Task[];
-}
-
-export interface ExecutionWorkerResult {
-  results: RuleResult[];
-  errors: Array<{ task: Task; error: string }>;
-}
+import type {
+  ExecutionWorkerData,
+  ExecutionWorkerResult,
+} from './models/index.js';
 
 const main = async (): Promise<void> => {
   registerAllBuiltinRules();

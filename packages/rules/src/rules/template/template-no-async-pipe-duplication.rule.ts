@@ -3,12 +3,12 @@ import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   unwrapNode,
   isMemberExpressionLike,
   getStaticPropertyName,
   getTemplateAbsoluteOffset,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const seenByTemplateKey = new WeakMap<RuleContext, Map<string, Set<string>>>();
 

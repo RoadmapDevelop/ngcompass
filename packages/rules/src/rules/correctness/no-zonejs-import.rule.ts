@@ -2,7 +2,10 @@ import { ImportDeclaration } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createImportDeclarationRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
-import { AstNode, getNodeStart } from '../../rule-utils';
+import {
+  getNodeStart,
+} from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'no-zonejs-import';
 
