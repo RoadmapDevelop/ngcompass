@@ -7,9 +7,19 @@ import {
 import { computeHash } from './hashing.js';
 import type { CacheKeyContext } from './models/index.js';
 
-export function buildCacheKeyContext(
+const resolveParserVersion = (): string => {
+  try {
+    const require = createRequire(import.meta.url);
+    const pkg = require('oxc-parser/package.json') as { version?: string };
+    return String(pkg.version ?? 'unknown');
+  } catch {
+    return 'unknown';
+  }
+};
+
+export const buildCacheKeyContext = (
   ruleNames: ReadonlyArray<string>
-): CacheKeyContext {
+): CacheKeyContext => {
   const sortedNames = [...ruleNames].sort();
   const ruleRegistryHash = computeHash(stableSerialize(sortedNames));
 
@@ -20,24 +30,13 @@ export function buildCacheKeyContext(
     parserVersion: resolveParserVersion(),
     platform: process.platform,
   });
-}
+};
 
-export function serializeCacheKeyContext(ctx: CacheKeyContext): string {
-  return [
+export const serializeCacheKeyContext = (ctx: CacheKeyContext): string =>
+  [
     ctx.toolVersion,
     ctx.schemaVersion,
     ctx.parserVersion,
     ctx.ruleRegistryHash,
     ctx.platform,
   ].join('::');
-}
-
-function resolveParserVersion(): string {
-  try {
-    const require = createRequire(import.meta.url);
-    const pkg = require('oxc-parser/package.json') as { version?: string };
-    return String(pkg.version ?? 'unknown');
-  } catch {
-    return 'unknown';
-  }
-}

@@ -61,6 +61,13 @@ const createAsyncMemoryDriver = <T>(
   };
 };
 
+type PrunableDriver = AsyncDriver<AstEntry> & { prune: () => Promise<void> };
+
+const isPrunableDriver = (
+  driver: AsyncDriver<AstEntry>
+): driver is PrunableDriver =>
+  'prune' in driver && typeof driver.prune === 'function';
+
 const resolveDiskRoot = (config: CacheConfig): string => {
   if (config.disk?.path) return config.disk.path;
   return path.resolve(process.cwd(), 'node_modules', '.cache', 'ngcompass');
@@ -147,9 +154,8 @@ export const createCacheContext = (config: CacheConfig = {}): CacheContext => {
   };
 
   const prune = async (): Promise<void> => {
-    const prunable = astL2 as { prune?: () => Promise<void> };
-    if (typeof prunable.prune === 'function') {
-      await prunable.prune();
+    if (isPrunableDriver(astL2)) {
+      await astL2.prune();
     }
   };
 

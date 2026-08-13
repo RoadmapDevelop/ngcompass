@@ -13,7 +13,7 @@ const gunzip = promisify(zlib.gunzip);
 
 const errorCode = (err: unknown): string | undefined => {
   if (err && typeof err === 'object' && 'code' in err) {
-    const code = (err as { code: unknown }).code;
+    const code = err.code;
     return typeof code === 'string' ? code : undefined;
   }
   return undefined;

@@ -6,11 +6,11 @@ import type {
   CreateRuntimeCacheOptions,
 } from './models/index.js';
 
-export function createRuntimeCache(
+export const createRuntimeCache = (
   config: NormalizedAnalyzerConfig,
   cwd: string,
   options: CreateRuntimeCacheOptions = {}
-): CacheContext | undefined {
+): CacheContext | undefined => {
   if (!config.cache.enabled && !options.allowDisabled) {
     return undefined;
   }
@@ -26,4 +26,4 @@ export function createRuntimeCache(
           ttl: config.cache.ttl,
         },
   });
-}
+};

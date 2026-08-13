@@ -2,9 +2,9 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { debug } from '@ngcompass/common';
 
-export async function getDirectoryStats(
+export const getDirectoryStats = async (
   dirPath: string
-): Promise<{ entries: number; size: number }> {
+): Promise<{ entries: number; size: number }> => {
   let entries = 0;
   let size = 0;
 
@@ -14,7 +14,7 @@ export async function getDirectoryStats(
     return { entries: 0, size: 0 };
   }
 
-  async function traverse(currentPath: string): Promise<void> {
+  const traverse = async (currentPath: string): Promise<void> => {
     const files = await fs.readdir(currentPath, { withFileTypes: true });
     for (const file of files) {
       const fullPath = path.join(currentPath, file.name);
@@ -26,7 +26,7 @@ export async function getDirectoryStats(
         size += stats.size;
       }
     }
-  }
+  };
 
   try {
     await traverse(dirPath);
@@ -39,4 +39,4 @@ export async function getDirectoryStats(
   }
 
   return { entries, size };
-}
+};
