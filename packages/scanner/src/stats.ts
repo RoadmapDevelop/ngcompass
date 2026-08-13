@@ -1,6 +1,6 @@
 import { stat } from 'node:fs/promises';
 import path from 'node:path';
-import type { ScanStatistics } from './types.js';
+import type { ScanStatistics } from './models/index.js';
 
 const STAT_CONCURRENCY = 128;
 

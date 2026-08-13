@@ -1,11 +1,6 @@
 import { glob } from 'tinyglobby';
-import {
-  Err,
-  Ok,
-  type ExpandedPatterns,
-  type RawFileList,
-  type Result,
-} from './types.js';
+import { Err, Ok, type Result } from '@ngcompass/common';
+import type { ExpandedPatterns, RawFileList } from './models/index.js';
 
 export const executeGlob = async (
   patterns: ExpandedPatterns,

@@ -1,17 +1,16 @@
-export { scan } from './scan.js';
+export type * from './models/file-filter.js';
+export type * from './models/scan-progress.js';
 export type {
   ExpandedPatterns,
-  GitignoreFilter,
   NormalizedOptions,
-  OnProgressCallback,
-  Result,
   ScanOptions,
-  ScanPhase,
-  ScanResult,
-  ScanStatistics,
-} from './types.js';
+} from './models/scan-options.js';
+export type { ScanResult, ScanStatistics } from './models/scan-result.js';
 
-export { Err, Ok } from './types.js';
+export { Err, Ok } from '@ngcompass/common';
+export type { Result } from '@ngcompass/common';
+
+export { scan } from './scan.js';
 export { normalizeOptions, validateOptions } from './normalize.js';
 export {
   expandPatterns,

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import ignore, { type Ignore } from 'ignore';
-import { debug } from '@ngcompass/common';
-import { Err, Ok, type GitignoreFilter, type Result } from './types.js';
+import { debug, Err, Ok, type Result } from '@ngcompass/common';
+import type { GitignoreFilter } from './models/index.js';
 
 export const loadGitignore = async (
   rootDir: string

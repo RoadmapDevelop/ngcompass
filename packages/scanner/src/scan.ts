@@ -1,6 +1,14 @@
 import { access, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { debug, stableSerialize, time, timeEnd } from '@ngcompass/common';
+import {
+  debug,
+  Err,
+  Ok,
+  stableSerialize,
+  time,
+  timeEnd,
+  type Result,
+} from '@ngcompass/common';
 import type { FileCacheEntry } from '@ngcompass/cache';
 import { applyFilters, filterByGlob } from './filters.js';
 import { executeGlob } from './glob.js';
@@ -13,18 +21,15 @@ import {
 import { normalizeOptions } from './normalize.js';
 import { expandPatterns } from './patterns.js';
 import { calculateStats } from './stats.js';
-import {
-  Err,
-  Ok,
-  type ExpandedPatterns,
-  type NormalizedOptions,
-  type OnProgressCallback,
-  type Result,
-  type ScanOptions,
-  type ScanResult,
-  type ScanStatistics,
-  type ScanTimings,
-} from './types.js';
+import type {
+  ExpandedPatterns,
+  NormalizedOptions,
+  OnProgressCallback,
+  ScanOptions,
+  ScanResult,
+  ScanStatistics,
+  ScanTimings,
+} from './models/index.js';
 
 const SCAN_CACHE_VERSION = 'v1';
 

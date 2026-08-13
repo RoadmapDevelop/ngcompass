@@ -1,15 +1,13 @@
 import path from 'node:path';
 import { minimatch } from 'minimatch';
+import { Err, Ok, type Result } from '@ngcompass/common';
 import { loadAllGitignoreFilters } from './gitignore.js';
-import {
-  Err,
-  Ok,
-  type FilteredFileList,
-  type GitignoreFilter,
-  type NormalizedOptions,
-  type RawFileList,
-  type Result,
-} from './types.js';
+import type {
+  FilteredFileList,
+  GitignoreFilter,
+  NormalizedOptions,
+  RawFileList,
+} from './models/index.js';
 
 export const deduplicateFiles = (
   files: ReadonlyArray<string>

@@ -1,4 +1,4 @@
-import type { ExpandedPatterns, NormalizedOptions } from './types.js';
+import type { ExpandedPatterns, NormalizedOptions } from './models/index.js';
 
 export const normalizePattern = (pattern: string): string =>
   pattern.replace(/\\/g, '/');

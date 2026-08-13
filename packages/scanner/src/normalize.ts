@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { NormalizedOptions, ScanOptions } from './types.js';
+import type { NormalizedOptions, ScanOptions } from './models/index.js';
 
 const DEFAULT_INCLUDE = [
   '**/*.ts',
