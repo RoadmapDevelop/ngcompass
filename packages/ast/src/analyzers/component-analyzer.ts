@@ -8,10 +8,10 @@ import {
   hasDecorator,
   matchesMemberExpression,
 } from '../ast/matchers.js';
+import { isArrayExpression, isObjectExpression } from '../ast/node-guards.js';
 import { nodeStart } from '../ast/node-offsets.js';
 import { ChangeDetectionStrategy } from '../models/index.js';
 import type {
-  ArrayExpression,
   ClassDeclaration,
   ComponentMetadata,
   Decorator,
@@ -172,9 +172,9 @@ const extractHostDirectives = (
 ): MetadataValue<ReadonlyArray<HostDirectiveMetadata>> => {
   const node = getObjectPropertyUnsafe(obj, 'hostDirectives');
   if (!node) return MISSING;
-  if (node.type !== 'ArrayExpression') return NON_LITERAL;
+  if (!isArrayExpression(node)) return NON_LITERAL;
 
-  const elements = (node as ArrayExpression).elements;
+  const elements = node.elements;
   const results: HostDirectiveMetadata[] = [];
 
   for (let i = 0; i < elements.length; i++) {
@@ -195,13 +195,12 @@ const parseHostDirectiveElement = (
     return { directive: direct, inputs: [], outputs: [] };
   }
 
-  if (el.type === 'ObjectExpression') {
-    const objExpr = el as ObjectExpression;
-    const dirNode = getObjectPropertyUnsafe(objExpr, 'directive');
+  if (isObjectExpression(el)) {
+    const dirNode = getObjectPropertyUnsafe(el, 'directive');
     return {
       directive: dirNode ? getIdentifierName(dirNode) : undefined,
-      inputs: extractRenames(getObjectPropertyUnsafe(objExpr, 'inputs')),
-      outputs: extractRenames(getObjectPropertyUnsafe(objExpr, 'outputs')),
+      inputs: extractRenames(getObjectPropertyUnsafe(el, 'inputs')),
+      outputs: extractRenames(getObjectPropertyUnsafe(el, 'outputs')),
     };
   }
 
@@ -211,8 +210,8 @@ const parseHostDirectiveElement = (
 const extractRenames = (
   node: Expression | undefined
 ): ReadonlyArray<{ internal: string; external: string }> => {
-  if (!node || node.type !== 'ArrayExpression') return [];
-  const elements = (node as ArrayExpression).elements;
+  if (!node || !isArrayExpression(node)) return [];
+  const elements = node.elements;
   const renames: { internal: string; external: string }[] = [];
   for (let i = 0; i < elements.length; i++) {
     const el = elements[i];

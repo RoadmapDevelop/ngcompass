@@ -12,18 +12,15 @@ interface TraversableNode {
   readonly type: string;
 }
 
-function isTraversableNode(value: unknown): value is TraversableNode {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    typeof (value as { type?: unknown }).type === 'string'
-  );
-}
+const isTraversableNode = (value: unknown): value is TraversableNode =>
+  typeof value === 'object' &&
+  value !== null &&
+  typeof (value as { type?: unknown }).type === 'string';
 
-export function walkProgram(
+export const walkProgram = (
   root: TraversableNode | null | undefined,
   visitor: (node: TraversableNode) => void | boolean
-): void {
+): void => {
   if (!root) return;
 
   const stack: TraversableNode[] = [root];
@@ -56,4 +53,4 @@ export function walkProgram(
       stack.push(children[i]);
     }
   }
-}
+};

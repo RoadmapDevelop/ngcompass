@@ -1,20 +1,22 @@
 import type {
-  BooleanLiteral,
-  CallExpression,
   ClassDeclaration,
   Decorator,
   Expression,
-  Identifier,
-  MemberExpression,
   ObjectExpression,
-  StringLiteral,
 } from '../models/index.js';
+import {
+  isBooleanLiteral,
+  isIdentifier,
+  isMemberExpression,
+  isObjectExpression,
+  isStringLiteral,
+} from './node-guards.js';
 
 export const getIdentifierName = (
   node: Expression | undefined
 ): string | undefined => {
-  if (!node || node.type !== 'Identifier') return undefined;
-  return (node as Identifier).name;
+  if (!node || !isIdentifier(node)) return undefined;
+  return node.name;
 };
 
 export const hasDecorator = (
@@ -35,16 +37,13 @@ export const getDecoratorNameUnsafe = (
   const expr = decorator.expression;
   if (!expr || expr.type !== 'CallExpression') return undefined;
 
-  const callee = (expr as CallExpression).callee;
+  const callee = expr.callee;
 
   const direct = getIdentifierName(callee);
   if (direct !== undefined) return direct;
 
-  if (
-    callee.type === 'MemberExpression' ||
-    callee.type === 'StaticMemberExpression'
-  ) {
-    return getIdentifierName((callee as MemberExpression).property);
+  if (isMemberExpression(callee)) {
+    return getIdentifierName(callee.property);
   }
 
   return undefined;
@@ -56,13 +55,11 @@ export const getDecoratorObjectArgUnsafe = (
   const expr = decorator.expression;
   if (!expr || expr.type !== 'CallExpression') return undefined;
 
-  const args = (expr as CallExpression).arguments;
+  const args = expr.arguments;
   if (!args || args.length === 0) return undefined;
 
   const first = args[0];
-  return first.type === 'ObjectExpression'
-    ? (first as ObjectExpression)
-    : undefined;
+  return isObjectExpression(first) ? first : undefined;
 };
 
 export const hasObjectProperty = (
@@ -97,9 +94,8 @@ export const getKeyNameUnsafe = (key: Expression): string | undefined => {
   if (!key) return undefined;
   const ident = getIdentifierName(key);
   if (ident !== undefined) return ident;
-  if (key.type === 'StringLiteral' || key.type === 'Literal') {
-    const lit = key as StringLiteral;
-    return typeof lit.value === 'string' ? lit.value : undefined;
+  if (isStringLiteral(key)) {
+    return typeof key.value === 'string' ? key.value : undefined;
   }
   return undefined;
 };
@@ -110,26 +106,17 @@ export const matchesMemberExpression = (
   propertyName: string
 ): boolean => {
   if (!expr) return false;
-  if (
-    expr.type !== 'MemberExpression' &&
-    expr.type !== 'StaticMemberExpression'
-  )
-    return false;
+  if (!isMemberExpression(expr)) return false;
 
-  const memberExpr = expr as MemberExpression;
+  if (getIdentifierName(expr.property) !== propertyName) return false;
 
-  if (getIdentifierName(memberExpr.property) !== propertyName) return false;
-
-  const obj = memberExpr.object;
+  const obj = expr.object;
   if (!obj) return false;
 
   if (getIdentifierName(obj) === objectName) return true;
 
-  if (
-    obj.type === 'MemberExpression' ||
-    obj.type === 'StaticMemberExpression'
-  ) {
-    return getIdentifierName((obj as MemberExpression).property) === objectName;
+  if (isMemberExpression(obj)) {
+    return getIdentifierName(obj.property) === objectName;
   }
 
   return false;
@@ -139,9 +126,8 @@ export const getLiteralStringValueUnsafe = (
   node: Expression
 ): string | undefined => {
   if (!node) return undefined;
-  if (node.type !== 'StringLiteral' && node.type !== 'Literal')
-    return undefined;
-  const value = (node as StringLiteral).value;
+  if (!isStringLiteral(node)) return undefined;
+  const value = node.value;
   return typeof value === 'string' ? value : undefined;
 };
 
@@ -149,8 +135,7 @@ export const getLiteralBooleanValueUnsafe = (
   node: Expression
 ): boolean | undefined => {
   if (!node) return undefined;
-  if (node.type !== 'BooleanLiteral' && node.type !== 'Literal')
-    return undefined;
-  const value = (node as BooleanLiteral).value;
+  if (!isBooleanLiteral(node)) return undefined;
+  const value = node.value;
   return typeof value === 'boolean' ? value : undefined;
 };

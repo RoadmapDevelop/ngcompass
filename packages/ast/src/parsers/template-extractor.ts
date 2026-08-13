@@ -9,58 +9,10 @@ type AstNode = {
 
 const EMPTY: ExtractedTemplate = { content: '', startOffset: 0 };
 
-export function extractTemplateFromProgram(
-  program: Program
-): ExtractedTemplate {
-  let result: ExtractedTemplate = EMPTY;
-
-  walkProgram(program, (rawNode) => {
-    const node = rawNode as AstNode;
-
-    if (result.content) return false;
-
-    if (node.type !== 'ClassDeclaration' || !Array.isArray(node.decorators))
-      return;
-
-    const extracted = tryExtractFromClass(node);
-    if (extracted) {
-      result = extracted;
-      return false;
-    }
-  });
-
-  return result;
-}
-
-function tryExtractFromClass(classNode: AstNode): ExtractedTemplate | null {
-  const decorators = classNode.decorators as ReadonlyArray<AstNode> | undefined;
-  if (!decorators) return null;
-
-  for (const decorator of decorators) {
-    const call = decorator?.expression as AstNode | undefined;
-    if (!call || call.type !== 'CallExpression') continue;
-
-    const callee = call.callee as AstNode | undefined;
-    if (!callee || callee.type !== 'Identifier' || callee.name !== 'Component')
-      continue;
-
-    const args = call.arguments as ReadonlyArray<AstNode> | undefined;
-    const objectArg = args?.[0];
-    if (!objectArg || objectArg.type !== 'ObjectExpression') continue;
-
-    const templateValue = findPropertyValue(
-      objectArg.properties as ReadonlyArray<AstNode>,
-      'template'
-    );
-    if (templateValue) return extractStringValueWithOffset(templateValue);
-  }
-  return null;
-}
-
-function findPropertyValue(
+const findPropertyValue = (
   properties: ReadonlyArray<AstNode>,
   keyName: string
-): AstNode | null {
+): AstNode | null => {
   if (!Array.isArray(properties)) return null;
   for (const prop of properties) {
     const key = prop?.key as AstNode | undefined;
@@ -70,9 +22,9 @@ function findPropertyValue(
     if (name === keyName) return value;
   }
   return null;
-}
+};
 
-function extractStringValueWithOffset(node: AstNode): ExtractedTemplate {
+const extractStringValueWithOffset = (node: AstNode): ExtractedTemplate => {
   if (!node) return EMPTY;
 
   if (node.type === 'StringLiteral' || node.type === 'Literal') {
@@ -102,4 +54,52 @@ function extractStringValueWithOffset(node: AstNode): ExtractedTemplate {
   }
 
   return EMPTY;
-}
+};
+
+const tryExtractFromClass = (classNode: AstNode): ExtractedTemplate | null => {
+  const decorators = classNode.decorators as ReadonlyArray<AstNode> | undefined;
+  if (!decorators) return null;
+
+  for (const decorator of decorators) {
+    const call = decorator?.expression as AstNode | undefined;
+    if (!call || call.type !== 'CallExpression') continue;
+
+    const callee = call.callee as AstNode | undefined;
+    if (!callee || callee.type !== 'Identifier' || callee.name !== 'Component')
+      continue;
+
+    const args = call.arguments as ReadonlyArray<AstNode> | undefined;
+    const objectArg = args?.[0];
+    if (!objectArg || objectArg.type !== 'ObjectExpression') continue;
+
+    const templateValue = findPropertyValue(
+      objectArg.properties as ReadonlyArray<AstNode>,
+      'template'
+    );
+    if (templateValue) return extractStringValueWithOffset(templateValue);
+  }
+  return null;
+};
+
+export const extractTemplateFromProgram = (
+  program: Program
+): ExtractedTemplate => {
+  let result: ExtractedTemplate = EMPTY;
+
+  walkProgram(program, (rawNode) => {
+    const node = rawNode as AstNode;
+
+    if (result.content) return false;
+
+    if (node.type !== 'ClassDeclaration' || !Array.isArray(node.decorators))
+      return;
+
+    const extracted = tryExtractFromClass(node);
+    if (extracted) {
+      result = extracted;
+      return false;
+    }
+  });
+
+  return result;
+};
