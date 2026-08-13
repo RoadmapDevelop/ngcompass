@@ -38,7 +38,7 @@ class CompoundReporter implements Reporter {
     this.progress = new ConsoleReporter(stderrOutput, {
       ...options,
       compact: false,
-      phaseStream: process.stderr as NodeJS.WriteStream,
+      phaseStream: process.stderr,
     });
   }
 
@@ -138,7 +138,7 @@ export function getReporter(
       );
     default: {
       const exhaustive: never = format;
-      throw new Error(`Unknown reporter format: "${exhaustive as string}"`);
+      throw new Error(`Unknown reporter format: "${String(exhaustive)}"`);
     }
   }
 }

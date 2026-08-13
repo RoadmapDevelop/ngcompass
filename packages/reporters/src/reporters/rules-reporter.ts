@@ -89,7 +89,7 @@ function groupByDomain(
 
 function sortDomains(domains: ReadonlyArray<string>): string[] {
   const rank = (d: string): number => {
-    const idx = DOMAIN_ORDER.indexOf(d as (typeof DOMAIN_ORDER)[number]);
+    const idx = DOMAIN_ORDER.findIndex((domain) => domain === d);
     return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
   };
   return [...domains].sort((a, b) => rank(a) - rank(b));
