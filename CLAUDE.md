@@ -128,6 +128,7 @@ packages/<name>/src/
 | **Runtime values stay out of `models/`.** The one exception is a const-object enum and its derived type (`RuleCategory`), which move as a unit.  | Splitting the pair would leave the type unable to reference its own values.                  |
 | **A model file may import from another model file, never from a logic file.** The single exception is `import type` of a class whose instances appear in a model — `Locator` in `RuleContext`, `ParseError` in `AnalysisResult`. | `models/` is a leaf. A model reaching into logic means the type is in the wrong place.       |
 | **Module-private types stay in their logic file.**                                                                                              | The barrel re-exports everything in `models/`; moving a private type there would widen the public API. |
+| **`src/index.ts` decides the public surface.** Star-export the barrel only when every model is already public; otherwise re-export the public model files by name (`@ngcompass/ast` hides `HostDirectiveMetadata` this way). | The barrel is the package's internal import path, not automatically its public API. |
 | **Relative imports carry the `.js` extension**, and type-only imports use `import type` / `export type`.                                         | `module: "Node16"` requires it, and the extension-less form fails at runtime, not at build.  |
 
 Moving a type is behaviour-preserving only if the public type surface is unchanged. The verification gate is the built declaration file:
