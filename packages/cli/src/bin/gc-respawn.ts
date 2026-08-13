@@ -13,7 +13,7 @@ const RESPAWN_CRASH_NOTICE =
   '[ngcompass] Analysis crashed (likely out of memory); re-run with --skip-type-check or raise --max-old-space-size.';
 
 const isGarbageCollectionExposed = (): boolean =>
-  typeof (globalThis as { gc?: () => void }).gc === 'function';
+  'gc' in globalThis && typeof globalThis.gc === 'function';
 
 const isAnalyzeInvocation = (args: ReadonlyArray<string>): boolean => {
   if (!args.includes(ANALYZE_COMMAND)) return false;
