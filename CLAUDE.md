@@ -108,6 +108,37 @@ interface RuleHandler<TNode> {
 - Compiled with SWC (`unplugin-swc`) via tsup for packages, and via vitest for tests.
 - Each package has its own `tsconfig.json` extending the root.
 
+## Model Layout
+
+Every package keeps its type declarations in `src/models/`, separate from the code that uses them. `packages/common` is the reference implementation.
+
+```
+packages/<name>/src/
+  models/
+    index.ts        <- barrel: only `export *` / `export type *` lines
+    <domain>.ts     <- one file per domain concept
+  <logic files>
+```
+
+| Rule                                                                                                                                            | Rationale                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **`interface`s, `type` aliases, and type-only generic helpers live in `src/models/`.**                                                           | A logic file that also declares types hides its dependencies and grows without bound.        |
+| **Group model files by domain concept, not by kind.** `models/task.ts`, never `models/interfaces.ts`.                                            | Kind-based files are a dumping ground; domain files tell you where a type belongs.           |
+| **`models/index.ts` re-exports every model file and declares nothing itself.**                                                                   | One import path per package; the barrel stays mechanical and merge-friendly.                 |
+| **Runtime values stay out of `models/`.** The one exception is a const-object enum and its derived type (`RuleCategory`), which move as a unit.  | Splitting the pair would leave the type unable to reference its own values.                  |
+| **A model file may import from another model file, never from a logic file.** The single exception is `import type` of a class whose instances appear in a model — `Locator` in `RuleContext`, `ParseError` in `AnalysisResult`. | `models/` is a leaf. A model reaching into logic means the type is in the wrong place.       |
+| **Module-private types stay in their logic file.**                                                                                              | The barrel re-exports everything in `models/`; moving a private type there would widen the public API. |
+| **Relative imports carry the `.js` extension**, and type-only imports use `import type` / `export type`.                                         | `module: "Node16"` requires it, and the extension-less form fails at runtime, not at build.  |
+
+Moving a type is behaviour-preserving only if the public type surface is unchanged. The verification gate is the built declaration file:
+
+```bash
+pnpm build && cp packages/<name>/dist/index.d.ts /tmp/<name>-before.d.ts
+pnpm build && diff /tmp/<name>-before.d.ts packages/<name>/dist/index.d.ts
+```
+
+tsup emits declarations in module-graph order, so restructuring imports reorders the file even when nothing changed. A raw diff of ordering alone is acceptable **only** when the sorted set of top-level declarations and the trailing export list are byte-identical. Compare those two directly rather than eyeballing the raw diff.
+
 ## Testing
 
 Tests use Vitest with globals enabled (`describe`, `it`, `expect` without imports). Test files match `**/*.{test,spec}.ts`. Coverage thresholds are intentionally low during beta — do not lower them further.
