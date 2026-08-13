@@ -1,11 +1,5 @@
 import { parse } from 'angular-html-parser';
-
-export interface HtmlParserResult {
-  readonly rootNodes: ReadonlyArray<unknown>;
-  readonly errors: ReadonlyArray<unknown>;
-
-  readonly templateStartOffset: number;
-}
+import type { HtmlParserResult } from '../models/index.js';
 
 export const parseHtml = (
   content: string,

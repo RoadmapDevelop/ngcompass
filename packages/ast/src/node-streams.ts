@@ -1,61 +1,16 @@
-import {
-  analyzeComponent,
-  type ComponentMetadata,
-} from './analyzers/component-analyzer.js';
+import { analyzeComponent } from './analyzers/component-analyzer.js';
 import { getDecoratorNameUnsafe } from './ast/matchers.js';
-import { nodeStart } from './ast/types.js';
+import { nodeStart } from './ast/node-offsets.js';
 import type {
+  AngularClassNode,
+  AnyAngularClassNode,
   CallExpression,
   ClassDeclaration,
-  Decorator,
-  Expression,
+  DecoratedPropertyNode,
   ImportDeclaration,
   NewExpression,
   PropertyDefinition,
-} from './ast/types.js';
-
-export interface TemplateExpressionNode {
-  readonly expression: Expression;
-  readonly sourceSpan: { start: number; end: number };
-}
-
-export interface TemplateAttributeNode {
-  readonly name: string;
-  readonly value?: string;
-  readonly sourceSpan: { start: number; end: number };
-}
-
-export interface TemplateBlockNode {
-  readonly name: string;
-  readonly parameters: ReadonlyArray<{
-    readonly expression: string;
-    readonly sourceSpan: { start: number; end: number };
-  }>;
-  readonly sourceSpan: { start: number; end: number };
-}
-
-export interface TemplateAnalysis {
-  readonly expressions: ReadonlyArray<TemplateExpressionNode>;
-  readonly attributes: ReadonlyArray<TemplateAttributeNode>;
-  readonly blocks: ReadonlyArray<TemplateBlockNode>;
-}
-
-export interface AngularClassNode {
-  readonly node: ClassDeclaration;
-  readonly metadata: ComponentMetadata;
-}
-
-export interface AnyAngularClassNode {
-  readonly node: ClassDeclaration;
-  readonly decoratorName: string;
-  readonly className: string | undefined;
-  readonly decoratorStart: number;
-}
-
-export interface DecoratedPropertyNode {
-  readonly node: PropertyDefinition;
-  readonly decorators: ReadonlyArray<Decorator>;
-}
+} from './models/index.js';
 
 export const toAngularClassStream = (
   classNode: ClassDeclaration

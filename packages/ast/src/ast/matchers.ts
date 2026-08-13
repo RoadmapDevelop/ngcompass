@@ -8,7 +8,7 @@ import type {
   MemberExpression,
   ObjectExpression,
   StringLiteral,
-} from './types.js';
+} from '../models/index.js';
 
 export const getIdentifierName = (
   node: Expression | undefined

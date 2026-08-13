@@ -1,15 +1,11 @@
+import type { TemplateBlock, TemplateBlockParameter } from './template-node.js';
+
 export interface Node {
   readonly type: string;
   readonly span?: { start: number; end: number };
   readonly start?: number;
   readonly end?: number;
 }
-
-export const nodeStart = (node: Pick<Node, 'start' | 'span'>): number =>
-  node.start ?? node.span?.start ?? 0;
-
-export const nodeEnd = (node: Pick<Node, 'end' | 'span'>): number =>
-  node.end ?? node.span?.end ?? 0;
 
 export interface Identifier extends Node {
   readonly type: 'Identifier';
@@ -120,42 +116,6 @@ export interface ImportDeclaration extends Node {
   readonly type: 'ImportDeclaration';
   readonly source: StringLiteral;
   readonly specifiers?: ReadonlyArray<Node>;
-}
-
-export interface ClassDeclaration extends Node {
-  readonly type: 'ClassDeclaration';
-  readonly id?: Identifier;
-  readonly decorators?: ReadonlyArray<Decorator>;
-  readonly body?: ClassBody;
-}
-
-export interface ClassBody extends Node {
-  readonly type: 'ClassBody';
-  readonly body: ReadonlyArray<PropertyDefinition | MethodDefinition>;
-}
-
-export interface PropertyDefinition extends Node {
-  readonly type: 'PropertyDefinition';
-  readonly key: Expression;
-  readonly value?: Expression;
-  readonly decorators?: ReadonlyArray<Decorator>;
-}
-
-export interface MethodDefinition extends Node {
-  readonly type: 'MethodDefinition';
-  readonly key: Expression;
-}
-
-export interface TemplateBlock extends Node {
-  readonly type: 'Block';
-  readonly name: string;
-  readonly parameters: ReadonlyArray<TemplateBlockParameter>;
-  readonly children: ReadonlyArray<Node>;
-}
-
-export interface TemplateBlockParameter extends Node {
-  readonly type: 'BlockParameter';
-  readonly expression: string;
 }
 
 export type Expression =

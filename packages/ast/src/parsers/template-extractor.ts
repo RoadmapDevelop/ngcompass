@@ -1,16 +1,11 @@
 import type { Program } from 'oxc-parser';
+import type { ExtractedTemplate } from '../models/index.js';
 import { walkProgram } from '../visitor.js';
 
 type AstNode = {
   type?: string;
   [key: string]: unknown;
 };
-
-export interface ExtractedTemplate {
-  readonly content: string;
-
-  readonly startOffset: number;
-}
 
 const EMPTY: ExtractedTemplate = { content: '', startOffset: 0 };
 

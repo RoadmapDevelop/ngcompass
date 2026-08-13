@@ -1,12 +1,12 @@
 import { parseSync } from 'oxc-parser';
 import { debug } from '@ngcompass/common';
 import type {
+  HtmlParserResult,
   TemplateAnalysis,
   TemplateAttributeNode,
   TemplateBlockNode,
   TemplateExpressionNode,
-} from '../node-streams.js';
-import type { HtmlParserResult } from '../parsers/html.js';
+} from '../models/index.js';
 
 type HtmlAstNode = {
   children?: readonly HtmlAstNode[];

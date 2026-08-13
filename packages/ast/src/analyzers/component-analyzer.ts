@@ -8,57 +8,26 @@ import {
   hasDecorator,
   matchesMemberExpression,
 } from '../ast/matchers.js';
-import { nodeStart } from '../ast/types.js';
+import { nodeStart } from '../ast/node-offsets.js';
+import { ChangeDetectionStrategy } from '../models/index.js';
 import type {
   ArrayExpression,
   ClassDeclaration,
+  ComponentMetadata,
   Decorator,
   Expression,
+  HostDirectiveMetadata,
+  LiteralValue,
+  MetadataValue,
+  MissingValue,
+  NonLiteralValue,
   ObjectExpression,
-} from '../ast/types.js';
-
-export type LiteralValue<T> = { readonly kind: 'literal'; readonly value: T };
-export type NonLiteralValue = { readonly kind: 'non-literal' };
-export type MissingValue = { readonly kind: 'missing' };
-
-export type MetadataValue<T> = LiteralValue<T> | NonLiteralValue | MissingValue;
+} from '../models/index.js';
 
 const NON_LITERAL: NonLiteralValue = { kind: 'non-literal' };
 const MISSING: MissingValue = { kind: 'missing' };
 
 const literal = <T>(value: T): LiteralValue<T> => ({ kind: 'literal', value });
-
-export const ChangeDetectionStrategy = {
-  Default: 0,
-  OnPush: 1,
-} as const;
-
-export type ChangeDetectionStrategy =
-  (typeof ChangeDetectionStrategy)[keyof typeof ChangeDetectionStrategy];
-
-export interface HostDirectiveMetadata {
-  readonly directive: string | undefined;
-  readonly inputs: ReadonlyArray<{
-    readonly internal: string;
-    readonly external: string;
-  }>;
-  readonly outputs: ReadonlyArray<{
-    readonly internal: string;
-    readonly external: string;
-  }>;
-}
-
-export interface ComponentMetadata {
-  readonly className: string | undefined;
-  readonly selector: MetadataValue<string>;
-  readonly changeDetection: MetadataValue<ChangeDetectionStrategy>;
-  readonly standalone: MetadataValue<boolean>;
-  readonly templateUrl: MetadataValue<string>;
-  readonly template: MetadataValue<string>;
-  readonly hostDirectives: MetadataValue<ReadonlyArray<HostDirectiveMetadata>>;
-  readonly decoratorStart: number;
-  readonly type: 'Component' | 'Directive';
-}
 
 const componentCache = new WeakMap<
   ClassDeclaration,
