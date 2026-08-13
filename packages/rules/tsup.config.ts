@@ -1,10 +1,10 @@
 import { createConfig } from '../../tsup.config.js';
 
 export default createConfig({
-  entry: [
-    'src/index.ts',
-    'src/execution-worker.ts',
-    'src/type-aware-worker.ts',
-  ],
+  entry: {
+    index: 'src/index.ts',
+    'execution-worker': 'src/execution/execution-worker.ts',
+    'type-aware-worker': 'src/execution/type-aware-worker.ts',
+  },
   dts: true,
 });

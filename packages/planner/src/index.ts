@@ -1,4 +1,4 @@
-export { buildExecutionPlan, getExecutionPlanSummary } from './builder.js';
+export { buildExecutionPlan, getExecutionPlanSummary } from './plan-building/builder.js';
 
 export type * from './models/execution-index.js';
 export type * from './models/execution-plan.js';
@@ -23,7 +23,7 @@ export {
 export {
   extractStyleUrls,
   extractTemplateUrl,
-} from './decorator-references.js';
+} from './resource-discovery/decorator-references.js';
 
 export {
   discoverResources,
@@ -31,7 +31,7 @@ export {
   getStyleFiles,
   getTemplateFile,
   resourceExists,
-} from './resources.js';
+} from './resource-discovery/resources.js';
 
 export {
   buildTask,
@@ -39,7 +39,7 @@ export {
   filterRulesByAstRequirement,
   groupRulesByDependencyType,
   shouldApplyRule,
-} from './task-builder.js';
+} from './plan-building/task-builder.js';
 
 export {
   calculateFileHash,
@@ -48,26 +48,26 @@ export {
   hashFiles,
   hashRules,
   hashTaskInputs,
-} from './hashing.js';
+} from './task-identity/hashing.js';
 
 export {
   buildIndexes,
   getFilesForRules,
   getTasksCountBySeverity,
   getTotalTasks,
-} from './indexes.js';
+} from './incremental-analysis/indexes.js';
 
 export {
   areAllTasksCached,
   filterCachedTasks,
   getCacheHitRate,
   pruneStaleCache,
-} from './incremental.js';
+} from './incremental-analysis/incremental.js';
 
-export { groupTasksByFile } from './utils.js';
+export { groupTasksByFile } from './task-identity/utils.js';
 
 export {
   getScanFileCount,
   hasScanFiles,
   scanResultToPlanInput,
-} from './integration.js';
+} from './plan-building/integration.js';

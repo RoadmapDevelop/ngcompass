@@ -1,7 +1,7 @@
 import process from 'node:process';
 import type { RuleResult } from '@ngcompass/common';
 import pc from 'picocolors';
-import { getAnalysisStatus } from './analysis-status.js';
+import { getAnalysisStatus } from './formatting/analysis-status.js';
 import { TextCacheReporter } from './reporters/cache.js';
 import { TextConfigReporter } from './reporters/config.js';
 import { ConsoleReporter } from './reporters/console-reporter.js';

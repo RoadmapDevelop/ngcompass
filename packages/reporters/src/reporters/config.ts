@@ -6,7 +6,7 @@ import {
   type HealthReport,
   type InitResult,
 } from '@ngcompass/common';
-import { processOutput } from '../output.js';
+import { processOutput } from '../formatting/output.js';
 import type { ReporterOutput } from '../models/index.js';
 import type { ConfigReporter } from '../models/index.js';
 

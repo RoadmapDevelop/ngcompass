@@ -2,9 +2,9 @@ import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
 import type {
   ConfigBlockValidation,
-  ValidatedConfig,
   ValidationContext,
 } from '../../models/index.js';
+import type { ValidatedConfig } from '../../validation/schema.js';
 import { validateConfigBlock } from './base.js';
 
 const LIMITS = {

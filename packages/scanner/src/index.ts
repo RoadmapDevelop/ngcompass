@@ -10,14 +10,14 @@ export type { ScanResult, ScanStatistics } from './models/scan-result.js';
 export { Err, Ok } from '@ngcompass/common';
 export type { Result } from '@ngcompass/common';
 
-export { scan } from './scan.js';
+export { scan } from './discovery/scan.js';
 export { normalizeOptions, validateOptions } from './normalize.js';
 export {
   expandPatterns,
   isValidPattern,
   normalizePattern,
   validatePatterns,
-} from './patterns.js';
+} from './discovery/patterns.js';
 export {
   deduplicateFiles,
   filterByExtension,
@@ -28,4 +28,4 @@ export {
   createGitignoreFilter,
   createPassThroughFilter,
   loadAllGitignoreFilters,
-} from './gitignore.js';
+} from './discovery/gitignore.js';

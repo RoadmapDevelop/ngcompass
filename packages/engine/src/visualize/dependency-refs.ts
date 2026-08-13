@@ -4,7 +4,7 @@ import {
   keyName,
   spanOffset,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import { ownerOfOffset } from './ts-members.js';
 import type {
   AstNodeLike,

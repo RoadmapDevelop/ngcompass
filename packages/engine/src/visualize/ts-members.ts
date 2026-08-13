@@ -4,7 +4,7 @@ import {
   keyName,
   spanOffset,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import type { BoxKind } from './unit-graph.js';
 import type {
   AstNodeLike,

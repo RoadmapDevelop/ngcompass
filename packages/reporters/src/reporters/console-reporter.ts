@@ -2,16 +2,16 @@
 import process from 'node:process';
 import { RuleFailure, RuleResult, formatDuration } from '@ngcompass/common';
 import pc from 'picocolors';
-import { getAnalysisStatus } from '../analysis-status.js';
+import { getAnalysisStatus } from '../formatting/analysis-status.js';
 import {
   defaultSourceReader,
   renderCodeFrame,
   
-} from '../code-frame.js';
+} from '../formatting/code-frame.js';
 import type { SourceReader } from '../models/index.js';
-import { processOutput } from '../output.js';
+import { processOutput } from '../formatting/output.js';
 import type { ReporterOutput } from '../models/index.js';
-import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
+import { compareByPosition, isErrorSeverity } from '../formatting/severity-utils.js';
 import type {
   ConsoleReporterOptions,
   ParseError,

@@ -75,6 +75,21 @@ flowchart TB
 | `@ngcompass/reporters` | Render results for humans and machines                         | console, JSON, SARIF, HTML/UI reporters                               |
 | `@ngcompass/common`    | Shared domain model and utilities                              | `AnalyzerConfig`, `RuleResult`, `RuleContext`, `ProjectContext`       |
 
+### Internal Package Layout
+
+Each package has one public interface at `src/index.ts`. Its implementation is organized by capability instead of generic technical roles: for example, `engine` contains `execution`, `context`, `project-graph`, and `analysis`; `planner` contains `plan-building`, `task-identity`, `resource-discovery`, and `incremental-analysis`.
+
+```text
+packages/<name>/src/
+├── index.ts
+├── <capability>/
+│   └── <implementation>.ts
+└── models/
+    └── <shared-domain-type>.ts
+```
+
+Capability folders are introduced only when multiple files share a responsibility. Package-local types stay with their capability; `models/` contains only types shared across capabilities. Generic catch-all folders such as `utils`, `helpers`, `shared`, and `services` are not used for new code.
+
 ## 4. End-to-End Analysis Lifecycle
 
 The `analyze` command is the primary workflow. It starts in `ngcompass` (CLI), then delegates to each subsystem in a strict sequence.
@@ -114,7 +129,7 @@ sequenceDiagram
     Reporter-->>User: Console, JSON, HTML/UI, or SARIF output
 ```
 
-The lifecycle is implemented in `packages/cli/src/commands/analyze.ts` as these conceptual stages:
+The lifecycle is implemented in `packages/cli/src/commands/analyze/index.ts` as these conceptual stages:
 
 1. Load configuration and plugins.
 2. Discover files.
@@ -760,7 +775,7 @@ ngcompass analyze --skip-type-check # syntax-only, fastest, lowest memory
 
 ## 12. Single-Pass Analysis Engine
 
-The single-pass engine is the high-throughput path for rule execution. It appears in `packages/engine/src/single-pass-engine.ts`.
+The single-pass engine is the high-throughput path for rule execution. It appears in `packages/engine/src/execution/single-pass-engine.ts`.
 
 Rules declare a `streamType`, such as:
 

@@ -3,8 +3,8 @@ import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
 import type {
   ConfigBlockValidation,
-  ValidatedConfig,
 } from '../../models/index.js';
+import type { ValidatedConfig } from '../../validation/schema.js';
 
 const TRIPLE_SLASH_RE = /\/\/\//;
 const BRACE_OPEN_RE = /\{/g;

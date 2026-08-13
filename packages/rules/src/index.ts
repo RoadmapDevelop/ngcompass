@@ -73,7 +73,7 @@ export { registerAllBuiltinRules } from './registry/register-all.js';
 export {
   executeBatchedNewEngineRules,
   isNewEngineRule,
-} from './engine/adapter.js';
+} from './execution/adapter.js';
 export { type RuleHandler, RuleContextFactory } from '@ngcompass/engine';
 
 export {

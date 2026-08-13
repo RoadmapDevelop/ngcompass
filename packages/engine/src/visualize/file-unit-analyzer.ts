@@ -1,7 +1,7 @@
 import type { Program } from 'oxc-parser';
 import { Locator } from '@ngcompass/common';
 import { computeFileCallGraph } from '../callgraph/call-graph-analyzer.js';
-import { isNode } from '../shared/ast-functions.js';
+import { isNode } from '../execution/ast-functions.js';
 import { collectDependencyRefs } from './dependency-refs.js';
 import { analyzeSpec } from './spec-refs.js';
 import { collectStyleSelectors } from './style-selectors.js';

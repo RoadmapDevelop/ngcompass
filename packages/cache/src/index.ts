@@ -16,8 +16,8 @@ export * from './constants.js';
 
 export { computeHash, initHasher } from './hashing.js';
 
-export * from './key-context.js';
+export * from './runtime/key-context.js';
 
-export * from './context.js';
+export * from './runtime/context.js';
 
-export * from './runtime-cache.js';
+export * from './runtime/runtime-cache.js';

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveChildExecArgv } from '../src/orchestrator.js';
+import { resolveChildExecArgv } from '../src/execution/orchestrator.js';
 
 const countExposeGc = (argv: ReadonlyArray<string>): number =>
   argv.filter((arg) => arg === '--expose-gc').length;

@@ -3,9 +3,9 @@ import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
 import type {
   ConfigBlockValidation,
-  ValidatedConfig,
   ValidationContext,
 } from '../../models/index.js';
+import type { ValidatedConfig } from '../../validation/schema.js';
 
 const TRAVERSAL_TOKEN = '..';
 const SENSITIVE_DIRS = ['/etc/', '\\etc\\', '/var/', '\\var\\'];

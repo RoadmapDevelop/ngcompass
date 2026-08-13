@@ -108,29 +108,36 @@ interface RuleHandler<TNode> {
 - Compiled with SWC (`unplugin-swc`) via tsup for packages, and via vitest for tests.
 - Each package has its own `tsconfig.json` extending the root.
 
-## Model Layout
+## Package Layout
 
-Every package keeps its type declarations in `src/models/`, separate from the code that uses them. `packages/common` is the reference implementation.
+Every package is organized by capability. Its `src/index.ts` is the public interface, while implementation files live behind capability folders so files that change together remain together. `src/models/` is reserved for types shared across more than one capability.
 
 ```
 packages/<name>/src/
+  index.ts
+  <capability>/
+    <implementation>.ts
   models/
-    index.ts        <- barrel: only `export *` / `export type *` lines
-    <domain>.ts     <- one file per domain concept
-  <logic files>
+    index.ts
+    <shared-domain-type>.ts
 ```
 
 | Rule                                                                                                                                            | Rationale                                                                                    |
 | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| **`interface`s, `type` aliases, and type-only generic helpers live in `src/models/`.**                                                           | A logic file that also declares types hides its dependencies and grows without bound.        |
+| **Create a capability folder when at least two related files share one responsibility.**                                                         | Avoids both a crowded package root and needless nesting around one-file modules.             |
+| **Name folders for behavior, such as `execution`, `loading`, or `resource-discovery`.**                                                          | Callers can locate work by what it does, not by an ambiguous technical role.                 |
+| **Do not create catch-all `utils`, `helpers`, `shared`, or `services` folders.**                                                                  | Those folders erase ownership and weaken locality.                                            |
+| **`src/index.ts` decides the public surface.** Export only names intended for consumers.**                                                       | The package interface remains small even as implementation depth grows.                      |
+| **Types shared by capabilities live in `src/models/`; capability-private types stay local.**                                                     | Shared domain types have one stable location without widening module-private interfaces.     |
 | **Group model files by domain concept, not by kind.** `models/task.ts`, never `models/interfaces.ts`.                                            | Kind-based files are a dumping ground; domain files tell you where a type belongs.           |
 | **`models/index.ts` re-exports every model file and declares nothing itself.**                                                                   | One import path per package; the barrel stays mechanical and merge-friendly.                 |
 | **Runtime values stay out of `models/`.** The one exception is a const-object enum and its derived type (`RuleCategory`), which move as a unit.  | Splitting the pair would leave the type unable to reference its own values.                  |
 | **A model file may import from another model file, never from a logic file.** The single exception is `import type` of a class whose instances appear in a model — `Locator` in `RuleContext`, `ParseError` in `AnalysisResult`. | `models/` is a leaf. A model reaching into logic means the type is in the wrong place.       |
-| **Module-private types stay in their logic file.**                                                                                              | The barrel re-exports everything in `models/`; moving a private type there would widen the public API. |
+| **Module-private types stay in their capability file.**                                                                                         | Moving local types to `models/` widens the package surface without creating leverage.        |
 | **`src/index.ts` decides the public surface.** Star-export the barrel only when every model is already public; otherwise re-export the public model files by name (`@ngcompass/ast` hides `HostDirectiveMetadata` this way). | The barrel is the package's internal import path, not automatically its public API. |
+| **Exported-function style is per package, not repo-wide.** `common`, `ast`, `cache`, `scanner` and `planner` use `export const fn = () =>`; `config`, `engine`, `reporters`, `rules` and `cli` use `export function fn()`. Match the file's package. | Both forms are in use; consistency within a package is what makes a diff readable. |
 | **Relative imports carry the `.js` extension**, and type-only imports use `import type` / `export type`.                                         | `module: "Node16"` requires it, and the extension-less form fails at runtime, not at build.  |
-| **A type inferred from a zod schema moves only if that schema is already exported.** `ValidatedConfig` moved; `AnalyzerConfig` stayed in `schemas/schema.ts` because it infers from a module-private schema. | Widening a schema's visibility to satisfy a type move inverts the dependency.                |
+| **A type inferred from a zod schema moves only if that schema is already exported.** `ValidatedConfig` moves; `AnalyzerConfig` stays in `validation/schema.ts` because it infers from a module-private schema. | Widening a schema's visibility to satisfy a type move inverts the dependency.                |
 
 Moving a type is behaviour-preserving only if the public type surface is unchanged. The verification gate is the built declaration file:
 
@@ -181,7 +188,7 @@ npm view ngcompass dist-tags
 - Progress and debug output goes to `stderr`. Machine-readable output (JSON, SARIF) goes to `stdout`.
 - All inter-package imports use workspace package names (`@ngcompass/common`), never relative paths across package boundaries.
 - The `site` package is excluded from the build pipeline and publish step.
-- `packages/cli/src/commands/analyze.ts` is the canonical reference for the full analysis lifecycle.
+- `packages/cli/src/commands/analyze/index.ts` is the canonical reference for the full analysis lifecycle.
 
 ---
 

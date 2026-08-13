@@ -5,10 +5,10 @@ import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import type { RuleResult, RuleFailure } from '@ngcompass/common';
 import type { Reporter, ResultSummary, ParseError } from '../models/index.js';
-import { isErrorSeverity, severityRank, compareByPosition } from '../severity-utils.js';
-import { processOutput } from '../output.js';
+import { isErrorSeverity, severityRank, compareByPosition } from '../formatting/severity-utils.js';
+import { processOutput } from '../formatting/output.js';
 import type { ReporterOutput } from '../models/index.js';
-import { getAnalysisStatus } from '../analysis-status.js';
+import { getAnalysisStatus } from '../formatting/analysis-status.js';
 
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';
 const SEVERITY_ORDER = ['critical', 'high', 'error', 'moderate', 'warn', 'low', 'info', 'hint'] as const;

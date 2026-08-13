@@ -9,7 +9,7 @@ import {
   resolveFunctionName,
   spanOffset,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import type {
   AstNodeLike,
   FunctionComplexity,

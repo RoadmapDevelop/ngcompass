@@ -91,6 +91,19 @@ pnpm --filter @ngcompass/rules vitest run src/rules/reactivity/rxjs-no-subscribe
 When in doubt, place the change where the responsibility already lives. Prefer
 small changes within one package over cross-package refactors.
 
+### Internal Package Structure
+
+Each package exposes a small public interface through `src/index.ts` and groups
+its implementation by capability. Use behavior-oriented folders such as
+`execution`, `loading`, `resource-discovery`, and `formatting`. Add a capability
+folder only when at least two files share that responsibility; otherwise keep
+the file at the package root. Avoid catch-all `utils`, `helpers`, `shared`, and
+`services` folders for new code.
+
+Keep capability-private types next to their implementation. Use `src/models/`
+only for domain types shared across capabilities. Place tests under `tests/` in
+the same capability structure as the source they exercise.
+
 ## Contribution Workflow
 
 1. Open an issue first for large features, public API changes, cache format
@@ -185,7 +198,8 @@ In rule handlers, planner loops, and AST traversal callbacks:
 - Do not call `JSON.parse` or `JSON.stringify`.
 - Make bounded caches evict.
 
-If a performance choice is non-obvious, leave a short comment explaining why.
+Make performance choices clear through names and extracted functions; source
+comments are not used in this repository.
 
 ## Adding or Changing Rules
 
@@ -254,8 +268,8 @@ for non-obvious APIs. Also document internal helpers when they encode cache
 behavior, parser behavior, file discovery, import resolution, worker
 orchestration, or other analyzer mechanics.
 
-Inline comments should explain why something is done, not restate what the code
-already says. Do not add TODO comments without a linked issue.
+Use names and extracted functions to communicate intent. Do not add source
+comments or TODO comments.
 
 ## Release and Versioning Notes
 

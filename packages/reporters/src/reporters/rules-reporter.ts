@@ -1,6 +1,6 @@
 import pc from 'picocolors';
 import type { RuleListEntry } from '@ngcompass/common';
-import { processOutput } from '../output.js';
+import { processOutput } from '../formatting/output.js';
 import type { ReporterOutput } from '../models/index.js';
 import type { RulesReporterOptions } from '../models/index.js';
 

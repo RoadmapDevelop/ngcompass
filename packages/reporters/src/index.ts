@@ -16,8 +16,8 @@ export type {
   TestOutput,
 } from './models/index.js';
 export * from './factory.js';
-export * from './output.js';
-export * from './code-frame.js';
+export * from './formatting/output.js';
+export * from './formatting/code-frame.js';
 export * from './reporters/config.js';
 export * from './reporters/cache.js';
 export * from './reporters/console-reporter.js';

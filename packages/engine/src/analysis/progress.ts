@@ -1,0 +1,56 @@
+import type { RuleResult, WorkerFileProgress } from '@ngcompass/common';
+import type { AnalysisFileProgress } from '../models/index.js';
+
+export function buildFileProgress(
+  filePath: string,
+  taskCount: number,
+  results: ReadonlyArray<RuleResult>,
+  duration: number,
+  typeAware?: boolean
+): AnalysisFileProgress {
+  let errorCount = 0;
+  let warningCount = 0;
+
+  for (const result of results) {
+    for (const failure of result.failures) {
+      if (failure.severity === 'error') errorCount++;
+      else if (failure.severity === 'warn') warningCount++;
+    }
+  }
+
+  return {
+    filePath,
+    taskCount,
+    issueCount: errorCount + warningCount,
+    errorCount,
+    warningCount,
+    duration,
+    typeAware,
+  };
+}
+
+export function isWorkerFileProgress(
+  message: unknown
+): message is WorkerFileProgress {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    (message as { kind?: unknown }).kind === 'file-progress'
+  );
+}
+
+export function isAnalysisFileProgress(
+  message: unknown
+): message is AnalysisFileProgress {
+  if (!message || typeof message !== 'object') return false;
+  const value = message as Partial<AnalysisFileProgress> & { kind?: unknown };
+  return (
+    value.kind === 'file-progress' &&
+    typeof value.filePath === 'string' &&
+    typeof value.taskCount === 'number' &&
+    typeof value.issueCount === 'number' &&
+    typeof value.errorCount === 'number' &&
+    typeof value.warningCount === 'number' &&
+    typeof value.duration === 'number'
+  );
+}

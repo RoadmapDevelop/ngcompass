@@ -3,8 +3,8 @@ import { VALID_RULE_SEVERITIES } from '../constants.js';
 import { MESSAGES } from '../messages.js';
 import type {
   ConfigBlockValidation,
-  ValidatedConfig,
 } from '../../models/index.js';
+import type { ValidatedConfig } from '../../validation/schema.js';
 
 function hasExtendsSource(extendsField: ValidatedConfig['extends']): boolean {
   if (Array.isArray(extendsField)) return extendsField.length > 0;

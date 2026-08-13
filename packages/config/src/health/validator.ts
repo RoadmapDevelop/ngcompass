@@ -2,7 +2,7 @@ import { defu } from 'defu';
 import type { AstCache } from '@ngcompass/cache';
 import type { ConfigIssue, ConfigValidationResult } from '@ngcompass/common';
 
-import { AnalyzerConfigSchema } from '../schemas/schema.js';
+import { AnalyzerConfigSchema } from '../validation/schema.js';
 import {
   validateCrossFields,
   validateDeprecatedFields,
@@ -15,10 +15,10 @@ import {
 import { createDefaultContext } from './context.js';
 import { enrichIssueLocations } from './enricher.js';
 import type {
-  ValidatedConfig,
   ValidationContext,
   WritableIssue,
 } from '../models/index.js';
+import type { ValidatedConfig } from '../validation/schema.js';
 
 const ERROR_CODES = {
   CHECK_FAILED: 'check-failed',

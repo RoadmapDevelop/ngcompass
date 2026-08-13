@@ -4,7 +4,7 @@ import {
   MEMBER_TYPES,
   isNode,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import type { EdgeDirection } from './unit-graph.js';
 import type {
   AstNodeLike,

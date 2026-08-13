@@ -1,5 +1,5 @@
 import type { CacheKeyContext } from '@ngcompass/cache';
-import type { ComponentDependencyGraph } from '../component-graph.js';
+import type { ComponentDependencyGraph } from '../resource-discovery/component-graph.js';
 import type { TaskInputs } from './task.js';
 
 export interface GraphStats {

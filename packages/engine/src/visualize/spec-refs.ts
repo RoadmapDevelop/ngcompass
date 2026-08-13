@@ -5,7 +5,7 @@ import {
   keyName,
   spanOffset,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import { typeReferenceName } from './ts-members.js';
 import type {
   AstNodeLike,

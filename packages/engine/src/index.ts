@@ -28,39 +28,39 @@ export type {
   VisitorMap,
 } from './models/index.js';
 
-export * from './rule-handler.js';
+export * from './execution/rule-handler.js';
 
-export * from './visitor-registry.js';
+export * from './execution/visitor-registry.js';
 
-export * from './single-pass-engine.js';
+export * from './execution/single-pass-engine.js';
 
-export * from './rule-context-factory.js';
+export * from './context/rule-context-factory.js';
 
-export * from './orchestrator.js';
+export * from './execution/orchestrator.js';
 
 export {
   buildFileProgress,
   isAnalysisFileProgress,
   isWorkerFileProgress,
-} from './progress.js';
+} from './analysis/progress.js';
 
-export { createAnalysisContext } from './analysis-context.js';
+export { createAnalysisContext } from './analysis/analysis-context.js';
 
 export {
   buildProjectContext,
   buildImportGraphOnly,
-} from './project-context-builder.js';
+} from './context/project-context-builder.js';
 
-export { createTypeAwareAnalysisContext } from './type-aware-context.js';
+export { createTypeAwareAnalysisContext } from './context/type-aware-context.js';
 
 
-export { createAngularTypeIndex } from './angular-type-index.js';
+export { createAngularTypeIndex } from './context/angular-type-index.js';
 
-export { executeBatchedTasks } from './runner.js';
+export { executeBatchedTasks } from './execution/runner.js';
 
-export { configureRuleExecutor } from './rule-executor.js';
+export { configureRuleExecutor } from './execution/rule-executor.js';
 
-export * from './analysis-stats.js';
+export * from './analysis/analysis-stats.js';
 
 export * from './constants.js';
 
@@ -68,17 +68,17 @@ export {
   requestGarbageCollection,
   requestGarbageCollectionUnderPressure,
   getHeapPressureRatio,
-} from './runtime-memory.js';
+} from './analysis/runtime-memory.js';
 
 export * from './spinner.js';
 
-export * from './worker-pool.js';
+export * from './execution/worker-pool.js';
 
-export * from './cycle-detector.js';
+export * from './project-graph/cycle-detector.js';
 
-export * from './graph-scope.js';
+export * from './project-graph/graph-scope.js';
 
-export { buildImportGraphOxc } from './import-graph-oxc.js';
+export { buildImportGraphOxc } from './project-graph/import-graph-oxc.js';
 
 export { computeFileComplexity } from './complexity/complexity-analyzer.js';
 
