@@ -15,12 +15,12 @@ const DEFAULT_CAPABILITIES: EngineCapabilities = {
   cssASTEnabled: true,
 };
 
-export const loadPlugins = async (
+export async function loadPlugins(
   plugins: string[],
   configDir: string,
   registry: RuleRegistry,
   capabilities: EngineCapabilities = DEFAULT_CAPABILITIES
-): Promise<void> => {
+): Promise<void> {
   if (plugins.length === 0) return;
 
   debug(
@@ -47,7 +47,7 @@ export const loadPlugins = async (
         `Ensure plugins are installed and satisfy version requirements.`
     );
   }
-};
+}
 
 async function loadSinglePlugin(
   pluginRef: string,

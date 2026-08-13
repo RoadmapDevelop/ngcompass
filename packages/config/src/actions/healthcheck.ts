@@ -4,12 +4,14 @@ import { resolveConfig } from '../loaders/loader.js';
 
 const UNEXPECTED_ERROR_CODE = 'error-conf-semantic';
 
-const toUnexpectedIssue = (error: unknown): ConfigIssue => ({
-  code: UNEXPECTED_ERROR_CODE,
-  message: error instanceof Error ? error.message : String(error),
-  path: [],
-  severity: 'error',
-});
+function toUnexpectedIssue(error: unknown): ConfigIssue {
+  return {
+    code: UNEXPECTED_ERROR_CODE,
+    message: error instanceof Error ? error.message : String(error),
+    path: [],
+    severity: 'error',
+  };
+}
 
 export async function validateConfig(
   options: ValidateConfigOptions

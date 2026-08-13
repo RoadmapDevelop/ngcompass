@@ -2,6 +2,8 @@ import type { ConfigIssue } from '@ngcompass/common';
 
 type IssueTemplate = Omit<ConfigIssue, 'path'>;
 
+const defineTemplate = (template: IssueTemplate): IssueTemplate => template;
+
 export const MESSAGES = {
   NEGATIVE_MAX_WARNINGS: (val: number): IssueTemplate => ({
     code: 'negative-max-warnings',
@@ -19,12 +21,12 @@ export const MESSAGES = {
     severity: 'error',
   }),
 
-  WORKERS_BELOW_MINIMUM: {
+  WORKERS_BELOW_MINIMUM: defineTemplate({
     code: 'workers-below-minimum',
     message: "Value for 'maxWorkers' must be at least 1.",
     suggestion: 'Set to 1 or higher, or remove to use default (CPU count - 1).',
     severity: 'error',
-  } as IssueTemplate,
+  }),
   NEGATIVE_CACHE_TTL: (val: number): IssueTemplate => ({
     code: 'negative-cache-ttl',
     message: `Cache TTL must be non-negative. Received: ${val}ms.`,
@@ -38,14 +40,14 @@ export const MESSAGES = {
     suggestion: `Reduce to ${limit} or lower for optimal performance.`,
     severity: 'warning',
   }),
-  CACHE_TTL_ZERO: {
+  CACHE_TTL_ZERO: defineTemplate({
     code: 'warn-cache-ttl-zero',
     message:
       'Cache TTL is set to 0. Using driver default TTL (typically 24 hours).',
     suggestion:
       'Set explicit TTL if you need different cache expiration behavior.',
     severity: 'warning',
-  } as IssueTemplate,
+  }),
 
   INVALID_GLOB_PATTERN: (pattern: string, error: string): IssueTemplate => ({
     code: 'invalid-glob-pattern',
@@ -54,20 +56,20 @@ export const MESSAGES = {
       "Check pattern syntax. Valid examples: 'src/**/*.ts', '**/*.{ts,html}'.",
     severity: 'error',
   }),
-  EMPTY_INCLUDE: {
+  EMPTY_INCLUDE: defineTemplate({
     code: 'empty-include',
     message: 'No include patterns defined. Analysis will skip all files.',
     suggestion:
       "Add patterns like ['src/**/*.ts', 'src/**/*.html'] to enable analysis.",
     severity: 'error',
-  } as IssueTemplate,
-  EMPTY_EXCLUDE: {
+  }),
+  EMPTY_EXCLUDE: defineTemplate({
     code: 'warn-empty-exclude',
     message: 'No exclude patterns defined. Performance may degrade.',
     suggestion:
       "Add common exclusions: ['node_modules/**', 'dist/**', '**/*.spec.ts'].",
     severity: 'warning',
-  } as IssueTemplate,
+  }),
   DUPLICATE_PATTERNS: (field: string, patterns: string[]): IssueTemplate => ({
     code: 'warn-duplicate-patterns',
     message: `Duplicate patterns found in "${field}": ${patterns.map((p) => `"${p}"`).join(', ')}.`,
@@ -146,19 +148,19 @@ export const MESSAGES = {
     suggestion: "Use one of: 'warn', 'error', or 'off'.",
     severity: 'error',
   }),
-  NO_RULES_CONFIGURED: {
+  NO_RULES_CONFIGURED: defineTemplate({
     code: 'warn-no-rules-configured',
     message: 'No rules configured. Analysis effectively skips checks.',
     suggestion:
       "Add rules to enable analysis, or extend from a preset like 'recommended'.",
     severity: 'warning',
-  } as IssueTemplate,
-  EMPTY_RULE_NAME: {
+  }),
+  EMPTY_RULE_NAME: defineTemplate({
     code: 'empty-rule-name',
     message: 'Empty rule name detected. Rule keys must be non-empty strings.',
     suggestion: "Remove empty keys from 'rules' configuration.",
     severity: 'error',
-  } as IssueTemplate,
+  }),
 
   PROFILE_CIRCULAR_INHERITANCE: (chain: string[]): IssueTemplate => ({
     code: 'profile-circular-inheritance',
@@ -167,13 +169,13 @@ export const MESSAGES = {
       "Break the circular dependency by removing one 'extends' reference.",
     severity: 'error',
   }),
-  PROFILE_EMPTY: {
+  PROFILE_EMPTY: defineTemplate({
     code: 'warn-profile-empty',
     message: 'Profiles section is defined but empty. Consider removing it.',
     suggestion:
       "Remove 'profiles: {}' or add at least one profile like 'dev' or 'ci'.",
     severity: 'warning',
-  } as IssueTemplate,
+  }),
 
   EXTENDS_NOT_FOUND: (preset: string): IssueTemplate => ({
     code: 'extends-not-found',
@@ -182,17 +184,17 @@ export const MESSAGES = {
     severity: 'error',
   }),
 
-  DEPRECATED_CACHE_LOCATION: {
+  DEPRECATED_CACHE_LOCATION: defineTemplate({
     code: 'warn-deprecated-cache-location',
     message: "'cacheLocation' is deprecated. Use 'cache.location' instead.",
     suggestion:
       'Replace \'cacheLocation: "..."\' with \'cache: { location: "..." }\'.',
     severity: 'warning',
-  } as IssueTemplate,
-  DEPRECATED_CONCURRENCY: {
+  }),
+  DEPRECATED_CONCURRENCY: defineTemplate({
     code: 'warn-deprecated-concurrency',
     message: "'concurrency' is deprecated. Use 'maxWorkers' instead.",
     suggestion: "Replace 'concurrency: N' with 'maxWorkers: N'.",
     severity: 'warning',
-  } as IssueTemplate,
+  }),
 };

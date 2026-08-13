@@ -33,10 +33,9 @@ export function validateExtendsChain(
 
   if (!config.extends) return { issues };
 
-  const isArray = Array.isArray(config.extends);
-  const extendsList: unknown[] = isArray
-    ? (config.extends as unknown[])
-    : [config.extends];
+  const extendsValue = config.extends;
+  const isArray = Array.isArray(extendsValue);
+  const extendsList: unknown[] = isArray ? extendsValue : [extendsValue];
 
   for (let i = 0; i < extendsList.length; i++) {
     const preset = extendsList[i];

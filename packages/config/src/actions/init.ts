@@ -7,9 +7,9 @@ import { DEFAULT_CONFIG } from '../schemas/defaults.js';
 const CONFIG_FILENAME = 'ngcompass.config.ts';
 const ANGULAR_WORKSPACE_FILENAME = 'angular.json';
 
-export const renderConfigTemplate = (
+export function renderConfigTemplate(
   options: ConfigTemplateOptions = {}
-): string => {
+): string {
   const include = options.include ?? DEFAULT_CONFIG.include;
   const exclude = options.exclude ?? DEFAULT_CONFIG.exclude;
   const includes = include.map((p) => `    '${p}',`).join('\n');
@@ -36,9 +36,9 @@ ${excludes}
   },
 });
 `;
-};
+}
 
-const pathExists = async (targetPath: string): Promise<boolean> => {
+async function pathExists(targetPath: string): Promise<boolean> {
   try {
     await fs.access(targetPath);
     return true;
@@ -47,7 +47,7 @@ const pathExists = async (targetPath: string): Promise<boolean> => {
     debug('init', formatError(error));
     return false;
   }
-};
+}
 
 export async function detectAngularWorkspaceIncludes(
   cwd: string

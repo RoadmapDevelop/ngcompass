@@ -21,10 +21,10 @@ const TIME = {
   TWENTY_FOUR_HOURS: 86400000,
 } as const;
 
-export const getDefaultMaxWorkers = (): number => {
+export function getDefaultMaxWorkers(): number {
   const cpuCount = os.cpus().length;
   return Math.max(1, Math.min(4, cpuCount - 1));
-};
+}
 
 export const DEFAULT_CACHE_OPTIONS: Required<CacheOptions> = {
   enabled: true,

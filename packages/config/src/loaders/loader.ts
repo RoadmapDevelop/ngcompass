@@ -20,9 +20,9 @@ import type {
 } from '../models/index.js';
 import { findAndLoadConfig } from './discovery.js';
 
-export const resolveConfig = async (
+export async function resolveConfig(
   options: ValidateConfigOptions
-): Promise<ConfigValidationResult> => {
+): Promise<ConfigValidationResult> {
   time('config-resolution');
   const { cwd, profile, cache } = options;
 
@@ -73,7 +73,7 @@ export const resolveConfig = async (
   debug('loader', `Config resolution complete: ${resolutionTime.toFixed(1)}ms`);
 
   return result;
-};
+}
 
 function resolveAnchorDir(
   loaded: ConfigDiscoveryResult | null,

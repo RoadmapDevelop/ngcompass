@@ -20,7 +20,7 @@ const SEARCH_PLACES = [
   'package.json',
 ];
 
-const jitiLoader = (filepath: string): Promise<unknown> => {
+function jitiLoader(filepath: string): Promise<unknown> {
   const currentFile = fileURLToPath(import.meta.url);
   const configPackageEntry = path.basename(currentFile).startsWith('index.')
     ? currentFile
@@ -34,14 +34,15 @@ const jitiLoader = (filepath: string): Promise<unknown> => {
     }
     return mod;
   });
-};
+}
 
-const jsonLoader = (_filepath: string, content: string): unknown =>
-  JSON.parse(content.replace(/^\uFEFF/, ''));
+function jsonLoader(_filepath: string, content: string): unknown {
+  return JSON.parse(content.replace(/^\uFEFF/, ''));
+}
 
-export const findAndLoadConfig = async (
+export async function findAndLoadConfig(
   cwd: string
-): Promise<ConfigDiscoveryResult | null> => {
+): Promise<ConfigDiscoveryResult | null> {
   time('config-discovery');
   debug('discovery', `Searching for config in: ${cwd}`);
 
@@ -93,4 +94,4 @@ export const findAndLoadConfig = async (
     contentHash,
     isEmpty: result.isEmpty,
   };
-};
+}
