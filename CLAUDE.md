@@ -130,6 +130,7 @@ packages/<name>/src/
 | **Module-private types stay in their logic file.**                                                                                              | The barrel re-exports everything in `models/`; moving a private type there would widen the public API. |
 | **`src/index.ts` decides the public surface.** Star-export the barrel only when every model is already public; otherwise re-export the public model files by name (`@ngcompass/ast` hides `HostDirectiveMetadata` this way). | The barrel is the package's internal import path, not automatically its public API. |
 | **Relative imports carry the `.js` extension**, and type-only imports use `import type` / `export type`.                                         | `module: "Node16"` requires it, and the extension-less form fails at runtime, not at build.  |
+| **A type inferred from a zod schema moves only if that schema is already exported.** `ValidatedConfig` moved; `AnalyzerConfig` stayed in `schemas/schema.ts` because it infers from a module-private schema. | Widening a schema's visibility to satisfy a type move inverts the dependency.                |
 
 Moving a type is behaviour-preserving only if the public type surface is unchanged. The verification gate is the built declaration file:
 
@@ -139,6 +140,8 @@ pnpm build && diff /tmp/<name>-before.d.ts packages/<name>/dist/index.d.ts
 ```
 
 tsup emits declarations in module-graph order, so restructuring imports reorders the file even when nothing changed. A raw diff of ordering alone is acceptable **only** when the sorted set of top-level declarations and the trailing export list are byte-identical. Compare those two directly rather than eyeballing the raw diff.
+
+When even that compare is non-empty, the reordering has reached inside a declaration — a changed module graph can reorder union members (`'memory' | 'local'`) or object properties, which is textual noise but not a type change. Do not accept it on inspection. Escalate to a structural check: copy the baseline alongside the new `dist/index.d.ts`, generate a file that asserts every exported name is mutually assignable between the two, and compile it under `tsc --strict`. Equivalence is proven when the name sets match exactly and the assignability check compiles clean; anything else is a real surface change.
 
 ## Testing
 
