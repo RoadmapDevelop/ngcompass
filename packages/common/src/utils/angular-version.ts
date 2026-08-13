@@ -1,6 +1,6 @@
-const ANGULAR_VERSION_PATTERN = /^(\d+)(?:\.(\d+))?(?:\.\d+)?(?:[-+].*)?$/;
+import type { AngularVersionTuple } from '../models/angular-version.js';
 
-export type AngularVersionTuple = readonly [number, number];
+const ANGULAR_VERSION_PATTERN = /^(\d+)(?:\.(\d+))?(?:\.\d+)?(?:[-+].*)?$/;
 
 export function parseAngularVersion(value: string): AngularVersionTuple | null {
   const match = ANGULAR_VERSION_PATTERN.exec(value.trim());

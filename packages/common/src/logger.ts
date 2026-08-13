@@ -1,25 +1,5 @@
 import pc from 'picocolors';
-
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-export type Namespace =
-  | 'discovery'
-  | 'loader'
-  | 'validator'
-  | 'cache'
-  | 'scanner'
-  | 'parser'
-  | 'rules'
-  | 'workers'
-  | 'reporter'
-  | 'init'
-  | 'config'
-  | 'planner'
-  | 'incremental'
-  | 'dry-run'
-  | 'engine'
-  | 'plugin-loader'
-  | 'env-fingerprint';
+import type { LiveRedraw, LogLevel, Namespace } from './models/log.js';
 
 interface LoggerConfig {
   enabled: boolean;
@@ -70,11 +50,6 @@ function getNamespaceColor(namespace: string) {
     hash = namespace.charCodeAt(i) + ((hash << 5) - hash);
   }
   return COLORS[Math.abs(hash) % COLORS.length];
-}
-
-export interface LiveRedraw {
-  clear(): void;
-  redraw(): void;
 }
 
 let liveRedraw: LiveRedraw | undefined;

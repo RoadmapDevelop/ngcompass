@@ -1,11 +1,5 @@
 import ts from 'typescript';
-
-export interface Location {
-  line: number;
-  column: number;
-}
-
-export type LocationMap = Record<string, Location>;
+import type { LocationMap } from '../models/source-location.js';
 
 export class ASTUtils {
   static parse(content: string, fileName = 'config.ts'): ts.SourceFile {

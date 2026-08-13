@@ -1,37 +1,5 @@
-import type { Severity, RuleConfig } from './types.js';
-
-export interface PluginManifest {
-  readonly name: string;
-
-  readonly version: string;
-
-  readonly apiVersion: string;
-
-  readonly engineVersionRange: string;
-
-  readonly capabilities?: {
-    readonly requiresTypeInfo?: boolean;
-
-    readonly requiresTemplateAST?: boolean;
-
-    readonly requiresCssAST?: boolean;
-  };
-}
-
-export interface TelemetryEventBase {
-  readonly phase: 'config' | 'planner' | 'engine';
-  readonly operation: string;
-  readonly durationMs: number;
-  readonly cacheHit?: boolean;
-  readonly workerId?: number;
-  readonly metadata?: Readonly<Record<string, string | number | boolean>>;
-}
-
-export interface TelemetryConfig {
-  enabled?: boolean;
-
-  onEvent?: (event: TelemetryEventBase) => void;
-}
+import type { RuleConfig, Severity } from './rule-config.js';
+import type { TelemetryConfig } from './telemetry.js';
 
 export type OutputFormat = 'json' | 'text' | 'sarif' | 'html';
 
@@ -94,31 +62,6 @@ export interface AnalyzerConfig {
   angularVersion?: string;
 }
 
-export interface ConfigIssue {
-  readonly code: string;
-  readonly message: string;
-  readonly path?: ReadonlyArray<string | number>;
-  readonly severity: 'error' | 'warning';
-  readonly file?: string;
-  readonly line?: number;
-  readonly column?: number;
-  readonly suggestion?: string;
-}
-
-export interface HealthReport {
-  valid: boolean;
-  issues: ConfigIssue[];
-  config?: unknown;
-}
-
-export type ConfigReport = HealthReport;
-
-export interface InitResult {
-  success: boolean;
-  filePath: string;
-  alreadyExists?: boolean;
-}
-
 export interface NormalizedAnalyzerConfig extends Omit<
   AnalyzerConfig,
   | 'cache'
@@ -142,9 +85,4 @@ export interface NormalizedAnalyzerConfig extends Omit<
   rules: Record<string, RuleConfig>;
 
   angularVersion: string | null;
-}
-
-export interface ConfigValidationResult {
-  config?: NormalizedAnalyzerConfig;
-  report: HealthReport;
 }
