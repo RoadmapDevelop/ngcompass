@@ -5,7 +5,8 @@ import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { getReporter, type ResultSummary } from '@ngcompass/reporters';
 import { Spinner } from '../../spinner.js';
 import { exitWithError } from '../exit.js';
-import { resolvePerformanceOptions, type AnalyzeOptions } from './options.js';
+import { resolvePerformanceOptions } from './options.js';
+import type { AnalyzeOptions } from '../../models/index.js';
 import {
   formatAnalysisProgressMessage,
   normalizeReporterFormat,

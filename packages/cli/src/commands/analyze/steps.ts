@@ -26,7 +26,10 @@ import {
   isNewEngineRule,
   resolveRules,
 } from '@ngcompass/rules';
-import type { AnalyzeOptions, EffectivePerformanceOptions } from './options.js';
+import type {
+  AnalyzeOptions,
+  EffectivePerformanceOptions,
+} from '../../models/index.js';
 import { resolveParserProjectPath } from './resolve.js';
 
 export async function loadConfigurationStep(
