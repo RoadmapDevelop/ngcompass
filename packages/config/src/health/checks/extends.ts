@@ -2,7 +2,10 @@ import { createRequire } from 'node:module';
 import nodePath from 'node:path';
 import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
-import type { ConfigBlockValidation, ValidatedConfig } from '../types.js';
+import type {
+  ConfigBlockValidation,
+  ValidatedConfig,
+} from '../../models/index.js';
 
 function isSkippable(preset: string): boolean {
   if (preset.startsWith('.')) return true;

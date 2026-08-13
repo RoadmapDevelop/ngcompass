@@ -18,7 +18,7 @@ import type {
   ValidatedConfig,
   ValidationContext,
   WritableIssue,
-} from './types.js';
+} from '../models/index.js';
 
 const ERROR_CODES = {
   CHECK_FAILED: 'check-failed',

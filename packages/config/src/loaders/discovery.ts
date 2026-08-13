@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { createJiti } from 'jiti';
 import { lilconfig } from 'lilconfig';
 import { debug, time, timeEnd } from '@ngcompass/common';
+import type { ConfigDiscoveryResult } from '../models/index.js';
 import { sha1Hex } from '../utils/hash.js';
 
 const MODULE_NAME = 'ngcompass';
@@ -37,14 +38,6 @@ const jitiLoader = (filepath: string): Promise<unknown> => {
 
 const jsonLoader = (_filepath: string, content: string): unknown =>
   JSON.parse(content.replace(/^\uFEFF/, ''));
-
-export interface ConfigDiscoveryResult {
-  config: unknown;
-  filepath: string;
-  content: string;
-  contentHash: string;
-  isEmpty?: boolean;
-}
 
 export const findAndLoadConfig = async (
   cwd: string

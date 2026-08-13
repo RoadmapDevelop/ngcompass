@@ -1,7 +1,10 @@
 import { minimatch } from 'minimatch';
 import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
-import type { ConfigBlockValidation, ValidatedConfig } from '../types.js';
+import type {
+  ConfigBlockValidation,
+  ValidatedConfig,
+} from '../../models/index.js';
 
 const TRIPLE_SLASH_RE = /\/\/\//;
 const BRACE_OPEN_RE = /\{/g;

@@ -1,20 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { debug, type InitResult } from '@ngcompass/common';
+import type { ConfigTemplateOptions, InitOptions } from '../models/index.js';
 import { DEFAULT_CONFIG } from '../schemas/defaults.js';
 
 const CONFIG_FILENAME = 'ngcompass.config.ts';
 const ANGULAR_WORKSPACE_FILENAME = 'angular.json';
-
-export interface InitOptions {
-  cwd?: string;
-  force?: boolean;
-}
-
-export interface ConfigTemplateOptions {
-  readonly include?: ReadonlyArray<string>;
-  readonly exclude?: ReadonlyArray<string>;
-}
 
 export const renderConfigTemplate = (
   options: ConfigTemplateOptions = {}

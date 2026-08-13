@@ -5,7 +5,7 @@ import type {
   ConfigBlockValidation,
   ValidatedConfig,
   ValidationContext,
-} from '../types.js';
+} from '../../models/index.js';
 
 const TRAVERSAL_TOKEN = '..';
 const SENSITIVE_DIRS = ['/etc/', '\\etc\\', '/var/', '\\var\\'];

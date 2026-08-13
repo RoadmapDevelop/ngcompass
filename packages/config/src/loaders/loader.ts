@@ -10,21 +10,15 @@ import type { ConfigValidationResult } from '@ngcompass/common';
 
 import * as path from 'node:path';
 
-import {
-  detectAngularVersion,
-  type AngularVersionDetection,
-} from '../angular/detect-version.js';
+import { detectAngularVersion } from '../angular/detect-version.js';
 import { createDefaultContext } from '../health/context.js';
 import { validateConfiguration } from '../health/validator.js';
-import { findAndLoadConfig, type ConfigDiscoveryResult } from './discovery.js';
-
-export interface ValidateConfigOptions {
-  cwd: string;
-
-  profile?: string;
-
-  cache?: CacheContext;
-}
+import type {
+  AngularVersionDetection,
+  ConfigDiscoveryResult,
+  ValidateConfigOptions,
+} from '../models/index.js';
+import { findAndLoadConfig } from './discovery.js';
 
 export const resolveConfig = async (
   options: ValidateConfigOptions

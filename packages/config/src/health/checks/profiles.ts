@@ -4,7 +4,7 @@ import type {
   ConfigBlockValidation,
   ValidatedConfig,
   ValidationContext,
-} from '../types.js';
+} from '../../models/index.js';
 import { validateConfigBlock } from './base.js';
 
 function readExtends(profile: unknown): string | undefined {

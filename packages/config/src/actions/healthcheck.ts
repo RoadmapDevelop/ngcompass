@@ -1,10 +1,6 @@
 import type { ConfigValidationResult, ConfigIssue } from '@ngcompass/common';
-import {
-  resolveConfig,
-  type ValidateConfigOptions,
-} from '../loaders/loader.js';
-
-export type { ValidateConfigOptions };
+import type { ValidateConfigOptions } from '../models/index.js';
+import { resolveConfig } from '../loaders/loader.js';
 
 const UNEXPECTED_ERROR_CODE = 'error-conf-semantic';
 

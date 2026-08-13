@@ -4,7 +4,7 @@ import type {
   ConfigBlock,
   ConfigBlockValidation,
   ValidationContext,
-} from '../types.js';
+} from '../../models/index.js';
 
 const LIMITS = {
   WORKERS_MIN: 1,

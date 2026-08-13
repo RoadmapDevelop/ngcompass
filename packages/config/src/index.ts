@@ -1,3 +1,10 @@
+export type * from './models/angular-version.js';
+export type * from './models/config-block.js';
+export type * from './models/config-discovery.js';
+export type * from './models/init-options.js';
+export type * from './models/validated-config.js';
+export type * from './models/validation-context.js';
+
 export * from './actions/healthcheck.js';
 export * from './angular/detect-version.js';
 export * from './actions/init.js';

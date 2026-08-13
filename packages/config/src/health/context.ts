@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { cpus } from 'node:os';
 import process from 'node:process';
-import type { ValidationContext } from './types.js';
+import type { ValidationContext } from '../models/index.js';
 
 export function createDefaultContext(
   overrides: Partial<ValidationContext> = {}

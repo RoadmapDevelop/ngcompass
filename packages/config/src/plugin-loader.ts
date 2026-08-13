@@ -7,12 +7,7 @@ import type {
   RulePlugin,
   RuleRegistry,
 } from '@ngcompass/common';
-
-export interface EngineCapabilities {
-  readonly typeCheckingEnabled: boolean;
-  readonly templateASTEnabled: boolean;
-  readonly cssASTEnabled: boolean;
-}
+import type { EngineCapabilities } from './models/index.js';
 
 const DEFAULT_CAPABILITIES: EngineCapabilities = {
   typeCheckingEnabled: false,

@@ -6,7 +6,7 @@ import {
 } from '@ngcompass/common';
 import type { ConfigIssue, LocationMap } from '@ngcompass/common';
 import { sha1Hex } from '../utils/hash.js';
-import type { WritableIssue } from './types.js';
+import type { WritableIssue } from '../models/index.js';
 
 function buildVersionedCacheKey(contentHash: string): string {
   return `v${CACHE_VERSION}:${contentHash}`;
