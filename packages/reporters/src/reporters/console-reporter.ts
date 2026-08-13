@@ -6,16 +6,18 @@ import { getAnalysisStatus } from '../analysis-status.js';
 import {
   defaultSourceReader,
   renderCodeFrame,
-  type SourceReader,
+  
 } from '../code-frame.js';
-import { processOutput, type ReporterOutput } from '../output.js';
+import type { SourceReader } from '../models/index.js';
+import { processOutput } from '../output.js';
+import type { ReporterOutput } from '../models/index.js';
 import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
 import type {
   ConsoleReporterOptions,
   ParseError,
   Reporter,
   ResultSummary,
-} from '../types.js';
+} from '../models/index.js';
 
 const TYPE_WIDTH_COMPACT = 5;
 

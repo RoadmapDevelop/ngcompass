@@ -1,10 +1,5 @@
 import process from 'node:process';
-
-export interface ReporterOutput {
-  write(line: string): void;
-  error(line: string): void;
-}
-
+import type { ReporterOutput, TestOutput } from './models/index.js';
 export const processOutput: ReporterOutput = {
   write(line: string): void {
     process.stdout.write(line + '\n');
@@ -14,12 +9,6 @@ export const processOutput: ReporterOutput = {
     process.stderr.write(line + '\n');
   },
 };
-
-export interface TestOutput {
-  readonly output: ReporterOutput;
-  readonly lines: readonly string[];
-  readonly errors: readonly string[];
-}
 
 export function createTestOutput(): TestOutput {
   const lines: string[] = [];

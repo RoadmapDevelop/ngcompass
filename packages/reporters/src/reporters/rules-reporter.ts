@@ -1,6 +1,8 @@
 import pc from 'picocolors';
 import type { RuleListEntry } from '@ngcompass/common';
-import { processOutput, type ReporterOutput } from '../output.js';
+import { processOutput } from '../output.js';
+import type { ReporterOutput } from '../models/index.js';
+import type { RulesReporterOptions } from '../models/index.js';
 
 const DOMAIN_ORDER = [
   'correctness',
@@ -20,10 +22,6 @@ const NGCOMPASS_BANNER = [
   '|_| |_|\\__, |\\___\\___/|_| |_| |_| .__/ \\__,_|___/___/',
   '       |___/                    |_|                   ',
 ] as const;
-
-export interface RulesReporterOptions {
-  preset?: string;
-}
 
 export class RulesReporter {
   constructor(

@@ -1,4 +1,20 @@
-export * from './types.js';
+export type {
+  AnalysisReporter,
+  CacheReporter,
+  ConfigReporter,
+  ConsoleReporterOptions,
+  DiagnosticMessage,
+  FileDiagnosticResult,
+  ParseError,
+  ProgressReporter,
+  Reporter,
+  ReporterFormat,
+  ReporterOutput,
+  ResultSummary,
+  RulesReporterOptions,
+  SourceReader,
+  TestOutput,
+} from './models/index.js';
 export * from './factory.js';
 export * from './output.js';
 export * from './code-frame.js';

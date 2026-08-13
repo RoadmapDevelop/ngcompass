@@ -5,6 +5,7 @@ import type {
   RuleResult,
 } from '@ngcompass/common';
 import type { CacheInfo } from '@ngcompass/cache';
+import type { ResultSummary } from './result-summary.js';
 
 export type ReporterFormat = 'console' | 'json' | 'html' | 'ui' | 'sarif';
 
@@ -18,23 +19,6 @@ export interface ConsoleReporterOptions {
   readonly quiet?: boolean;
 
   readonly noRecommendation?: boolean;
-}
-
-export interface ResultSummary {
-  readonly scannedFiles: number;
-
-  readonly discoveredFiles?: number;
-
-  readonly totalFiles: number;
-  readonly totalTasks: number;
-  readonly cachedTasks?: number;
-  readonly totalErrors: number;
-  readonly totalWarnings: number;
-  readonly failOnSeverity?: 'warn' | 'error';
-  readonly maxWarnings?: number;
-  readonly skippedFiles?: number;
-  readonly skippedFilePaths?: ReadonlyArray<string>;
-  readonly duration: number;
 }
 
 export interface AnalysisReporter {
@@ -67,28 +51,17 @@ export interface ConfigReporter {
   renderHealthReport(report: HealthReport): void;
 }
 
+export interface CacheReporter {
+  renderClearResult(type: 'ast' | 'config' | 'results' | 'all'): void;
+
+  renderCacheInfo(info: CacheInfo): void;
+}
+
 export interface ParseError {
   readonly filePath: string;
   readonly message: string;
 }
 
-export interface DiagnosticMessage {
-  readonly ruleId: string;
-  readonly severity: 1 | 2;
-  readonly message: string;
-  readonly line: number;
-  readonly column: number;
-}
-
-export interface FileDiagnosticResult {
-  readonly filePath: string;
-  readonly messages: readonly DiagnosticMessage[];
-  readonly errorCount: number;
-  readonly warningCount: number;
-}
-
-export interface CacheReporter {
-  renderClearResult(type: 'ast' | 'config' | 'results' | 'all'): void;
-
-  renderCacheInfo(info: CacheInfo): void;
+export interface RulesReporterOptions {
+  preset?: string;
 }

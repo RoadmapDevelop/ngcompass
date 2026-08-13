@@ -1,13 +1,10 @@
 import fs from 'node:fs';
 import pc from 'picocolors';
 import { codeFrameColumns } from '@babel/code-frame';
+import type { SourceReader } from './models/index.js';
 
 const CONTEXT_LINES = 2;
 const FRAME_PADDING = '  ';
-
-export interface SourceReader {
-  readLines(filePath: string): string[];
-}
 
 const sourceCache = new Map<string, string[]>();
 

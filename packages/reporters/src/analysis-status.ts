@@ -1,12 +1,7 @@
-import type { ResultSummary } from './types.js';
-
-export type AnalysisStatus = 'passed' | 'passed-with-warnings' | 'failed';
-
-export interface AnalysisStatusInfo {
-  readonly status: AnalysisStatus;
-  readonly label: 'PASS' | 'WARN' | 'FAILED';
-}
-
+import type {
+  AnalysisStatusInfo,
+  ResultSummary,
+} from './models/index.js';
 const DEFAULT_MAX_WARNINGS = 10;
 
 export function getAnalysisStatus(

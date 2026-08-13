@@ -1,7 +1,8 @@
 import pc from 'picocolors';
 import type { CacheInfo } from '@ngcompass/cache';
-import type { CacheReporter } from '../types.js';
-import { processOutput, type ReporterOutput } from '../output.js';
+import type { CacheReporter } from '../models/index.js';
+import { processOutput } from '../output.js';
+import type { ReporterOutput } from '../models/index.js';
 
 const CACHE_META: Record<
   'ast' | 'config' | 'results',

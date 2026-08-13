@@ -9,8 +9,9 @@ import { HtmlReporter } from './reporters/html-reporter.js';
 import { JsonReporter } from './reporters/json-reporter.js';
 import {
   RulesReporter,
-  type RulesReporterOptions,
+  
 } from './reporters/rules-reporter.js';
+import type { RulesReporterOptions } from './models/index.js';
 import { SarifReporter } from './reporters/sarif-reporter.js';
 import type {
   CacheReporter,
@@ -20,7 +21,7 @@ import type {
   Reporter,
   ReporterFormat,
   ResultSummary,
-} from './types.js';
+} from './models/index.js';
 
 class CompoundReporter implements Reporter {
   private readonly progress: ConsoleReporter;

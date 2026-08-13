@@ -4,9 +4,10 @@ import process from 'node:process';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import type { RuleResult, RuleFailure } from '@ngcompass/common';
-import type { Reporter, ResultSummary, ParseError } from '../types.js';
+import type { Reporter, ResultSummary, ParseError } from '../models/index.js';
 import { isErrorSeverity, severityRank, compareByPosition } from '../severity-utils.js';
-import { processOutput, type ReporterOutput } from '../output.js';
+import { processOutput } from '../output.js';
+import type { ReporterOutput } from '../models/index.js';
 import { getAnalysisStatus } from '../analysis-status.js';
 
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';

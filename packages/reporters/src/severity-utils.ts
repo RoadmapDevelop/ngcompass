@@ -1,4 +1,5 @@
 import type { RuleSeverity } from '@ngcompass/common';
+import type { SourcePosition } from './models/index.js';
 
 const SEVERITY_PRIORITY: Readonly<Record<RuleSeverity, number>> = {
   error: 0,
@@ -12,11 +13,6 @@ export function isErrorSeverity(severity: RuleSeverity): boolean {
 
 export function severityRank(severity: RuleSeverity): number {
   return SEVERITY_PRIORITY[severity] ?? Number.MAX_SAFE_INTEGER;
-}
-
-export interface SourcePosition {
-  readonly line: number;
-  readonly column: number;
 }
 
 export function compareByPosition(

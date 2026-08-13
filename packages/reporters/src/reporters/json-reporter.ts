@@ -1,6 +1,7 @@
 import type { RuleResult, RuleSeverity } from '@ngcompass/common';
 import { getAnalysisStatus } from '../analysis-status.js';
-import { processOutput, type ReporterOutput } from '../output.js';
+import { processOutput } from '../output.js';
+import type { ReporterOutput } from '../models/index.js';
 import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
 import type {
   DiagnosticMessage,
@@ -8,7 +9,7 @@ import type {
   ParseError,
   Reporter,
   ResultSummary,
-} from '../types.js';
+} from '../models/index.js';
 
 const JSON_SEVERITY_ERROR = 2 as const;
 const JSON_SEVERITY_WARNING = 1 as const;
