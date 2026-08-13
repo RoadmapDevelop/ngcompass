@@ -14,26 +14,7 @@ import type {
   NewExpression,
 } from '@ngcompass/ast';
 import { RuleMetadata } from '@ngcompass/common';
-
-export type StreamType =
-  | 'AngularClass'
-  | 'AnyAngularClass'
-  | 'DecoratedProperty'
-  | 'TemplateExpression'
-  | 'TemplateAttribute'
-  | 'TemplateBlock'
-  | 'Template'
-  | 'CallExpression'
-  | 'NewExpression'
-  | 'ImportDeclaration';
-
-export interface RuleHandler<TNode> {
-  readonly name: string;
-  readonly streamType: StreamType;
-
-  handle(node: TNode, context: RuleContext): RuleFailure | RuleFailure[] | null;
-  readonly meta?: Partial<RuleMetadata>;
-}
+import type { RuleHandler } from './models/index.js';
 
 export const createComponentRule = (
   name: string,

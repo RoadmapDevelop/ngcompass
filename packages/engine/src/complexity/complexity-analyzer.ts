@@ -1,8 +1,6 @@
 import type { Program } from 'oxc-parser';
 import { Locator } from '@ngcompass/common';
 import {
-  type AstNodeLike,
-  type FunctionKind,
   FUNCTION_TYPES,
   NAMED_MEMBER_PARENTS,
   NON_CHILD_KEYS,
@@ -12,19 +10,11 @@ import {
   spanOffset,
   walkWithParent,
 } from '../shared/ast-functions.js';
+import type {
+  AstNodeLike,
+  FunctionComplexity,
+} from '../models/index.js';
 
-export type { FunctionKind } from '../shared/ast-functions.js';
-
-export interface FunctionComplexity {
-  readonly name: string;
-  readonly kind: FunctionKind;
-  readonly line: number;
-  readonly column: number;
-  readonly endLine: number;
-  readonly lineCount: number;
-  readonly cyclomatic: number;
-  readonly cognitive: number;
-}
 
 const CYCLOMATIC_DECISIONS: ReadonlySet<string> = new Set([
   'IfStatement',

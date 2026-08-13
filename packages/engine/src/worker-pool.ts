@@ -20,11 +20,8 @@ import pLimit from 'p-limit';
 import { createAnalysisContext } from './analysis-context.js';
 import { calculateStats } from './analysis-stats.js';
 import { MIN_WORKER_COUNT, WORKER_TIMEOUT_MS } from './constants.js';
-import {
-  buildFileProgress,
-  isWorkerFileProgress,
-  type AnalysisFileProgress,
-} from './progress.js';
+import { buildFileProgress, isWorkerFileProgress } from './progress.js';
+import type { AnalysisFileProgress } from './models/index.js';
 import { executeBatchedTasks } from './runner.js';
 
 export const runAnalysisParallel = async (

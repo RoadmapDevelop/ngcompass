@@ -12,8 +12,9 @@ import type { Task } from '@ngcompass/planner';
 
 import {
   RuleContextFactory,
-  type ExecutionContext,
+  
 } from './rule-context-factory.js';
+import type { ExecutionContext } from './models/index.js';
 import {
   getConfiguredChecker,
   getConfiguredExecutor,

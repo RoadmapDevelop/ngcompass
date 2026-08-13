@@ -3,15 +3,10 @@ import path from 'node:path';
 import ts from 'typescript';
 import { debug, type ParserOptions } from '@ngcompass/common';
 import { parseTs } from '@ngcompass/ast';
-import type { ImportGraphResult } from './project-context-builder.js';
-
-export interface OxcGraphOptions {
-  readonly rootDir: string;
-  readonly parserOptions?: ParserOptions;
-  readonly concurrency?: number;
-  readonly onProgress?: (parsed: number, total: number) => void;
-}
-
+import type {
+  ImportGraphResult,
+  OxcGraphOptions,
+} from './models/index.js';
 interface AliasEntry {
   readonly prefix: string;
   readonly suffix: string;

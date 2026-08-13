@@ -1,10 +1,8 @@
 import { promises as fs } from 'node:fs';
 import { debug, Locator } from '@ngcompass/common';
 import { parseTs } from '@ngcompass/ast';
-import {
-  computeFileCallGraph,
-  type FileCallGraph,
-} from './call-graph-analyzer.js';
+import { computeFileCallGraph } from './call-graph-analyzer.js';
+import type { FileCallGraph } from '../models/index.js';
 
 export async function analyzeFileCallGraph(
   absFile: string

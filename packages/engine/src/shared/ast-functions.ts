@@ -1,20 +1,9 @@
-export type FunctionKind =
-  | 'function'
-  | 'method'
-  | 'getter'
-  | 'setter'
-  | 'constructor'
-  | 'arrow';
-
-export interface AstNodeLike {
-  readonly type: string;
-  readonly [key: string]: unknown;
-}
-
-export interface NamedFunction {
-  readonly name: string;
-  readonly kind: FunctionKind;
-}
+import type {
+  AstNodeLike,
+  FunctionKind,
+  NamedFunction,
+  NodeVisitor,
+} from '../models/index.js';
 
 export const ANONYMOUS_NAME = '<anonymous>';
 
@@ -78,11 +67,6 @@ export function appendChildNodes(node: AstNodeLike, out: AstNodeLike[]): void {
     }
   }
 }
-
-export type NodeVisitor = (
-  node: AstNodeLike,
-  parent: AstNodeLike | undefined
-) => void;
 
 export function walkWithParent(
   node: AstNodeLike,

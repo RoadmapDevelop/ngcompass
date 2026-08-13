@@ -1,10 +1,7 @@
 import { parseTs } from '@ngcompass/ast';
 import { Locator } from '@ngcompass/common';
-import {
-  computeFileCallGraph,
-  type CallGraphNode,
-  type FileCallGraph,
-} from './call-graph-analyzer.js';
+import { computeFileCallGraph } from './call-graph-analyzer.js';
+import type { CallGraphNode, FileCallGraph } from '../models/index.js';
 
 function analyze(source: string): FileCallGraph {
   const { program } = parseTs(source, 'sample.ts');

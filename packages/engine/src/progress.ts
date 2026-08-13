@@ -1,15 +1,5 @@
 import type { RuleResult, WorkerFileProgress } from '@ngcompass/common';
-
-export interface AnalysisFileProgress {
-  readonly filePath: string;
-  readonly taskCount: number;
-  readonly issueCount: number;
-  readonly errorCount: number;
-  readonly warningCount: number;
-  readonly duration: number;
-  readonly cached?: boolean;
-  readonly typeAware?: boolean;
-}
+import type { AnalysisFileProgress } from './models/index.js';
 
 export const buildFileProgress = (
   filePath: string,

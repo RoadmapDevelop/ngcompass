@@ -1,5 +1,9 @@
-import type { RuleHandler, StreamType } from './rule-handler.js';
-import type { RuleFailure, RuleContext } from '@ngcompass/common';
+import type {
+  RuleHandler,
+  StreamType,
+  VisitorEntry,
+  VisitorMap,
+} from './models/index.js';
 
 type StreamToNodeType = { [K in StreamType]: string };
 
@@ -15,19 +19,6 @@ export const STREAM_TO_NODE_TYPE: StreamToNodeType = {
   NewExpression: 'NewExpression',
   ImportDeclaration: 'ImportDeclaration',
 };
-
-export interface VisitorEntry {
-  readonly ruleName: string;
-
-  readonly filter: (rawNode: any) => unknown;
-
-  readonly handle: (
-    streamNode: any,
-    ctx: RuleContext
-  ) => RuleFailure | RuleFailure[] | null;
-}
-
-export type VisitorMap = ReadonlyMap<string, ReadonlyArray<VisitorEntry>>;
 
 export function buildVisitorMap(
   handlers: ReadonlyArray<RuleHandler<any>>,

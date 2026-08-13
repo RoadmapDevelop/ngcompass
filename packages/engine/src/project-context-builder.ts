@@ -6,6 +6,7 @@ import type {
   ComponentFiles,
   NgModuleInfo,
 } from '@ngcompass/common';
+import type { ImportGraphResult } from './models/index.js';
 
 export function buildProjectContext(
   program: ts.Program,
@@ -84,12 +85,6 @@ function buildProjectFileSet(
   }
 
   return set;
-}
-
-export interface ImportGraphResult {
-  readonly importGraph: ReadonlyMap<string, ReadonlySet<string>>;
-  readonly projectFiles: ReadonlySet<string>;
-  readonly rootDir: string;
 }
 
 export function buildImportGraphOnly(

@@ -1,9 +1,7 @@
 import { parseTs } from '@ngcompass/ast';
 import { Locator } from '@ngcompass/common';
-import {
-  computeFileComplexity,
-  type FunctionComplexity,
-} from './complexity-analyzer.js';
+import { computeFileComplexity } from './complexity-analyzer.js';
+import type { FunctionComplexity } from '../models/index.js';
 
 function analyze(source: string): readonly FunctionComplexity[] {
   const { program } = parseTs(source, 'sample.ts');

@@ -29,11 +29,11 @@ import pLimit from 'p-limit';
 
 import { createAnalysisContext } from './analysis-context.js';
 import { calculateStats } from './analysis-stats.js';
-import {
+import { buildFileProgress, isAnalysisFileProgress } from './progress.js';
+import type {
   AnalysisFileProgress,
-  buildFileProgress,
-  isAnalysisFileProgress,
-} from './progress.js';
+  AnalysisOptions,
+} from './models/index.js';
 import { executeBatchedTasks } from './runner.js';
 import {
   createTypeAwareAnalysisContext,
@@ -57,8 +57,6 @@ const TYPE_AWARE_FILE_TIMEOUT_MULTIPLIER = 8;
 
 const DEFAULT_PARALLEL_THRESHOLD = 150;
 
-export type { AnalysisFileProgress } from './progress.js';
-
 interface TypeAwareChunkWork {
   readonly index: number;
   readonly tasks: ReadonlyArray<Task>;
@@ -67,7 +65,7 @@ interface TypeAwareChunkWork {
   readonly buildProjectContext: boolean;
 }
 
-export type { AnalysisContext } from './analysis-context.js';
+export type { AnalysisContext } from './models/index.js';
 export { createAnalysisContext } from './analysis-context.js';
 
 function isRuleResult(value: unknown): value is RuleResult {
@@ -98,38 +96,6 @@ function isValidAnalysisResult(value: unknown): value is AnalysisResult {
   if (typeof stats['totalWarnings'] !== 'number') return false;
   if (typeof stats['duration'] !== 'number') return false;
   return true;
-}
-
-export interface AnalysisOptions {
-  readonly rootDir: string;
-
-  readonly cache?: CacheContext;
-
-  readonly debug?: boolean;
-
-  readonly maxWorkers?: number;
-
-  readonly parallelThreshold?: number;
-
-  readonly errorCollector?: InfrastructureErrorCollector;
-
-  readonly files?: ReadonlyArray<string>;
-
-  readonly parserOptions?: ParserOptions;
-
-  readonly typeAwareFileConcurrency?: number;
-
-  readonly typeAwarePerFileTimeoutMs?: number;
-
-  readonly skipTypeCheck?: boolean;
-
-  readonly onProgress?: (completed: number, total: number) => void;
-
-  readonly onFileProgress?: (event: AnalysisFileProgress) => void;
-
-  readonly onNotice?: (message: string) => void;
-
-  readonly onFileSkipped?: (filePath: string) => void;
 }
 
 export const runAnalysis = async (

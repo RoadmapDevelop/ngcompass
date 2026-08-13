@@ -1,34 +1,17 @@
 import { Locator } from '@ngcompass/common';
 import {
-  type AstNodeLike,
   isNode,
   keyName,
   spanOffset,
   walkWithParent,
 } from '../shared/ast-functions.js';
 import type { BoxKind } from './unit-graph.js';
-
-export interface MemberSpan {
-  readonly name: string;
-  readonly kind: BoxKind;
-  readonly line: number;
-  readonly column: number;
-  readonly endLine: number;
-  readonly start: number;
-  readonly end: number;
-}
-
-export interface InjectedDependency {
-  readonly propertyName: string;
-  readonly typeName: string;
-}
-
-export interface EntryClassInfo {
-  readonly className: string | null;
-  readonly members: readonly MemberSpan[];
-  readonly injected: readonly InjectedDependency[];
-}
-
+import type {
+  AstNodeLike,
+  EntryClassInfo,
+  InjectedDependency,
+  MemberSpan,
+} from '../models/index.js';
 const METHOD_KINDS: ReadonlyMap<string, BoxKind> = new Map([
   ['get', 'getter'],
   ['set', 'setter'],

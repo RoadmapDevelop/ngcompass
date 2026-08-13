@@ -9,6 +9,7 @@ import {
 } from '@ngcompass/ast';
 import type { StyleAst, TemplateAst } from '@ngcompass/common';
 import type { Program } from 'oxc-parser';
+import type { AnalysisContext } from './models/index.js';
 
 const CSS_EXTENSIONS = new Set(['.css', '.scss', '.sass', '.less']);
 
@@ -16,18 +17,6 @@ const FILE_CACHE_MAX = 128;
 const PROGRAM_CACHE_MAX = 64;
 const TEMPLATE_CACHE_MAX = 64;
 const STYLE_CACHE_MAX = 64;
-
-export interface AnalysisContext {
-  readonly rootDir: string;
-  readonly readFile: (filePath: string) => Promise<string>;
-  readonly getProgram: (filePath: string) => Promise<Program>;
-  readonly getTemplate: (filePath: string) => Promise<TemplateAst | undefined>;
-  readonly getStyle: (filePath: string) => Promise<StyleAst | undefined>;
-
-  readonly evict: (filePath: string) => void;
-
-  readonly dispose: () => void;
-}
 
 export const createAnalysisContext = (rootDir: string): AnalysisContext => {
   const fileCache = new LRUCache<string, Promise<string>>({

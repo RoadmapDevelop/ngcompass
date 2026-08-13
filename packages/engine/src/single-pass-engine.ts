@@ -8,7 +8,11 @@ import {
   toNewExpressionStream,
   toImportDeclarationStream,
 } from '@ngcompass/ast';
-import type { RuleHandler } from './rule-handler.js';
+import type {
+  PerformanceReport,
+  RuleHandler,
+  RuleTiming,
+} from './models/index.js';
 import type {
   TemplateExpressionNode,
   TemplateAttributeNode,
@@ -29,21 +33,6 @@ import {
   BUDGET_MS_PER_FILE_WITHOUT_TYPES,
   BUDGET_MS_PER_FILE_WITH_TYPES,
 } from './constants.js';
-
-interface RuleTiming {
-  ruleName: string;
-  totalMs: number;
-  invocations: number;
-}
-
-export interface PerformanceReport {
-  traversalMs: number;
-  nodesVisited: number;
-  ruleTimings: RuleTiming[];
-  cacheStats: { hits: number; misses: number };
-  budgetViolations: string[];
-  hasBudgetViolations: boolean;
-}
 
 type AnyTemplateNode =
   | TemplateExpressionNode

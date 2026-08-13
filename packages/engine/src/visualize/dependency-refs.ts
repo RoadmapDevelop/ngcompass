@@ -1,20 +1,16 @@
 import {
-  type AstNodeLike,
   MEMBER_TYPES,
   isNode,
   keyName,
   spanOffset,
   walkWithParent,
 } from '../shared/ast-functions.js';
-import { type MemberSpan, ownerOfOffset } from './ts-members.js';
-
-export interface DependencyRef {
-  readonly typeName: string;
-  readonly memberName: string;
-  readonly ownerName: string;
-  readonly ownerLine: number;
-  readonly weight: number;
-}
+import { ownerOfOffset } from './ts-members.js';
+import type {
+  AstNodeLike,
+  DependencyRef,
+  MemberSpan,
+} from '../models/index.js';
 
 interface DependencyAccumulator {
   readonly typeName: string;

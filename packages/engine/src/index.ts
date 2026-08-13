@@ -1,3 +1,33 @@
+export type {
+  AnalysisContext,
+  AnalysisFileProgress,
+  AnalysisOptions,
+  BatchRuleExecutorFn,
+  CallGraphEdge,
+  CallGraphNode,
+  ExecutionContext,
+  ExternalCall,
+  FileCallGraph,
+  FileComplexity,
+  FileUnitInput,
+  FunctionComplexity,
+  FunctionKind,
+  ImportGraphResult,
+  OxcGraphOptions,
+  PerformanceReport,
+  ProjectComplexityOptions,
+  RuleCheckerFn,
+  RuleHandler,
+  SpecInput,
+  StreamType,
+  StyleInput,
+  TemplateInput,
+  TypeAwareAnalysisContext,
+  TypeAwareAnalysisContextOptions,
+  VisitorEntry,
+  VisitorMap,
+} from './models/index.js';
+
 export * from './rule-handler.js';
 
 export * from './visitor-registry.js';
@@ -15,21 +45,13 @@ export {
 } from './progress.js';
 
 export { createAnalysisContext } from './analysis-context.js';
-export type { AnalysisContext } from './analysis-context.js';
 
 export {
   buildProjectContext,
   buildImportGraphOnly,
-  type ImportGraphResult,
 } from './project-context-builder.js';
 
-export {
-  createTypeAwareAnalysisContext,
-} from './type-aware-context.js';
-export type {
-  TypeAwareAnalysisContext,
-  TypeAwareAnalysisContextOptions,
-} from './type-aware-context.js';
+export { createTypeAwareAnalysisContext } from './type-aware-context.js';
 
 
 export { createAngularTypeIndex } from './angular-type-index.js';
@@ -37,7 +59,6 @@ export { createAngularTypeIndex } from './angular-type-index.js';
 export { executeBatchedTasks } from './runner.js';
 
 export { configureRuleExecutor } from './rule-executor.js';
-export type { BatchRuleExecutorFn, RuleCheckerFn } from './rule-executor.js';
 
 export * from './analysis-stats.js';
 
@@ -57,30 +78,13 @@ export * from './cycle-detector.js';
 
 export * from './graph-scope.js';
 
-export {
-  buildImportGraphOxc,
-  type OxcGraphOptions,
-} from './import-graph-oxc.js';
+export { buildImportGraphOxc } from './import-graph-oxc.js';
 
-export {
-  computeFileComplexity,
-  type FunctionComplexity,
-  type FunctionKind,
-} from './complexity/complexity-analyzer.js';
+export { computeFileComplexity } from './complexity/complexity-analyzer.js';
 
-export {
-  computeProjectComplexity,
-  type ProjectComplexityOptions,
-  type FileComplexity,
-} from './complexity/compute-project-complexity.js';
+export { computeProjectComplexity } from './complexity/compute-project-complexity.js';
 
-export {
-  computeFileCallGraph,
-  type FileCallGraph,
-  type CallGraphNode,
-  type CallGraphEdge,
-  type ExternalCall,
-} from './callgraph/call-graph-analyzer.js';
+export { computeFileCallGraph } from './callgraph/call-graph-analyzer.js';
 
 export { analyzeFileCallGraph } from './callgraph/compute-file-call-graph.js';
 
@@ -88,12 +92,7 @@ export { computeFileUnit } from './visualize/compute-file-unit.js';
 
 export { analyzeFileUnitGraph } from './visualize/file-unit-analyzer.js';
 
-export type {
-  FileUnitInput,
-  SpecInput,
-  StyleInput,
-  TemplateInput,
-} from './visualize/file-unit-analyzer.js';
+
 
 export type {
   BoxKind,

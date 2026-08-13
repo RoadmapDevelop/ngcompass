@@ -1,15 +1,13 @@
 import type { Program } from 'oxc-parser';
-import type { TemplateAnalysis } from '@ngcompass/ast';
 import { Locator } from '@ngcompass/common';
 import { computeFileCallGraph } from '../callgraph/call-graph-analyzer.js';
-import { type AstNodeLike, isNode } from '../shared/ast-functions.js';
+import { isNode } from '../shared/ast-functions.js';
 import { collectDependencyRefs } from './dependency-refs.js';
 import { analyzeSpec } from './spec-refs.js';
 import { collectStyleSelectors } from './style-selectors.js';
 import { collectTemplateRefs } from './template-refs.js';
 import {
   type FileUnitGraph,
-  type LaneStatus,
   type UnitBox,
   type UnitEdge,
   type UnitLane,
@@ -20,40 +18,15 @@ import {
   dependencyLaneId,
   stylesLaneId,
 } from './unit-graph.js';
-import { type MemberSpan, ownerOfLine, readEntryClass } from './ts-members.js';
-
-export interface TemplateInput {
-  readonly status: LaneStatus;
-  readonly filePath: string | null;
-  readonly label: string;
-  readonly analysis: TemplateAnalysis | null;
-  readonly locator: Locator | null;
-}
-
-export interface StyleInput {
-  readonly status: LaneStatus;
-  readonly filePath: string | null;
-  readonly label: string;
-  readonly content: string | null;
-}
-
-export interface SpecInput {
-  readonly status: LaneStatus;
-  readonly filePath: string | null;
-  readonly label: string;
-  readonly program: Program | null;
-  readonly locator: Locator | null;
-}
-
-export interface FileUnitInput {
-  readonly entryFile: string;
-  readonly entryLabel: string;
-  readonly program: Program;
-  readonly locator: Locator;
-  readonly template: TemplateInput | null;
-  readonly styles: readonly StyleInput[];
-  readonly spec: SpecInput | null;
-}
+import { ownerOfLine, readEntryClass } from './ts-members.js';
+import type {
+  AstNodeLike,
+  FileUnitInput,
+  MemberSpan,
+  SpecInput,
+  StyleInput,
+  TemplateInput,
+} from '../models/index.js';
 
 function memberBoxes(members: readonly MemberSpan[]): UnitBox[] {
   const boxes: UnitBox[] = [];

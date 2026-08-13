@@ -6,36 +6,13 @@ import {
   type ParserOptions,
   type ProjectContext,
 } from '@ngcompass/common';
-import {
-  createAnalysisContext,
-  type AnalysisContext,
-} from './analysis-context.js';
+import { createAnalysisContext } from './analysis-context.js';
+import type {
+  TypeAwareAnalysisContext,
+  TypeAwareAnalysisContextOptions,
+} from './models/index.js';
 import { buildProjectContext } from './project-context-builder.js';
 import { createAngularTypeIndex } from './angular-type-index.js';
-
-export interface TypeAwareAnalysisContext extends AnalysisContext {
-  readonly getTypeChecker: (
-    filePath: string
-  ) => Promise<ts.TypeChecker | undefined>;
-
-  readonly getProjectContext: () => ProjectContext | undefined;
-
-  readonly getTsProgram: () => ts.Program | undefined;
-
-  readonly getTsSourceFile: (filePath: string) => ts.SourceFile | undefined;
-
-  readonly getAngularTypes: () => AngularTypeIndex | undefined;
-
-  readonly warmup: () => Promise<void>;
-
-  readonly dispose: () => void;
-}
-
-export interface TypeAwareAnalysisContextOptions {
-  readonly buildProjectContext?: boolean;
-
-  readonly programRootFiles?: ReadonlyArray<string>;
-}
 
 export const createTypeAwareAnalysisContext = (
   rootDir: string,
