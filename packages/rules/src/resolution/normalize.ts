@@ -4,11 +4,11 @@ import type {
   RuleSeverity,
 } from '@ngcompass/common';
 
-export const isShorthand = (config: RuleConfig): config is RuleSeverity => {
+export function isShorthand(config: RuleConfig): config is RuleSeverity {
   return typeof config === 'string';
-};
+}
 
-export const normalizeRuleConfig = (config: RuleConfig): RuleConfigFull => {
+export function normalizeRuleConfig(config: RuleConfig): RuleConfigFull {
   if (isShorthand(config)) {
     return {
       severity: config,
@@ -20,16 +20,16 @@ export const normalizeRuleConfig = (config: RuleConfig): RuleConfigFull => {
     severity: config.severity,
     options: config.options || {},
   };
-};
+}
 
-export const isRuleEnabled = (config: RuleConfig): boolean => {
+export function isRuleEnabled(config: RuleConfig): boolean {
   const normalized = normalizeRuleConfig(config);
   return normalized.severity !== 'off';
-};
+}
 
-export const normalizeAllRules = (
+export function normalizeAllRules(
   rules: Readonly<Record<string, RuleConfig>>
-): ReadonlyMap<string, RuleConfigFull> => {
+): ReadonlyMap<string, RuleConfigFull> {
   const normalized = new Map<string, RuleConfigFull>();
 
   for (const [name, config] of Object.entries(rules)) {
@@ -37,4 +37,4 @@ export const normalizeAllRules = (
   }
 
   return normalized;
-};
+}

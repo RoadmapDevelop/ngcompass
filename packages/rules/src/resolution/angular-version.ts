@@ -5,11 +5,11 @@ import {
 } from '@ngcompass/common';
 import type { VersionGateDecision } from '../models/index.js';
 
-export const decideVersionGate = (
+export function decideVersionGate(
   metadata: RuleMetadata,
   detectedVersion: string | null,
   isExplicitlyConfigured: boolean
-): VersionGateDecision => {
+): VersionGateDecision {
   const floor = metadata.minAngularVersion;
   if (floor === undefined) return 'run';
 
@@ -22,4 +22,4 @@ export const decideVersionGate = (
   if (parsedDetected === null) return 'run';
 
   return isAngularVersionBelow(parsedDetected, parsedFloor) ? 'skip' : 'run';
-};
+}

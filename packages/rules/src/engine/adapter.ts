@@ -3,10 +3,10 @@ import { runSinglePassAnalysis, type RuleHandler } from '@ngcompass/engine';
 import { getGlobalRegistry } from '../registry/rule-registry.js';
 import type { RulePlugin } from '../models/index.js';
 
-export const registerNewEngineRule = (
+export function registerNewEngineRule(
   handler: RuleHandler<unknown>,
   category?: string
-): void => {
+): void {
   const plugin: RulePlugin = {
     name: handler.name,
     handler,
@@ -20,15 +20,16 @@ export const registerNewEngineRule = (
 
   getGlobalRegistry().register(plugin);
   debug('engine', `Registered rule: ${handler.name}`);
-};
+}
 
-export const isNewEngineRule = (ruleName: string): boolean =>
-  getGlobalRegistry().has(ruleName);
+export function isNewEngineRule(ruleName: string): boolean {
+  return getGlobalRegistry().has(ruleName);
+}
 
-export const executeBatchedNewEngineRules = (
+export function executeBatchedNewEngineRules(
   ruleNames: ReadonlyArray<string>,
   context: RuleContext
-): ReadonlyArray<RuleResult> => {
+): ReadonlyArray<RuleResult> {
   const registry = getGlobalRegistry();
 
   const handlers: RuleHandler<unknown>[] = [];
@@ -68,4 +69,4 @@ export const executeBatchedNewEngineRules = (
   }
 
   return results;
-};
+}

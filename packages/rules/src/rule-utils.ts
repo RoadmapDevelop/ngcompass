@@ -1,4 +1,4 @@
-import { RuleContext } from '@ngcompass/common';
+import { debug, RuleContext } from '@ngcompass/common';
 import type { AstNode } from './models/index.js';
 
 
@@ -602,7 +602,12 @@ function requireTypescript(): typeof import('typescript') | undefined {
   if (!_tsModuleLoaded) {
     try {
       _tsModule = require('typescript') as typeof import('typescript');
-    } catch {}
+    } catch (error) {
+      debug(
+        'rules',
+        `TypeScript is not resolvable, type-aware helpers disabled: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
     _tsModuleLoaded = true;
   }
   return _tsModule;

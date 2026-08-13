@@ -17,10 +17,10 @@ import { resolveExtendsChain } from './loader.js';
 import { applyOverrides, mergeRulesConfigs } from './merger.js';
 import { isRuleEnabled } from './normalize.js';
 
-export const resolveRules = async (
+export async function resolveRules(
   config: NormalizedAnalyzerConfig,
   configDir: string
-): Promise<Result<RuleResolutionResult>> => {
+): Promise<Result<RuleResolutionResult>> {
   time('rule-resolution');
   debug('loader', 'Starting rule resolution');
 
@@ -122,21 +122,21 @@ export const resolveRules = async (
       new Error(`Rule resolution failed: ${(error as Error).message}`)
     );
   }
-};
+}
 
-export const getEnabledRules = (
+export function getEnabledRules(
   resolvedRules: ResolvedRulesMap
-): ResolvedRulesMap => {
+): ResolvedRulesMap {
   const enabled = new Map<string, ResolvedRule>();
   for (const [name, rule] of resolvedRules) {
     if (rule.severity !== 'off') enabled.set(name, rule);
   }
   return enabled;
-};
+}
 
-export const getRulesByCategory = (
+export function getRulesByCategory(
   resolvedRules: ResolvedRulesMap
-): ReadonlyMap<string, ReadonlyArray<ResolvedRule>> => {
+): ReadonlyMap<string, ReadonlyArray<ResolvedRule>> {
   const byCategory = new Map<string, ResolvedRule[]>();
   for (const rule of resolvedRules.values()) {
     const category = rule.metadata.category;
@@ -145,11 +145,11 @@ export const getRulesByCategory = (
     byCategory.set(category, rules);
   }
   return byCategory;
-};
+}
 
-export const getRulesByDependencyType = (
+export function getRulesByDependencyType(
   resolvedRules: ResolvedRulesMap
-): ReadonlyMap<string, ReadonlyArray<ResolvedRule>> => {
+): ReadonlyMap<string, ReadonlyArray<ResolvedRule>> {
   const byType = new Map<string, ResolvedRule[]>();
   for (const rule of resolvedRules.values()) {
     const depType = rule.metadata.dependencyType;
@@ -158,4 +158,4 @@ export const getRulesByDependencyType = (
     byType.set(depType, rules);
   }
   return byType;
-};
+}

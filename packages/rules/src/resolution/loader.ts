@@ -10,10 +10,10 @@ import {
 } from '@ngcompass/common';
 import { getBuiltinPreset, isBuiltinPreset } from '../presets/index.js';
 
-export const loadPreset = async (
+export async function loadPreset(
   reference: PresetReference,
   configDir: string
-): Promise<Result<PresetConfig>> => {
+): Promise<Result<PresetConfig>> {
   debug('loader', `Loading preset: ${reference}`);
 
   if (isBuiltinPreset(reference)) {
@@ -39,13 +39,13 @@ export const loadPreset = async (
       )
     );
   }
-};
+}
 
-export const resolveExtendsChain = async (
+export async function resolveExtendsChain(
   extendsValue: string | ReadonlyArray<string> | undefined,
   configDir: string,
   inheritancePath: ReadonlyArray<string> = []
-): Promise<Result<ReadonlyArray<PresetConfig>>> => {
+): Promise<Result<ReadonlyArray<PresetConfig>>> {
   if (!extendsValue) return Ok([]);
 
   const references = Array.isArray(extendsValue)
@@ -77,4 +77,4 @@ export const resolveExtendsChain = async (
   }
 
   return Ok(presets);
-};
+}
