@@ -1,5 +1,6 @@
 import { glob } from 'tinyglobby';
 import { Err, Ok, type Result } from '@ngcompass/common';
+import { describeError } from './error-message.js';
 import type { ExpandedPatterns, RawFileList } from './models/index.js';
 
 export const executeGlob = async (
@@ -18,7 +19,7 @@ export const executeGlob = async (
     });
     return Ok({ files });
   } catch (error) {
-    return Err(new Error(`Glob execution failed: ${(error as Error).message}`));
+    return Err(new Error(`Glob execution failed: ${describeError(error)}`));
   }
 };
 

@@ -2,6 +2,20 @@ import { spawn } from 'node:child_process';
 import { readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { debug } from '@ngcompass/common';
+import { describeError } from './error-message.js';
+
+const runGitForOutput = (
+  args: ReadonlyArray<string>,
+  cwd: string
+): Promise<string> =>
+  new Promise((resolve) => {
+    const child = spawn('git', [...args], { cwd });
+    const out: string[] = [];
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => out.push(chunk));
+    child.on('close', (code) => resolve(code === 0 ? out.join('').trim() : ''));
+    child.on('error', () => resolve(''));
+  });
 
 export const isGitRepo = async (dir: string): Promise<boolean> => {
   return new Promise((resolve) => {
@@ -59,7 +73,7 @@ export const executeGitDiscovery = async (
         resolve([]);
       });
     } catch (error) {
-      debug('scanner', `Git discovery failed: ${(error as Error).message}`);
+      debug('scanner', `Git discovery failed: ${describeError(error)}`);
       resolve([]);
     }
   });
@@ -79,7 +93,7 @@ export const getRepoFingerprint = async (dir: string): Promise<string> => {
   } catch (err) {
     debug(
       'scanner',
-      `Could not stat .git/index, falling back to HEAD-only fingerprint: ${err instanceof Error ? err.message : String(err)}`
+      `Could not stat .git/index, falling back to HEAD-only fingerprint: ${describeError(err)}`
     );
     return head;
   }
@@ -107,22 +121,8 @@ export const getDirectoryFingerprint = async (dir: string): Promise<string> => {
   } catch (error) {
     debug(
       'scanner',
-      `Failed to get directory fingerprint: ${error instanceof Error ? error.message : String(error)}`
+      `Failed to get directory fingerprint: ${describeError(error)}`
     );
     return '';
   }
 };
-
-function runGitForOutput(
-  args: ReadonlyArray<string>,
-  cwd: string
-): Promise<string> {
-  return new Promise((resolve) => {
-    const child = spawn('git', [...args], { cwd });
-    const out: string[] = [];
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (chunk: string) => out.push(chunk));
-    child.on('close', (code) => resolve(code === 0 ? out.join('').trim() : ''));
-    child.on('error', () => resolve(''));
-  });
-}

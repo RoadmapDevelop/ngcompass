@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { minimatch } from 'minimatch';
 import { Err, Ok, type Result } from '@ngcompass/common';
+import { describeError } from './error-message.js';
 import { loadAllGitignoreFilters } from './gitignore.js';
 import type {
   FilteredFileList,
@@ -40,7 +41,7 @@ export const applyFilters = async (
 
     return Ok({ files, filtered: startCount - files.length });
   } catch (error) {
-    return Err(new Error(`Filtering failed: ${(error as Error).message}`));
+    return Err(new Error(`Filtering failed: ${describeError(error)}`));
   }
 };
 
