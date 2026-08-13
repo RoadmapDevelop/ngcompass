@@ -16,140 +16,160 @@ import type {
 import { RuleMetadata } from '@ngcompass/common';
 import type { RuleHandler } from './models/index.js';
 
-export const createComponentRule = (
+export function createComponentRule(
   name: string,
   handler: (
     node: AngularClassNode,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<AngularClassNode> => ({
-  name,
-  streamType: 'AngularClass',
-  handle: handler,
-  meta,
-});
+): RuleHandler<AngularClassNode> {
+  return {
+    name,
+    streamType: 'AngularClass',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createAnyAngularClassRule = (
+export function createAnyAngularClassRule(
   name: string,
   handler: (
     node: AnyAngularClassNode,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<AnyAngularClassNode> => ({
-  name,
-  streamType: 'AnyAngularClass',
-  handle: handler,
-  meta,
-});
+): RuleHandler<AnyAngularClassNode> {
+  return {
+    name,
+    streamType: 'AnyAngularClass',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createDecoratedPropertyRule = (
+export function createDecoratedPropertyRule(
   name: string,
   handler: (
     node: DecoratedPropertyNode,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null
-): RuleHandler<DecoratedPropertyNode> => ({
-  name,
-  streamType: 'DecoratedProperty',
-  handle: handler,
-});
+): RuleHandler<DecoratedPropertyNode> {
+  return {
+    name,
+    streamType: 'DecoratedProperty',
+    handle: handler,
+  };
+}
 
-export const createTemplateExpressionRule = (
+export function createTemplateExpressionRule(
   name: string,
   handler: (
     node: TemplateExpressionNode,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<TemplateExpressionNode> => ({
-  name,
-  streamType: 'TemplateExpression',
-  handle: handler,
-  meta,
-});
+): RuleHandler<TemplateExpressionNode> {
+  return {
+    name,
+    streamType: 'TemplateExpression',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createTemplateAttributeRule = (
+export function createTemplateAttributeRule(
   name: string,
   handler: (
     node: TemplateAttributeNode,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<TemplateAttributeNode> => ({
-  name,
-  streamType: 'TemplateAttribute',
-  handle: handler,
-  meta,
-});
+): RuleHandler<TemplateAttributeNode> {
+  return {
+    name,
+    streamType: 'TemplateAttribute',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createCallExpressionRule = (
+export function createCallExpressionRule(
   name: string,
   handler: (
     node: CallExpression,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<CallExpression> => ({
-  name,
-  streamType: 'CallExpression',
-  handle: handler,
-  meta,
-});
+): RuleHandler<CallExpression> {
+  return {
+    name,
+    streamType: 'CallExpression',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createNewExpressionRule = (
+export function createNewExpressionRule(
   name: string,
   handler: (
     node: NewExpression,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<NewExpression> => ({
-  name,
-  streamType: 'NewExpression',
-  handle: handler,
-  meta,
-});
+): RuleHandler<NewExpression> {
+  return {
+    name,
+    streamType: 'NewExpression',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createImportDeclarationRule = (
+export function createImportDeclarationRule(
   name: string,
   handler: (
     node: ImportDeclaration,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<ImportDeclaration> => ({
-  name,
-  streamType: 'ImportDeclaration',
-  handle: handler,
-  meta,
-});
+): RuleHandler<ImportDeclaration> {
+  return {
+    name,
+    streamType: 'ImportDeclaration',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createTemplateBlockRule = (
+export function createTemplateBlockRule(
   name: string,
   handler: (
     node: TemplateBlockNode,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<TemplateBlockNode> => ({
-  name,
-  streamType: 'TemplateBlock',
-  handle: handler,
-  meta,
-});
+): RuleHandler<TemplateBlockNode> {
+  return {
+    name,
+    streamType: 'TemplateBlock',
+    handle: handler,
+    meta,
+  };
+}
 
-export const createTemplateRule = (
+export function createTemplateRule(
   name: string,
   handler: (
     node: TemplateAnalysis,
     context: RuleContext
   ) => RuleFailure | RuleFailure[] | null,
   meta?: Partial<RuleMetadata>
-): RuleHandler<TemplateAnalysis> => ({
-  name,
-  streamType: 'Template',
-  handle: handler,
-  meta,
-});
+): RuleHandler<TemplateAnalysis> {
+  return {
+    name,
+    streamType: 'Template',
+    handle: handler,
+    meta,
+  };
+}

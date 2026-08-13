@@ -1,13 +1,13 @@
 import type { RuleResult, WorkerFileProgress } from '@ngcompass/common';
 import type { AnalysisFileProgress } from './models/index.js';
 
-export const buildFileProgress = (
+export function buildFileProgress(
   filePath: string,
   taskCount: number,
   results: ReadonlyArray<RuleResult>,
   duration: number,
   typeAware?: boolean
-): AnalysisFileProgress => {
+): AnalysisFileProgress {
   let errorCount = 0;
   let warningCount = 0;
 
@@ -27,18 +27,21 @@ export const buildFileProgress = (
     duration,
     typeAware,
   };
-};
+}
 
-export const isWorkerFileProgress = (
+export function isWorkerFileProgress(
   message: unknown
-): message is WorkerFileProgress =>
-  !!message &&
-  typeof message === 'object' &&
-  (message as { kind?: unknown }).kind === 'file-progress';
+): message is WorkerFileProgress {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    (message as { kind?: unknown }).kind === 'file-progress'
+  );
+}
 
-export const isAnalysisFileProgress = (
+export function isAnalysisFileProgress(
   message: unknown
-): message is AnalysisFileProgress => {
+): message is AnalysisFileProgress {
   if (!message || typeof message !== 'object') return false;
   const value = message as Partial<AnalysisFileProgress> & { kind?: unknown };
   return (
@@ -50,4 +53,4 @@ export const isAnalysisFileProgress = (
     typeof value.warningCount === 'number' &&
     typeof value.duration === 'number'
   );
-};
+}

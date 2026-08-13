@@ -13,14 +13,18 @@ let _executor: BatchRuleExecutorFn = () => {
 };
 let _checker: RuleCheckerFn = () => false;
 
-export const configureRuleExecutor = (
+export function configureRuleExecutor(
   executor: BatchRuleExecutorFn,
   checker: RuleCheckerFn
-): void => {
+): void {
   _executor = executor;
   _checker = checker;
-};
+}
 
-export const getConfiguredExecutor = (): BatchRuleExecutorFn => _executor;
+export function getConfiguredExecutor(): BatchRuleExecutorFn {
+  return _executor;
+}
 
-export const getConfiguredChecker = (): RuleCheckerFn => _checker;
+export function getConfiguredChecker(): RuleCheckerFn {
+  return _checker;
+}

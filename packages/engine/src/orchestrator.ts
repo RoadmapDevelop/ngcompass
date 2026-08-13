@@ -98,10 +98,10 @@ function isValidAnalysisResult(value: unknown): value is AnalysisResult {
   return true;
 }
 
-export const runAnalysis = async (
+export async function runAnalysis(
   plan: ExecutionPlanOutput,
   options: AnalysisOptions
-): Promise<Result<AnalysisResult>> => {
+): Promise<Result<AnalysisResult>> {
   try {
     if (plan.precomputedAnalysis) {
       if (!isValidAnalysisResult(plan.precomputedAnalysis)) {
@@ -281,7 +281,7 @@ export const runAnalysis = async (
   } catch (e) {
     return Err(e instanceof Error ? e : new Error(String(e)));
   }
-};
+}
 
 const executeTasksLocally = async (
   tasks: ReadonlyArray<Task>,
@@ -601,10 +601,10 @@ const normalizeFlag = (flag: string): string => flag.split('_').join('-');
 const setsOldSpaceLimit = (value: string | undefined): boolean =>
   value !== undefined && normalizeFlag(value).includes(OLD_SPACE_FLAG);
 
-export const resolveChildExecArgv = (
+export function resolveChildExecArgv(
   execArgv: ReadonlyArray<string>,
   nodeOptions: string | undefined
-): string[] => {
+): string[] {
   const forwarded: string[] = [];
   let hasOldSpaceLimit = setsOldSpaceLimit(nodeOptions);
 
@@ -633,7 +633,7 @@ export const resolveChildExecArgv = (
     argv.push(`${OLD_SPACE_FLAG}=${DEFAULT_CHILD_MAX_OLD_SPACE_MB}`);
   }
   return argv;
-};
+}
 
 const buildChildExecArgv = (): string[] =>
   resolveChildExecArgv(process.execArgv, process.env.NODE_OPTIONS);
@@ -658,11 +658,11 @@ class TypeAwareChildFailure extends Error {
   }
 }
 
-export const computeAdaptiveFileBudget = (
+export function computeAdaptiveFileBudget(
   explicitMs: number | undefined,
   observedFiles: number,
   maxObservedMs: number
-): number => {
+): number {
   if (explicitMs !== undefined) return explicitMs;
   if (observedFiles === 0) return TYPE_AWARE_FIRST_FILE_TIMEOUT_MS;
   const adaptive = maxObservedMs * TYPE_AWARE_FILE_TIMEOUT_MULTIPLIER;
@@ -670,7 +670,7 @@ export const computeAdaptiveFileBudget = (
     TYPE_AWARE_MAX_FILE_TIMEOUT_MS,
     Math.max(TYPE_AWARE_MIN_FILE_TIMEOUT_MS, adaptive)
   );
-};
+}
 
 const executeTypeAwareChunkInChildProcess = async (
   tasks: ReadonlyArray<Task>,
@@ -834,7 +834,12 @@ const resolveTypeAwareWorkerPath = async (): Promise<string | null> => {
     const req = createRequire(import.meta.url);
     const workerFromRules = req.resolve('@ngcompass/rules/type-aware-worker');
     if (existsSync(workerFromRules)) return workerFromRules;
-  } catch {}
+  } catch (error) {
+    debug(
+      'engine',
+      `Could not resolve type-aware worker from @ngcompass/rules, falling back to path candidates: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 
   const candidates = [
     join(__dirname, '..', '..', 'rules', 'dist', 'type-aware-worker.js'),

@@ -80,14 +80,14 @@ const dispatchTemplateHandlers = (
   }
 };
 
-export const runSinglePassAnalysis = (
+export function runSinglePassAnalysis(
   rules: ReadonlyArray<RuleHandler<unknown>>,
   context: RuleContext,
   options?: {
     errorCollector?: InfrastructureErrorCollector;
     collectRuleTimings?: boolean;
   }
-): { results: RuleResult[]; performance: PerformanceReport } => {
+): { results: RuleResult[]; performance: PerformanceReport } {
   const { program } = context;
 
   if (!program) {
@@ -294,4 +294,4 @@ export const runSinglePassAnalysis = (
       hasBudgetViolations: budgetViolations.length > 0,
     },
   };
-};
+}

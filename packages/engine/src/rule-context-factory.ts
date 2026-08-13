@@ -1,5 +1,6 @@
 import {
   AngularTypeIndex,
+  debug,
   Locator,
   RuleContext,
   TemplateAst,
@@ -8,6 +9,9 @@ import {
 } from '@ngcompass/common';
 import ts from 'typescript';
 import type { ExecutionContext } from './models/index.js';
+
+const describeError = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error);
 
 export class RuleContextFactory {
   constructor(private readonly context: ExecutionContext) {}
@@ -113,20 +117,35 @@ export class RuleContextFactory {
         publicMembers = extractPublicMembers(tsSourceFile);
         signalMembers = extractSignalMembers(tsSourceFile);
       }
-    } catch {}
+    } catch (error) {
+      debug(
+        'engine',
+        `Could not read component members for ${componentPath}: ${describeError(error)}`
+      );
+    }
 
     let effectiveTemplate = loadedTemplate;
     if (!effectiveTemplate && templatePath) {
       try {
         effectiveTemplate = await this.context.getTemplate(templatePath);
-      } catch {}
+      } catch (error) {
+        debug(
+          'engine',
+          `Could not load template ${templatePath}: ${describeError(error)}`
+        );
+      }
     }
 
     let templateReferences: ReadonlySet<string> | undefined;
     if (effectiveTemplate) {
       try {
         templateReferences = extractTemplateReferences(effectiveTemplate);
-      } catch {}
+      } catch (error) {
+        debug(
+          'engine',
+          `Could not extract template references: ${describeError(error)}`
+        );
+      }
     }
 
     return {

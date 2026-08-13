@@ -18,7 +18,7 @@ const PROGRAM_CACHE_MAX = 64;
 const TEMPLATE_CACHE_MAX = 64;
 const STYLE_CACHE_MAX = 64;
 
-export const createAnalysisContext = (rootDir: string): AnalysisContext => {
+export function createAnalysisContext(rootDir: string): AnalysisContext {
   const fileCache = new LRUCache<string, Promise<string>>({
     max: FILE_CACHE_MAX,
   });
@@ -99,7 +99,7 @@ export const createAnalysisContext = (rootDir: string): AnalysisContext => {
     evict,
     dispose,
   };
-};
+}
 
 const readFileSafe = async (
   rootDir: string,

@@ -14,12 +14,12 @@ import type {
 import { buildProjectContext } from './project-context-builder.js';
 import { createAngularTypeIndex } from './angular-type-index.js';
 
-export const createTypeAwareAnalysisContext = (
+export function createTypeAwareAnalysisContext(
   rootDir: string,
   files: ReadonlyArray<string> = [],
   parserOptions?: ParserOptions,
   contextOptions: TypeAwareAnalysisContextOptions = {}
-): TypeAwareAnalysisContext => {
+): TypeAwareAnalysisContext {
   const baseContext = createAnalysisContext(rootDir);
 
   debug('engine', 'Initializing Type-Aware Context (ts.createProgram)...');
@@ -93,11 +93,14 @@ export const createTypeAwareAnalysisContext = (
       baseContext.dispose();
     },
   };
-};
+}
 
-export const isTsProgramRoot = (filePath: string): boolean =>
-  (filePath.endsWith('.ts') || filePath.endsWith('.tsx')) &&
-  !filePath.endsWith('.d.ts');
+export function isTsProgramRoot(filePath: string): boolean {
+  return (
+    (filePath.endsWith('.ts') || filePath.endsWith('.tsx')) &&
+    !filePath.endsWith('.d.ts')
+  );
+}
 
 function loadTypeScriptProgram(
   rootDir: string,

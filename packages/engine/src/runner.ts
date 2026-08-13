@@ -27,11 +27,11 @@ interface TaskBatch {
   severities: Map<string, RuleSeverity>;
 }
 
-export const executeBatchedTasks = async (
+export async function executeBatchedTasks(
   tasks: ReadonlyArray<Task>,
   context: ExecutionContext,
   errorCollector?: InfrastructureErrorCollector
-): Promise<RuleResult[]> => {
+): Promise<RuleResult[]> {
   if (tasks.length === 0) return [];
 
   const filePath = tasks[0].filePath;
@@ -84,7 +84,7 @@ export const executeBatchedTasks = async (
   }
 
   return results;
-};
+}
 
 const createBatch = (options: Record<string, unknown>): TaskBatch => ({
   options,

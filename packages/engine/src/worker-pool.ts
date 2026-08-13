@@ -24,14 +24,14 @@ import { buildFileProgress, isWorkerFileProgress } from './progress.js';
 import type { AnalysisFileProgress } from './models/index.js';
 import { executeBatchedTasks } from './runner.js';
 
-export const runAnalysisParallel = async (
+export async function runAnalysisParallel(
   tasks: ReadonlyArray<Task>,
   rootDir: string,
   startTime: number,
   maxWorkers?: number,
   concurrency?: number,
   onFileProgress?: (event: AnalysisFileProgress) => void
-): Promise<Result<AnalysisResult>> => {
+): Promise<Result<AnalysisResult>> {
   const { Worker } = await import('node:worker_threads');
 
   const workerCount =
@@ -95,7 +95,7 @@ export const runAnalysisParallel = async (
     parseErrors: [],
     stats: calculateStats(successful, startTime),
   });
-};
+}
 
 type WorkerCtor = typeof import('node:worker_threads').Worker;
 
@@ -218,7 +218,12 @@ const resolveWorkerPath = async (): Promise<string | null> => {
     const req = createRequire(import.meta.url);
     const workerFromRules = req.resolve('@ngcompass/rules/execution-worker');
     if (existsSync(workerFromRules)) return workerFromRules;
-  } catch {}
+  } catch (error) {
+    debug(
+      'engine',
+      `Could not resolve execution worker from @ngcompass/rules, falling back to path candidates: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
 
   const candidates = [
     join(here, '..', '..', 'rules', 'dist', 'execution-worker.js'),

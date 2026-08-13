@@ -5,11 +5,11 @@ import type {
   RuleSeverity,
 } from '@ngcompass/common';
 
-export const calculateStats = (
+export function calculateStats(
   results: ReadonlyArray<RuleResult>,
   startTime: number,
   cacheHitRate?: number
-): AnalysisResult['stats'] => {
+): AnalysisResult['stats'] {
   const duration = performance.now() - startTime;
   const failures = results.flatMap((r) => r.failures);
 
@@ -31,7 +31,7 @@ export const calculateStats = (
     duration,
     cacheHitRate,
   };
-};
+}
 
 const isErrorSeverity = (severity: RuleSeverity): boolean =>
   severity === 'error';
