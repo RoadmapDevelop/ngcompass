@@ -1,17 +1,8 @@
-import type { AsyncDriver } from '../drivers/types.js';
-
-export interface FileCacheEntry {
-  files: string[];
-
-  timestamp: number;
-
-  stats?: unknown;
-}
-
-export interface FileCache {
-  get: (key: string) => Promise<FileCacheEntry | undefined>;
-  set: (key: string, files: string[], stats?: unknown) => Promise<void>;
-}
+import type {
+  AsyncDriver,
+  FileCache,
+  FileCacheEntry,
+} from '../models/index.js';
 
 export const createFileCache = (
   driver: AsyncDriver<FileCacheEntry>

@@ -1,45 +1,10 @@
-import { AsyncDriver } from '../drivers/types.js';
 import { debug } from '@ngcompass/common';
-
-export interface CacheMetadata {
-  readonly taskId: string;
-
-  readonly timestamp: number;
-
-  readonly hits: number;
-
-  readonly lastAccess: number;
-}
-
-export interface CacheEntry<T> {
-  readonly result: T;
-
-  readonly metadata: CacheMetadata;
-}
-
-export interface ResultCache {
-  get: <T>(hash: string) => Promise<T | undefined>;
-  set: <T>(hash: string, result: T) => Promise<void>;
-  has: (hash: string) => Promise<boolean>;
-  delete: (hash: string) => Promise<void>;
-
-  getMany: <T>(
-    hashes: ReadonlyArray<string>
-  ) => Promise<ReadonlyMap<string, T>>;
-  setMany: <T>(entries: ReadonlyArray<readonly [string, T]>) => Promise<void>;
-  hasMany: (hashes: ReadonlyArray<string>) => Promise<ReadonlySet<string>>;
-
-  getWithMetadata: <T>(hash: string) => Promise<CacheEntry<T> | undefined>;
-  getManyWithMetadata: <T>(
-    hashes: ReadonlyArray<string>
-  ) => Promise<ReadonlyMap<string, CacheEntry<T>>>;
-  updateMetadata: (
-    hash: string,
-    updates: Partial<CacheMetadata>
-  ) => Promise<void>;
-
-  flush: () => Promise<void>;
-}
+import type {
+  AsyncDriver,
+  CacheEntry,
+  CacheMetadata,
+  ResultCache,
+} from '../models/index.js';
 
 const BATCH_SIZE = 200;
 

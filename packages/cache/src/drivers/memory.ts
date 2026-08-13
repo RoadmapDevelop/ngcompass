@@ -1,5 +1,5 @@
 import { LRUCache } from 'lru-cache';
-import type { MemoryDriverConfig, SyncDriver } from './types.js';
+import type { MemoryDriverConfig, SyncDriver } from '../models/index.js';
 
 const FALLBACK_ENTRY_SIZE = 1024;
 

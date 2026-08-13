@@ -5,18 +5,7 @@ import {
   stableSerialize,
 } from '@ngcompass/common';
 import { computeHash } from './hashing.js';
-
-export interface CacheKeyContext {
-  readonly toolVersion: string;
-
-  readonly schemaVersion: string;
-
-  readonly ruleRegistryHash: string;
-
-  readonly parserVersion: string;
-
-  readonly platform: string;
-}
+import type { CacheKeyContext } from './models/index.js';
 
 export function buildCacheKeyContext(
   ruleNames: ReadonlyArray<string>

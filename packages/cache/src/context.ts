@@ -5,20 +5,25 @@ import { createDiskDriver } from './drivers/disk.js';
 import { createJsonFileDriver } from './drivers/json-file.js';
 import { createMemoryDriver } from './drivers/memory.js';
 import { createPackedFileDriver } from './drivers/packed.js';
-import type { AsyncDriver, CacheConfig, DriverStats } from './drivers/types.js';
 import { CACHE_KEY_PREFIX, CACHE_VERSION } from './constants.js';
 import { computeCompositeHash } from './services/hashing.js';
-import { createAstCache, type AstEntry } from './services/ast-cache.js';
+import { createAstCache } from './services/ast-cache.js';
 import { createConfigCache } from './services/config-cache.js';
-import { createFileCache, type FileCacheEntry } from './services/file-cache.js';
-import { createMetaCache, type FileMeta } from './services/meta-cache.js';
+import { createFileCache } from './services/file-cache.js';
+import { createMetaCache } from './services/meta-cache.js';
 import { createPlanCache } from './services/plan-cache.js';
 import { createResultCache } from './services/result-cache.js';
-import {
-  createSourceCache,
-  type SourceEntry,
-} from './services/source-cache.js';
-import type { CacheContext } from './types.js';
+import { createSourceCache } from './services/source-cache.js';
+import type {
+  AstEntry,
+  AsyncDriver,
+  CacheConfig,
+  CacheContext,
+  DriverStats,
+  FileCacheEntry,
+  FileMeta,
+  SourceEntry,
+} from './models/index.js';
 import type { ConfigValidationResult } from '@ngcompass/common';
 
 const AST_L1_MAX_ENTRIES = 200;

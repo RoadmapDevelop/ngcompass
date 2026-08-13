@@ -1,16 +1,4 @@
-import type { SyncDriver } from '../drivers/types.js';
-
-export interface SourceEntry {
-  content: string;
-
-  filePath: string;
-}
-
-export interface SourceCache {
-  get: (hash: string) => SourceEntry | undefined;
-  set: (hash: string, entry: SourceEntry) => void;
-  has: (hash: string) => boolean;
-}
+import type { SourceCache, SourceEntry, SyncDriver } from '../models/index.js';
 
 export const createSourceCache = (
   driver: SyncDriver<SourceEntry>

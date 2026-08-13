@@ -1,18 +1,4 @@
-import type { AsyncDriver } from '../drivers/types.js';
-
-export interface FileMeta {
-  readonly mtime: number;
-  readonly size: number;
-  readonly hash: string;
-}
-
-export interface MetaCache {
-  get: (filePath: string) => Promise<FileMeta | undefined>;
-  set: (filePath: string, meta: FileMeta) => Promise<void>;
-  delete: (filePath: string) => Promise<void>;
-
-  flush: () => Promise<void>;
-}
+import type { AsyncDriver, FileMeta, MetaCache } from '../models/index.js';
 
 export const createMetaCache = (driver: AsyncDriver<FileMeta>): MetaCache => ({
   get: (filePath) => driver.get(filePath),

@@ -4,7 +4,7 @@ import { promisify } from 'node:util';
 import cacache from 'cacache';
 import { debug } from '@ngcompass/common';
 import { getDirectoryStats } from '../utils/fs.js';
-import type { AsyncDriver, DiskDriverConfig } from './types.js';
+import type { AsyncDriver, DiskDriverConfig } from '../models/index.js';
 
 const CACHE_GZIP_LEVEL = zlib.constants.Z_DEFAULT_COMPRESSION;
 

@@ -4,7 +4,7 @@ import v8 from 'node:v8';
 import zlib from 'node:zlib';
 import { promisify } from 'node:util';
 import writeFileAtomic from 'write-file-atomic';
-import type { AsyncDriver, DriverStats } from './types.js';
+import type { AsyncDriver, DriverStats } from '../models/index.js';
 
 const PACK_SUFFIX = '.pack';
 const CACHE_GZIP_LEVEL = zlib.constants.Z_DEFAULT_COMPRESSION;

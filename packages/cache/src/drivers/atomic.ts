@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import writeFileAtomic from 'write-file-atomic';
 import { getDirectoryStats } from '../utils/fs.js';
-import type { AsyncDriver, DiskDriverConfig } from './types.js';
+import type { AsyncDriver, DiskDriverConfig } from '../models/index.js';
 
 const JSON_EXTENSION = '.json';
 

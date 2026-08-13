@@ -1,11 +1,10 @@
 import path from 'node:path';
 import type { NormalizedAnalyzerConfig } from '@ngcompass/common';
 import { createCacheContext } from './context.js';
-import type { CacheContext } from './types.js';
-
-export interface CreateRuntimeCacheOptions {
-  allowDisabled?: boolean;
-}
+import type {
+  CacheContext,
+  CreateRuntimeCacheOptions,
+} from './models/index.js';
 
 export function createRuntimeCache(
   config: NormalizedAnalyzerConfig,

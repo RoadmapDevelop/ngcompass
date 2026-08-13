@@ -2,7 +2,11 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import writeFileAtomic from 'write-file-atomic';
 import { debug } from '@ngcompass/common';
-import type { AsyncDriver, DiskDriverConfig, DriverStats } from './types.js';
+import type {
+  AsyncDriver,
+  DiskDriverConfig,
+  DriverStats,
+} from '../models/index.js';
 
 const META_FILENAME = 'meta.json';
 const DEBOUNCE_MS = 2000;

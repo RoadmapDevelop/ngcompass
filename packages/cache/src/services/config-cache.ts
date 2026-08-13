@@ -1,10 +1,5 @@
 import type { ConfigValidationResult } from '@ngcompass/common';
-import type { AsyncDriver } from '../drivers/types.js';
-
-export interface ConfigCache {
-  get: (hash: string) => Promise<ConfigValidationResult | undefined>;
-  set: (hash: string, report: ConfigValidationResult) => Promise<void>;
-}
+import type { AsyncDriver, ConfigCache } from '../models/index.js';
 
 export const createConfigCache = (
   driver: AsyncDriver<ConfigValidationResult>

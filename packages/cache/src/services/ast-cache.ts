@@ -1,17 +1,10 @@
 import { debug } from '@ngcompass/common';
-import type { AsyncDriver, SyncDriver } from '../drivers/types.js';
-
-export interface AstEntry {
-  filePath: string;
-
-  ast: unknown;
-}
-
-export interface AstCache {
-  get: (hash: string) => Promise<AstEntry | undefined>;
-  set: (hash: string, entry: AstEntry) => Promise<void>;
-  invalidate: (hash: string) => Promise<void>;
-}
+import type {
+  AstCache,
+  AstEntry,
+  AsyncDriver,
+  SyncDriver,
+} from '../models/index.js';
 
 const describe = (err: unknown): string =>
   err instanceof Error ? err.message : String(err);

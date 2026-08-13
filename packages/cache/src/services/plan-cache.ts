@@ -1,10 +1,4 @@
-import type { AsyncDriver } from '../drivers/types.js';
-
-export interface PlanCache {
-  get: (key: string) => Promise<unknown>;
-  set: (key: string, plan: unknown) => Promise<void>;
-  delete: (key: string) => Promise<void>;
-}
+import type { AsyncDriver, PlanCache } from '../models/index.js';
 
 export const createPlanCache = (driver: AsyncDriver<unknown>): PlanCache => ({
   get: (key) => driver.get(key),
