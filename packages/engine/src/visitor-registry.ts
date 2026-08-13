@@ -1,5 +1,7 @@
 import type {
   RuleHandler,
+  StreamFilter,
+  StreamFilters,
   StreamType,
   VisitorEntry,
   VisitorMap,
@@ -20,9 +22,11 @@ export const STREAM_TO_NODE_TYPE: StreamToNodeType = {
   ImportDeclaration: 'ImportDeclaration',
 };
 
+const toStreamFilter = (filter: unknown): StreamFilter => filter as StreamFilter;
+
 export function buildVisitorMap(
-  handlers: ReadonlyArray<RuleHandler<any>>,
-  streamFilters: Partial<Record<StreamType, (rawNode: any) => unknown>>
+  handlers: ReadonlyArray<RuleHandler<unknown>>,
+  streamFilters: StreamFilters
 ): VisitorMap {
   const mutable = new Map<string, VisitorEntry[]>();
 
@@ -36,7 +40,7 @@ export function buildVisitorMap(
 
     const entry: VisitorEntry = {
       ruleName: handler.name,
-      filter,
+      filter: toStreamFilter(filter),
       handle: handler.handle.bind(handler),
     };
 
@@ -48,5 +52,5 @@ export function buildVisitorMap(
     }
   }
 
-  return mutable as VisitorMap;
+  return mutable;
 }

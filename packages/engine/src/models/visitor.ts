@@ -1,12 +1,19 @@
 import type { RuleContext, RuleFailure } from '@ngcompass/common';
+import type { StreamNode } from './rule-handler.js';
+
+export interface TraversedNode {
+  readonly type: string;
+}
+
+export type StreamFilter = (rawNode: TraversedNode) => StreamNode | null;
 
 export interface VisitorEntry {
   readonly ruleName: string;
 
-  readonly filter: (rawNode: any) => unknown;
+  readonly filter: StreamFilter;
 
   readonly handle: (
-    streamNode: any,
+    streamNode: StreamNode,
     ctx: RuleContext
   ) => RuleFailure | RuleFailure[] | null;
 }

@@ -12,12 +12,8 @@ import type {
   PerformanceReport,
   RuleHandler,
   RuleTiming,
+  StreamNode,
 } from './models/index.js';
-import type {
-  TemplateExpressionNode,
-  TemplateAttributeNode,
-  TemplateBlockNode,
-} from '@ngcompass/ast';
 import {
   resetComponentCacheStats,
   getComponentCacheStats,
@@ -34,14 +30,9 @@ import {
   BUDGET_MS_PER_FILE_WITH_TYPES,
 } from './constants.js';
 
-type AnyTemplateNode =
-  | TemplateExpressionNode
-  | TemplateAttributeNode
-  | TemplateBlockNode;
-
 const dispatchTemplateHandlers = (
-  nodes: ReadonlyArray<AnyTemplateNode>,
-  handlers: ReadonlyArray<RuleHandler<AnyTemplateNode>>,
+  nodes: ReadonlyArray<StreamNode>,
+  handlers: ReadonlyArray<RuleHandler<unknown>>,
   context: RuleContext,
   failuresByRule: Map<string, RuleFailure[]>,
   ruleTimings: Map<string, RuleTiming>,
@@ -90,7 +81,7 @@ const dispatchTemplateHandlers = (
 };
 
 export const runSinglePassAnalysis = (
-  rules: ReadonlyArray<RuleHandler<any>>,
+  rules: ReadonlyArray<RuleHandler<unknown>>,
   context: RuleContext,
   options?: {
     errorCollector?: InfrastructureErrorCollector;
@@ -241,7 +232,7 @@ export const runSinglePassAnalysis = (
     );
     dispatchTemplateHandlers(
       templateAnalysis.blocks,
-      templateBlockHandlers as any,
+      templateBlockHandlers,
       templateContext,
       failuresByRule,
       ruleTimings,
@@ -249,8 +240,8 @@ export const runSinglePassAnalysis = (
       options?.errorCollector
     );
     dispatchTemplateHandlers(
-      [templateAnalysis as any],
-      templateHandlers as any,
+      [templateAnalysis],
+      templateHandlers,
       templateContext,
       failuresByRule,
       ruleTimings,
