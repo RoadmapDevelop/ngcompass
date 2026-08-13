@@ -5,7 +5,7 @@ import type {
   FileInput,
   RuleTask,
   Task,
-} from './types.js';
+} from './models/index.js';
 
 const CURRENT_VERSION = 2;
 

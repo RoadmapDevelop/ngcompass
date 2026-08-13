@@ -6,7 +6,7 @@ import type {
   IncrementalFilterOptions,
   IncrementalPlan,
   Task,
-} from './types.js';
+} from './models/index.js';
 
 const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
 const DELETE_BATCH_SIZE = 100;

@@ -6,7 +6,7 @@ import type {
   FileType,
   RuleTask,
   Task,
-} from './types.js';
+} from './models/index.js';
 
 export function buildIndexes(plan: ExecutionPlan): ExecutionIndexes;
 export function buildIndexes(

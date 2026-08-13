@@ -1,4 +1,4 @@
-import type { Task } from './types.js';
+import type { Task } from './models/index.js';
 
 export const groupTasksByFile = (
   tasks: ReadonlyArray<Task>

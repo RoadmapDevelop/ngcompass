@@ -6,7 +6,7 @@ import {
   extractTemplateUrl,
 } from './decorator-references.js';
 import { getBaseName, isComponentFile } from './file-type.js';
-import type { FileInput, TaskInputs } from './types.js';
+import type { FileInput, TaskInputs } from './models/index.js';
 
 const STYLE_EXTENSIONS = ['.css', '.scss', '.sass', '.less'] as const;
 

@@ -8,11 +8,14 @@ import {
   AnalysisResult,
   createInfrastructureError,
   debug,
+  Err,
   InfrastructureErrorCollector,
+  Ok,
   time,
   timeLog,
   type ConfigOverride,
   type ResolvedRule,
+  type Result,
 } from '@ngcompass/common';
 
 import { ComponentDependencyGraph } from './component-graph.js';
@@ -30,21 +33,16 @@ import {
   PLAN_SCHEMA_VERSION,
   serializePlan,
 } from './serialize.js';
-import {
-  buildTasksForFileTaskCentric,
-  type TaskBuilderContext,
-} from './task-builder.js';
-import {
-  Err,
-  Ok,
-  type ExecutionPlanOptions,
-  type ExecutionPlanOutput,
-  type FileAnalysisUnit,
-  type FileType,
-  type Result,
-  type RuleTask,
-  type Task,
-} from './types.js';
+import { buildTasksForFileTaskCentric } from './task-builder.js';
+import type {
+  ExecutionPlanOptions,
+  ExecutionPlanOutput,
+  FileAnalysisUnit,
+  FileType,
+  RuleTask,
+  Task,
+  TaskBuilderContext,
+} from './models/index.js';
 import { groupTasksByFile } from './utils.js';
 
 const DEFAULT_PARALLEL_THRESHOLD = 10_000;

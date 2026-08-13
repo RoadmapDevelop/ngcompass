@@ -6,7 +6,7 @@ import {
   type MetaCache,
 } from '@ngcompass/cache';
 
-import type { TaskInputs } from './types.js';
+import type { TaskInputs } from './models/index.js';
 
 const HASH_BATCH_SIZE = 500;
 

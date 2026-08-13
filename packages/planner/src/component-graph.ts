@@ -3,15 +3,7 @@ import {
   extractStyleUrls,
   extractTemplateUrl,
 } from './decorator-references.js';
-import type { FileType } from './types.js';
-
-export interface ComponentNode {
-  tsPath: string;
-  templatePath?: string;
-  stylePaths: string[];
-  specPath?: string;
-  type: FileType;
-}
+import type { ComponentNode } from './models/index.js';
 
 export class ComponentDependencyGraph {
   private readonly graph = new Map<string, ComponentNode>();

@@ -1,33 +1,8 @@
-import type { ResolvedRule } from '@ngcompass/common';
-import type { CacheContext, CacheKeyContext } from '@ngcompass/cache';
 import type {
   ExecutionPlanOptions,
-  IncrementalFilterOptions,
-} from './types.js';
-
-export interface ScanResultBridge {
-  readonly files: ReadonlyArray<string>;
-
-  readonly timestamp?: number;
-}
-
-export interface ScanToPlanOptions {
-  readonly rules: ReadonlyMap<string, ResolvedRule>;
-
-  readonly rootDir: string;
-
-  readonly cache?: CacheContext;
-
-  readonly debug?: boolean;
-
-  readonly incremental?: IncrementalFilterOptions;
-
-  readonly cacheKeyCtx?: CacheKeyContext;
-
-  readonly parallelThreshold?: number;
-
-  readonly workerCount?: number;
-}
+  ScanResultBridge,
+  ScanToPlanOptions,
+} from './models/index.js';
 
 export const scanResultToPlanInput = (
   scanResult: ScanResultBridge,
