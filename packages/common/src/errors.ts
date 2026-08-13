@@ -63,12 +63,11 @@ export class RuleExecutionError extends AnalyzerError {
   }
 }
 
-export function createInfrastructureError(
+export const createInfrastructureError = (
   type: InfrastructureErrorType,
   fields: Omit<InfrastructureError, 'type' | 'timestamp'>
-): InfrastructureError {
-  return Object.freeze({ type, timestamp: Date.now(), ...fields });
-}
+): InfrastructureError =>
+  Object.freeze({ type, timestamp: Date.now(), ...fields });
 
 export class InfrastructureErrorCollector {
   private readonly _errors: InfrastructureError[] = [];
