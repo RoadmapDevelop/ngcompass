@@ -59,17 +59,10 @@ const normalizeOverrideConfig = (
   rc: RuleConfig | 'off'
 ): NormalizedOverrideConfig => {
   if (typeof rc === 'string') {
-    return {
-      severity: rc as NormalizedOverrideConfig['severity'],
-      options: {},
-    };
+    return { severity: rc, options: {} };
   }
   if (rc && typeof rc === 'object' && 'severity' in rc) {
-    const obj = rc as { severity: string; options?: Record<string, unknown> };
-    return {
-      severity: obj.severity as NormalizedOverrideConfig['severity'],
-      options: obj.options ?? {},
-    };
+    return { severity: rc.severity, options: rc.options ?? {} };
   }
   return { severity: 'off', options: {} };
 };

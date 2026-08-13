@@ -170,7 +170,7 @@ const warmHashCacheIfPossible = async (
   debug('planner', 'Warming up hash cache from metadata index...');
   const start = performance.now();
   await warmupHashCache(
-    options.files as string[],
+    options.files,
     options.cache.metas,
     context.hashCache!
   );
@@ -209,14 +209,12 @@ const tryLoadPlanFromCache = async (
 
   if (options.incremental?.forceRerun) return null;
 
-  const precomputedAnalysis = await options.cache.analysis.get(globalHash);
+  const precomputedAnalysis =
+    await options.cache.analysis.get<AnalysisResult>(globalHash);
   if (precomputedAnalysis) {
     if (options.debug)
       debug('planner', 'Analysis results cached (Short-circuit enabled)');
-    return buildPrecomputedOutput(
-      globalHash,
-      precomputedAnalysis as AnalysisResult
-    );
+    return buildPrecomputedOutput(globalHash, precomputedAnalysis);
   }
 
   const tIOStart = performance.now();
@@ -239,7 +237,12 @@ const tryLoadPlanFromCache = async (
     );
     try {
       await options.cache.plans.delete?.(globalHash);
-    } catch {}
+    } catch (deleteErr) {
+      debug(
+        'planner',
+        `Could not delete corrupted plan entry: ${deleteErr instanceof Error ? deleteErr.message : String(deleteErr)}`
+      );
+    }
     if (errorCollector) {
       errorCollector.record(
         createInfrastructureError('CacheCorruption', {

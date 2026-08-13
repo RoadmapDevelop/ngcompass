@@ -117,7 +117,7 @@ const buildFilesByType = (
   for (const [filePath, unit] of Object.entries(plan)) {
     index[unit.file.type].push(filePath);
   }
-  for (const type of Object.keys(index) as FileType[]) index[type].sort();
+  for (const filePaths of Object.values(index)) filePaths.sort();
   return index;
 };
 
@@ -197,8 +197,8 @@ const buildTasksBySeverityLevel = (
 ): Readonly<Record<RuleSeverity, ReadonlyArray<Task>>> => {
   const index: Record<RuleSeverity, Task[]> = { off: [], warn: [], error: [] };
   for (const task of tasks) index[task.severity].push(task);
-  for (const severity of Object.keys(index) as RuleSeverity[]) {
-    index[severity].sort((a, b) => {
+  for (const severityTasks of Object.values(index)) {
+    severityTasks.sort((a, b) => {
       const fileCompare = a.filePath.localeCompare(b.filePath);
       return fileCompare !== 0
         ? fileCompare

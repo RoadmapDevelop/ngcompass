@@ -60,26 +60,26 @@ export class ComponentDependencyGraph {
   }
 }
 
-async function resolveTemplate(
+const resolveTemplate = async (
   comp: string,
   dir: string,
   baseNamePath: string,
   dirFileSet: Set<string>,
   fileSet: Set<string>
-): Promise<string | undefined> {
+): Promise<string | undefined> => {
   const candidates = [`${baseNamePath}.component.html`, `${baseNamePath}.html`];
   const convention = candidates.find((t) => dirFileSet.has(t));
   if (convention) return convention;
   return extractTemplateUrl(comp, dir, fileSet);
-}
+};
 
-async function resolveStyles(
+const resolveStyles = async (
   comp: string,
   dir: string,
   baseNamePath: string,
   dirFiles: string[],
   fileSet: Set<string>
-): Promise<string[]> {
+): Promise<string[]> => {
   const conventional = dirFiles.filter((f) => {
     if (!f.startsWith(baseNamePath)) return false;
     const ext = path.extname(f);
@@ -93,15 +93,15 @@ async function resolveStyles(
   });
   if (conventional.length > 0) return conventional;
   return extractStyleUrls(comp, dir, fileSet);
-}
+};
 
-function resolveSpec(
+const resolveSpec = (
   baseNamePath: string,
   dirFileSet: Set<string>
-): string | undefined {
+): string | undefined => {
   const candidates = [
     `${baseNamePath}.component.spec.ts`,
     `${baseNamePath}.spec.ts`,
   ];
   return candidates.find((c) => dirFileSet.has(c));
-}
+};

@@ -11,7 +11,7 @@ import type { TaskInputs } from './models/index.js';
 const HASH_BATCH_SIZE = 500;
 
 export const warmupHashCache = async (
-  filePaths: string[],
+  filePaths: ReadonlyArray<string>,
   metaCache: MetaCache,
   hashCache: Map<string, string>
 ): Promise<void> => {
@@ -39,7 +39,13 @@ export const warmupHashCache = async (
             size: stats.size,
             hash,
           });
-        } catch {}
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          debug(
+            'planner',
+            `Hash cache warmup skipped ${filePath}: ${message}`
+          );
+        }
       })
     );
   }
@@ -82,7 +88,9 @@ export const hashFileStats = async (filePath: string): Promise<string> => {
   try {
     const stats = await fs.stat(filePath);
     return computeHash(`${filePath}::${stats.size}::${stats.mtimeMs}`);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    debug('planner', `Failed to stat file: ${filePath}. Error: ${message}`);
     return '';
   }
 };
