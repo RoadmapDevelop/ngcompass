@@ -1,5 +1,6 @@
 export type * from './analysis-result.js';
 export type * from './analyzer-config.js';
+export type * from './baseline.js';
 export type * from './angular-type-index.js';
 export type * from './angular-version.js';
 export type * from './config-health.js';

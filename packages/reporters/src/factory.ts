@@ -2,6 +2,7 @@ import process from 'node:process';
 import type { RuleResult } from '@ngcompass/common';
 import pc from 'picocolors';
 import { getAnalysisStatus } from './formatting/analysis-status.js';
+import { TextBaselineReporter } from './reporters/baseline.js';
 import { TextCacheReporter } from './reporters/cache.js';
 import { TextConfigReporter } from './reporters/config.js';
 import { ConsoleReporter } from './reporters/console-reporter.js';
@@ -14,6 +15,7 @@ import {
 import type { RulesReporterOptions } from './models/index.js';
 import { SarifReporter } from './reporters/sarif-reporter.js';
 import type {
+  BaselineReporter,
   CacheReporter,
   ConfigReporter,
   ConsoleReporterOptions,
@@ -149,6 +151,10 @@ export function getConfigReporter(): ConfigReporter {
 
 export function getCacheReporter(): CacheReporter {
   return new TextCacheReporter();
+}
+
+export function getBaselineReporter(): BaselineReporter {
+  return new TextBaselineReporter();
 }
 
 export function getRulesReporter(

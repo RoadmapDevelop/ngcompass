@@ -1,12 +1,27 @@
 import { z } from 'zod';
-import type { CacheOptions } from '@ngcompass/common';
+import type { BaselineConfig, CacheOptions } from '@ngcompass/common';
 import {
+  DEFAULT_BASELINE_OPTIONS,
   DEFAULT_CACHE_OPTIONS,
   DEFAULT_CONFIG,
   getDefaultMaxWorkers,
 } from './defaults.js';
 
 export type ValidatedConfig = z.infer<typeof AnalyzerConfigSchema>;
+
+function normalizeBaseline(
+  value: boolean | z.infer<typeof BaselineOptionsSchema> | undefined
+): BaselineConfig {
+  if (value === undefined || typeof value === 'boolean') {
+    return { ...DEFAULT_BASELINE_OPTIONS, enabled: value === true };
+  }
+
+  return {
+    enabled: value.enabled ?? true,
+    path: value.path ?? DEFAULT_BASELINE_OPTIONS.path,
+    onStale: value.onStale ?? DEFAULT_BASELINE_OPTIONS.onStale,
+  };
+}
 
 export type CacheConfig = ValidatedConfig['cache'];
 
@@ -29,6 +44,12 @@ const CacheOptionsSchema = z.object({
   ttl: z.number().optional(),
 });
 
+const BaselineOptionsSchema = z.object({
+  enabled: z.boolean().optional(),
+  path: z.string().optional(),
+  onStale: z.enum(['ignore', 'warn', 'error']).optional(),
+});
+
 const ParserOptionsSchema = z.object({
   project: z.string().optional(),
   tsconfigRootDir: z.string().optional(),
@@ -47,6 +68,8 @@ const BaseAnalyzerConfigSchema = z.object({
 
   cache: z.union([z.boolean(), CacheOptionsSchema]).optional(),
   cacheLocation: z.string().optional(),
+
+  baseline: z.union([z.boolean(), BaselineOptionsSchema]).optional(),
 
   outputFormat: OutputFormatSchema.default(DEFAULT_CONFIG.outputFormat),
   outputPath: z.string().optional(),
@@ -97,6 +120,7 @@ export const AnalyzerConfigSchema = BaseAnalyzerConfigSchema.extend({
     ...data,
     maxWorkers,
     cache,
+    baseline: normalizeBaseline(data.baseline),
     rules: data.rules ?? {},
     overrides: data.overrides ?? [],
     ignorePatterns: data.ignorePatterns ?? [],

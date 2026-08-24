@@ -4,6 +4,7 @@ import type { ConfigIssue, ConfigValidationResult } from '@ngcompass/common';
 
 import { AnalyzerConfigSchema } from '../validation/schema.js';
 import {
+  validateBaseline,
   validateCrossFields,
   validateDeprecatedFields,
   validateExtendsChain,
@@ -95,6 +96,10 @@ function runSemanticChecks(
       run: () => validatePaths(validated, context, basePath).issues,
     },
     { name: 'rules', run: () => validateRules(validated, basePath).issues },
+    {
+      name: 'baseline',
+      run: () => validateBaseline(validated, context, basePath).issues,
+    },
     {
       name: 'extends-chain',
       run: () => validateExtendsChain(validated, basePath, context.cwd).issues,

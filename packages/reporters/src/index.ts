@@ -1,5 +1,6 @@
 export type {
   AnalysisReporter,
+  BaselineReporter,
   CacheReporter,
   ConfigReporter,
   ConsoleReporterOptions,
@@ -20,6 +21,7 @@ export * from './formatting/output.js';
 export * from './formatting/code-frame.js';
 export * from './reporters/config.js';
 export * from './reporters/cache.js';
+export * from './reporters/baseline.js';
 export * from './reporters/console-reporter.js';
 export * from './reporters/json-reporter.js';
 export * from './reporters/html-reporter.js';

@@ -7,8 +7,6 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'Use `toSignal()` or the `async` pipe for view state; add `takeUntilDestroyed()` for long-lived imperative subscriptions.',
   'template-trackby-required':
     'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
-  'template-trackby-required-for-ngfor':
-    'Add `trackBy` to `*ngFor`, or use `track` when migrating to `@for`.',
   'template-no-object-literal-binding':
     'Move the object to a component property, signal, computed value, or pure pipe.',
   'template-no-array-literal-binding':
@@ -19,8 +17,6 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'Use `signal()` for component UI state; move complex async pipelines into a service.',
   'signal-no-side-effects-in-computed':
     'Move side effects to an `effect()` or method, and keep `computed()` pure.',
-  'signal-no-writes-in-computed':
-    'Move `.set()` or `.update()` calls to an `effect()` or event handler.',
   'prefer-inject-over-constructor-di':
     'Replace constructor parameters with field initializers that call `inject()`.',
   'component-no-manual-detect-changes':
@@ -33,8 +29,6 @@ export const RECOMMENDATIONS: Readonly<Record<string, string>> = {
     'Convert template-used observables to `toSignal()` and read them as signals in the template.',
   'signal-effect-must-be-destroy-scoped':
     'Create the effect in an injection context or pass an explicit `{ injector }`.',
-  'signal-no-effect-in-constructor':
-    'Move the `effect()` call to a field initializer.',
   'signal-prefer-computed-over-sync-effect':
     'Replace the write-producing `effect()` with a `computed()` signal.',
   'signal-avoid-untracked-overuse':
@@ -189,18 +183,6 @@ total = computed(() => {
 // After:
 total = computed(() => this.price() * this.qty());`,
 
-  'signal-no-writes-in-computed': `// Before:
-derived = computed(() => {
-  const val = this.source();
-  this.other.set(val * 2);  // write inside computed!
-  return val;
-});
-
-// After:
-derived = computed(() => this.source());
-// Use effect() for the write:
-syncEffect = effect(() => this.other.set(this.source() * 2));`,
-
   'signal-effect-must-be-destroy-scoped': `// Before:
 ngAfterViewInit() {
   effect(() => console.log(this.count()));  // no injection context!
@@ -213,14 +195,6 @@ logEffect = effect(() => console.log(this.count()));
 ngAfterViewInit() {
   effect(() => console.log(this.count()), { injector: this.injector });
 }`,
-
-  'signal-no-effect-in-constructor': `// Before:
-constructor() {
-  effect(() => console.log(this.count()));
-}
-
-// After:
-logEffect = effect(() => console.log(this.count()));`,
 
   'signal-prefer-computed-over-sync-effect': `// Before:
 logEffect = effect(() => {
@@ -260,7 +234,7 @@ childConfig = signal({ color: 'red', size: 10 });
 items = signal([1, 2, 3]);
 // template: <app-child [items]="items()"></app-child>`,
 
-  'template-trackby-required-for-ngfor': `// Before:
+  'template-trackby-required': `// Before:
 <div *ngFor="let item of items">{{ item.name }}</div>
 
 // After:

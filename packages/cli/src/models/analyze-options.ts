@@ -13,6 +13,7 @@ export interface AnalyzeOptions {
   quiet?: boolean;
   recommendation?: boolean;
   rule?: string;
+  baseline?: string | boolean;
   output?: string;
   maxWorkers?: string;
   skipTypeCheck?: boolean;

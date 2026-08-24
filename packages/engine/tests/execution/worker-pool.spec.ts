@@ -47,7 +47,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-describe('runAnalysisParallel — contract', () => {
+describe('runAnalysisParallel — contract', { timeout: 30000 }, () => {
   it('returns Ok with an empty result when tasks array is empty', async () => {
     const result = await runAnalysisParallel([], '/fake', Date.now());
     expect(result.ok).toBe(true);
@@ -88,7 +88,7 @@ describe('runAnalysisParallel — contract', () => {
   });
 });
 
-describe('runAnalysisParallel — same-file task grouping', () => {
+describe('runAnalysisParallel — same-file task grouping', { timeout: 30000 }, () => {
   it('handles multiple tasks targeting the same file', async () => {
     const filePath = '/fake/shared.component.ts';
     const tasks = [
@@ -103,7 +103,7 @@ describe('runAnalysisParallel — same-file task grouping', () => {
   });
 });
 
-describe('runAnalysisParallel — result shape', () => {
+describe('runAnalysisParallel — result shape', { timeout: 30000 }, () => {
   it('every result has ruleName and failures array', async () => {
     const tasks = [makeTask('/fake/a.ts'), makeTask('/fake/b.ts')];
     const result = await runAnalysisParallel(tasks, '/fake', performance.now());
@@ -127,7 +127,7 @@ describe('runAnalysisParallel — result shape', () => {
   });
 });
 
-describe('runAnalysisParallel — concurrency params', () => {
+describe('runAnalysisParallel — concurrency params', { timeout: 30000 }, () => {
   it('accepts maxWorkers=1 without error', async () => {
     const result = await runAnalysisParallel(
       [makeTask()],

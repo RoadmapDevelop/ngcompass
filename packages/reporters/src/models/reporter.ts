@@ -1,4 +1,5 @@
 import type {
+  BaselineReport,
   ConfigReport,
   HealthReport,
   InitResult,
@@ -49,6 +50,10 @@ export interface ConfigReporter {
   renderInitResult(result: InitResult): void;
 
   renderHealthReport(report: HealthReport): void;
+}
+
+export interface BaselineReporter {
+  renderBaseline(report: BaselineReport): void;
 }
 
 export interface CacheReporter {

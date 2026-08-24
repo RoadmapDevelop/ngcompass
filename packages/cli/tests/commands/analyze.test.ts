@@ -45,6 +45,11 @@ describe('Analyze Command', () => {
           ttl: 86400000,
         },
         overrides: [],
+        baseline: {
+          enabled: false,
+          path: '.ngcompass/baseline.json',
+          onStale: 'warn',
+        },
         ...configOverrides,
       } as any,
     } as any);

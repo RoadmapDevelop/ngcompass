@@ -1,6 +1,7 @@
 import type {
   OutputFormat,
   FailSeverity,
+  BaselineConfig,
   CacheOptions,
 } from '@ngcompass/common';
 import { DEFAULT_INCLUDE_PATTERNS } from '@ngcompass/common';
@@ -31,6 +32,12 @@ export const DEFAULT_CACHE_OPTIONS: Required<CacheOptions> = {
   location: DEFAULT_CACHE_DIR,
   strategy: 'local',
   ttl: TIME.TWENTY_FOUR_HOURS,
+};
+
+export const DEFAULT_BASELINE_OPTIONS: BaselineConfig = {
+  enabled: false,
+  path: '.ngcompass/baseline.json',
+  onStale: 'warn',
 };
 
 export const DEFAULT_CONFIG = {

@@ -5,12 +5,10 @@ import {
 } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createTemplateRule } from '@ngcompass/engine';
-import { RECOMMENDATIONS } from '../../recommendations';
+import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 import { getTemplateAbsoluteOffset } from '../../rule-utils';
 
-const NGFOR_RULE_NAME = 'template-trackby-required-for-ngfor';
-const ATFOR_RULE_NAME = 'template-track-required-for-atfor';
-const COMBINED_RULE_NAME = 'template-trackby-required';
+const RULE_NAME = 'template-trackby-required';
 
 const NGFOR_MESSAGE =
   '*ngFor without trackBy can recreate DOM nodes unnecessarily when list items change.';
@@ -20,7 +18,6 @@ const ATFOR_MESSAGE =
 function createFailure(
   context: RuleContext,
   node: TemplateAttributeNode | TemplateBlockNode,
-  ruleName: string,
   message: string
 ): RuleFailure {
   const offset = getTemplateAbsoluteOffset(context, node.sourceSpan.start);
@@ -28,12 +25,13 @@ function createFailure(
 
   return {
     filePath: context.filePath,
-    ruleName,
+    ruleName: RULE_NAME,
     message,
     line,
     column,
     severity: 'error',
-    fix: RECOMMENDATIONS[ruleName],
+    fix: RECOMMENDATIONS[RULE_NAME],
+    codeExample: CODE_EXAMPLES[RULE_NAME],
   };
 }
 
@@ -53,23 +51,19 @@ function hasNonEmptyForTrack(node: TemplateBlockNode): boolean {
 }
 
 export const templateTrackByRequiredRule = createTemplateRule(
-  COMBINED_RULE_NAME,
+  RULE_NAME,
   (analysis: TemplateAnalysis, context: RuleContext): RuleFailure[] | null => {
     const failures: RuleFailure[] = [];
 
     for (const node of analysis.attributes) {
       if (node.name === '*ngFor' && !hasNonEmptyTrackBy(node.value ?? '')) {
-        failures.push(
-          createFailure(context, node, NGFOR_RULE_NAME, NGFOR_MESSAGE)
-        );
+        failures.push(createFailure(context, node, NGFOR_MESSAGE));
       }
     }
 
     for (const node of analysis.blocks) {
       if (node.name === 'for' && !hasNonEmptyForTrack(node)) {
-        failures.push(
-          createFailure(context, node, ATFOR_RULE_NAME, ATFOR_MESSAGE)
-        );
+        failures.push(createFailure(context, node, ATFOR_MESSAGE));
       }
     }
 

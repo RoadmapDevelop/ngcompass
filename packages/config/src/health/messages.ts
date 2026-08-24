@@ -13,6 +13,22 @@ export const MESSAGES = {
     severity: 'error',
   }),
 
+  BASELINE_FILE_MISSING: (baselinePath: string): IssueTemplate => ({
+    code: 'baseline-file-missing',
+    message: `Baseline is enabled but no baseline file exists at "${baselinePath}".`,
+    suggestion:
+      "Run 'ngcompass baseline create' to record the current violations, or set 'baseline.enabled' to false.",
+    severity: 'warning',
+  }),
+
+  BASELINE_MAX_WARNINGS_REDUNDANT: (val: number): IssueTemplate => ({
+    code: 'warn-baseline-max-warnings-redundant',
+    message: `'maxWarnings' is ${val} while a baseline is enabled. The baseline already absorbs existing warnings, so a large budget now hides real regressions.`,
+    suggestion:
+      "Lower 'maxWarnings' to a strict value now that the baseline covers existing debt.",
+    severity: 'warning',
+  }),
+
   INVALID_ANGULAR_VERSION: (val: string): IssueTemplate => ({
     code: 'invalid-angular-version',
     message: `Value for 'angularVersion' must be a plain version number. Received: "${val}".`,

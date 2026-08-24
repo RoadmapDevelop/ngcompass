@@ -44,6 +44,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@ngcompass/baseline": "workspace:*",
     "@ngcompass/common": "workspace:*",
     "@ngcompass/reporters": "workspace:*",
     "@ngcompass/rules": "workspace:*",

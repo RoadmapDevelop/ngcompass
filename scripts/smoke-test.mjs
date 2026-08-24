@@ -98,6 +98,77 @@ const ZERO_ANGULAR_TMP = path.join(
   `ngcompass-zero-${process.pid}`
 );
 
+const BASELINE_TMP = path.join(
+  os.tmpdir(),
+  `ngcompass-baseline-${process.pid}`
+);
+
+const BASELINE_FILE = path.join(BASELINE_TMP, '.ngcompass', 'baseline.json');
+
+const BASELINE_RULE = 'template-prefer-control-flow';
+
+const BASELINE_SOURCES = [
+  ['legacy.component.ts', 'app-legacy', 'LegacyComponent'],
+  ['widget.component.ts', 'app-widget', 'WidgetComponent'],
+];
+
+function writeBaselineComponent(fileName, selector, className) {
+  fs.writeFileSync(
+    path.join(BASELINE_TMP, 'src', fileName),
+    [
+      `import { Component } from '@angular/core';`,
+      `@Component({`,
+      `  selector: '${selector}',`,
+      `  template: '<ul><li *ngFor="let x of items">{{ x }}</li></ul>',`,
+      `})`,
+      `export class ${className} {`,
+      `  items = [1, 2, 3];`,
+      `}`,
+    ].join('\n')
+  );
+}
+
+async function setupBaselineFixture() {
+  fs.mkdirSync(path.join(BASELINE_TMP, 'src'), { recursive: true });
+
+  fs.writeFileSync(
+    path.join(BASELINE_TMP, 'ngcompass.config.ts'),
+    [
+      `import { defineConfig } from '@ngcompass/config';`,
+      ``,
+      `export default defineConfig({`,
+      `  include: ['**/*.ts'],`,
+      `  exclude: ['**/node_modules/**'],`,
+      `  rules: {`,
+      `    '${BASELINE_RULE}': 'error',`,
+      `  },`,
+      `});`,
+    ].join('\n')
+  );
+
+  for (const [fileName, selector, className] of BASELINE_SOURCES) {
+    writeBaselineComponent(fileName, selector, className);
+  }
+}
+
+function countBaselinedViolations() {
+  const parsed = readJsonFile(BASELINE_FILE);
+  let total = 0;
+  for (const counts of Object.values(parsed.entries)) {
+    for (const count of Object.values(counts)) total += count;
+  }
+  return total;
+}
+
+function countReportedViolations(stdout) {
+  return JSON.parse(stdout.trim()).summary.totalViolations;
+}
+
+function baselineHasFile(fileName) {
+  const entries = readJsonFile(BASELINE_FILE).entries;
+  return Object.keys(entries).some((file) => file.endsWith(fileName));
+}
+
 const CYCLE_TMP = path.join(os.tmpdir(), `ngcompass-cycle-${process.pid}`);
 
 async function setupCycleFixture() {
@@ -153,6 +224,7 @@ const tests = [
       /rules/,
       /cache/,
       /init/,
+      /baseline/,
       /circular/,
       /complexity/,
       /graph/,
@@ -171,6 +243,8 @@ const tests = [
       /--force/,
       /--skip-type-check/,
       /--max-workers/,
+      /--baseline/,
+      /--no-baseline/,
     ],
   },
   {
@@ -190,6 +264,25 @@ const tests = [
     args: ['config', '--help'],
     exitCodes: [0],
     stdout: [/health/i],
+  },
+  {
+    name: 'baseline --help → lists every subcommand',
+    args: ['baseline', '--help'],
+    exitCodes: [0],
+    stdout: [/create/, /update/, /prune/, /show/],
+  },
+  {
+    name: 'baseline create --help → documents every flag',
+    args: ['baseline', 'create', '--help'],
+    exitCodes: [0],
+    stdout: [
+      /--profile/,
+      /--path/,
+      /--rule/,
+      /--force/,
+      /--skip-type-check/,
+      /--max-workers/,
+    ],
   },
   {
     name: 'init --help → shows --force and --cwd flags',
@@ -1032,6 +1125,184 @@ const tests = [
     combined: [/visualize:/i],
     notCombined: [CRASH_RE],
   },
+
+  {
+    name: 'baseline show → exit 1 before any baseline exists',
+    args: ['baseline', 'show'],
+    exitCodes: [1],
+    cwd: BASELINE_TMP,
+    combined: [/no baseline file was found/i],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'baseline create → writes .ngcompass/baseline.json with counts',
+    args: ['baseline', 'create', '--skip-type-check'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    stdout: [/Baseline written/, /violations? recorded/],
+    notCombined: [CRASH_RE],
+    validate: () => {
+      if (!fs.existsSync(BASELINE_FILE))
+        return `baseline was not written to ${BASELINE_FILE}`;
+
+      const parsed = readJsonFile(BASELINE_FILE);
+      if (typeof parsed.version !== 'number')
+        return 'baseline file is missing a numeric "version"';
+      if (!parsed.entries || typeof parsed.entries !== 'object')
+        return 'baseline file is missing an "entries" object';
+      if (countBaselinedViolations() === 0)
+        return 'baseline recorded zero violations - the fixture produced none';
+      return null;
+    },
+  },
+  {
+    name: 'baseline create (no --force) when one exists → exit 1',
+    args: ['baseline', 'create', '--skip-type-check'],
+    exitCodes: [1],
+    cwd: BASELINE_TMP,
+    combined: [/already exists/i],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'baseline create --force → overwrites the existing baseline',
+    args: ['baseline', 'create', '--force', '--skip-type-check'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    stdout: [/Baseline written/],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'baseline show → BASELINE banner + the hidden violations',
+    args: ['baseline', 'show'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    stdout: [/BASELINE/, VERSION_RE, /hidden across/],
+    notCombined: [CRASH_RE],
+  },
+  {
+    name: 'analyze --no-baseline → reports the pre-existing violations',
+    args: ['analyze', '--skip-type-check', '--format', 'json', '--no-baseline'],
+    exitCodes: [0, 1],
+    cwd: BASELINE_TMP,
+    notCombined: [CRASH_RE],
+    validate: (r) => {
+      if (countReportedViolations(r.stdout) === 0)
+        return '--no-baseline reported zero violations on a fixture that has them';
+      return null;
+    },
+  },
+  {
+    name: 'analyze --baseline → suppresses every recorded violation',
+    args: ['analyze', '--skip-type-check', '--format', 'json', '--baseline'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    notCombined: [CRASH_RE],
+    validate: (r) => {
+      const remaining = countReportedViolations(r.stdout);
+      if (remaining !== 0)
+        return `--baseline left ${remaining} violation(s) it should have hidden`;
+      return null;
+    },
+  },
+  {
+    name: 'analyze --baseline --format html → report states the hidden count',
+    args: ['analyze', '--skip-type-check', '--baseline', '--format', 'html'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    notCombined: [CRASH_RE],
+    validate: () => {
+      const htmlFile = path.join(BASELINE_TMP, 'ngcompass-report.html');
+      if (!fs.existsSync(htmlFile))
+        return 'ngcompass-report.html was not created';
+
+      const html = fs.readFileSync(htmlFile, 'utf8');
+      if (!html.includes('Hidden by baseline'))
+        return 'html report omits the baseline stat card';
+      if (!html.includes('hidden by baseline'))
+        return 'html report headline omits the hidden count';
+      if (html.includes('No violations found'))
+        return 'html report claims no violations while a baseline is hiding some';
+      return null;
+    },
+  },
+  {
+    name: 'analyze --baseline → a violation added later is still reported',
+    args: ['analyze', '--skip-type-check', '--format', 'json', '--baseline'],
+    exitCodes: [0, 1],
+    cwd: BASELINE_TMP,
+    notCombined: [CRASH_RE],
+    prepare: async () => {
+      writeBaselineComponent(
+        'fresh.component.ts',
+        'app-fresh',
+        'FreshComponent'
+      );
+    },
+    validate: (r) => {
+      if (countReportedViolations(r.stdout) === 0)
+        return 'a violation introduced after the baseline was not reported';
+      return null;
+    },
+  },
+  {
+    name: 'baseline update → absorbs the newly introduced violation',
+    args: ['baseline', 'update', '--skip-type-check'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    stdout: [/Baseline written/],
+    notCombined: [CRASH_RE],
+    validate: () => {
+      if (!baselineHasFile('fresh.component.ts'))
+        return 'baseline update did not record src/fresh.component.ts';
+      return null;
+    },
+  },
+  {
+    name: 'baseline prune → drops entries for files that no longer exist',
+    args: ['baseline', 'prune', '--skip-type-check'],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    stdout: [/Baseline written/],
+    notCombined: [CRASH_RE],
+    prepare: async () => {
+      fs.rmSync(path.join(BASELINE_TMP, 'src', 'fresh.component.ts'), {
+        force: true,
+      });
+    },
+    validate: () => {
+      if (baselineHasFile('fresh.component.ts'))
+        return 'baseline prune kept an entry for a deleted file';
+      return null;
+    },
+  },
+  {
+    name: 'baseline create --path <custom> → writes to the specified path',
+    args: [
+      'baseline',
+      'create',
+      '--skip-type-check',
+      '--force',
+      '--path',
+      'custom-baseline.json',
+    ],
+    exitCodes: [0],
+    cwd: BASELINE_TMP,
+    stdout: [/Baseline written/],
+    notCombined: [CRASH_RE],
+    validate: () => {
+      const custom = path.join(BASELINE_TMP, 'custom-baseline.json');
+      if (!fs.existsSync(custom)) return 'custom-baseline.json was not created';
+      return null;
+    },
+  },
+  {
+    name: 'analyze --baseline <missing path> → exit 1 with a clear error',
+    args: ['analyze', '--skip-type-check', '--baseline', 'does-not-exist.json'],
+    exitCodes: [1],
+    cwd: BASELINE_TMP,
+    combined: [/no baseline file was found/i],
+    notCombined: [CRASH_RE],
+  },
 ];
 
 async function runTests() {
@@ -1047,6 +1318,7 @@ async function runTests() {
 
   await setupFixture();
   await setupCycleFixture();
+  await setupBaselineFixture();
 
   fs.mkdirSync(path.join(ZERO_ANGULAR_TMP, 'src'), { recursive: true });
   await runCli(['init', '--cwd', ZERO_ANGULAR_TMP, '--force']);
@@ -1144,7 +1416,13 @@ async function runTests() {
 
   w('');
 
-  for (const dir of [INIT_TMP, FIXTURE_TMP, ZERO_ANGULAR_TMP, CYCLE_TMP]) {
+  for (const dir of [
+    INIT_TMP,
+    FIXTURE_TMP,
+    ZERO_ANGULAR_TMP,
+    CYCLE_TMP,
+    BASELINE_TMP,
+  ]) {
     try {
       fs.rmSync(dir, { recursive: true, force: true });
     } catch {}

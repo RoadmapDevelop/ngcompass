@@ -1,3 +1,4 @@
+import type { BaselineConfig } from './baseline.js';
 import type { RuleConfig, Severity } from './rule-config.js';
 import type { TelemetryConfig } from './telemetry.js';
 
@@ -37,6 +38,8 @@ export interface AnalyzerConfig {
 
   cache?: boolean | CacheOptions;
 
+  baseline?: boolean | Partial<BaselineConfig>;
+
   outputFormat?: OutputFormat;
 
   outputPath?: string;
@@ -65,6 +68,7 @@ export interface AnalyzerConfig {
 export interface NormalizedAnalyzerConfig extends Omit<
   AnalyzerConfig,
   | 'cache'
+  | 'baseline'
   | 'maxWorkers'
   | 'outputFormat'
   | 'failOnSeverity'
@@ -73,6 +77,8 @@ export interface NormalizedAnalyzerConfig extends Omit<
   | 'angularVersion'
 > {
   cache: Required<CacheOptions>;
+
+  baseline: BaselineConfig;
 
   maxWorkers: number;
 
