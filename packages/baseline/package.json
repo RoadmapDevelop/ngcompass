@@ -1,6 +1,6 @@
 {
   "name": "@ngcompass/baseline",
-  "version": "0.2.4-beta",
+  "version": "0.2.6-beta",
   "description": "Baseline suppression for gradual ngcompass adoption",
   "sideEffects": false,
   "main": "./dist/index.cjs",
