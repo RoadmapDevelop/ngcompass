@@ -3,12 +3,12 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   getNodeStart,
   getStaticPropertyName,
   isMemberExpressionLike,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'no-detectchanges-testing';
 

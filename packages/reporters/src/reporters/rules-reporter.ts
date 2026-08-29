@@ -1,6 +1,8 @@
 import pc from 'picocolors';
 import type { RuleListEntry } from '@ngcompass/common';
-import { processOutput, type ReporterOutput } from '../output.js';
+import { processOutput } from '../formatting/output.js';
+import type { ReporterOutput } from '../models/index.js';
+import type { RulesReporterOptions } from '../models/index.js';
 
 const DOMAIN_ORDER = [
   'correctness',
@@ -20,10 +22,6 @@ const NGCOMPASS_BANNER = [
   '|_| |_|\\__, |\\___\\___/|_| |_| |_| .__/ \\__,_|___/___/',
   '       |___/                    |_|                   ',
 ] as const;
-
-export interface RulesReporterOptions {
-  preset?: string;
-}
 
 export class RulesReporter {
   constructor(
@@ -91,7 +89,7 @@ function groupByDomain(
 
 function sortDomains(domains: ReadonlyArray<string>): string[] {
   const rank = (d: string): number => {
-    const idx = DOMAIN_ORDER.indexOf(d as (typeof DOMAIN_ORDER)[number]);
+    const idx = DOMAIN_ORDER.findIndex((domain) => domain === d);
     return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
   };
   return [...domains].sort((a, b) => rank(a) - rank(b));

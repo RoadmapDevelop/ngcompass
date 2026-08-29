@@ -2,8 +2,9 @@ import { defu } from 'defu';
 import type { AstCache } from '@ngcompass/cache';
 import type { ConfigIssue, ConfigValidationResult } from '@ngcompass/common';
 
-import { AnalyzerConfigSchema } from '../schemas/schema.js';
+import { AnalyzerConfigSchema } from '../validation/schema.js';
 import {
+  validateBaseline,
   validateCrossFields,
   validateDeprecatedFields,
   validateExtendsChain,
@@ -15,10 +16,10 @@ import {
 import { createDefaultContext } from './context.js';
 import { enrichIssueLocations } from './enricher.js';
 import type {
-  ValidatedConfig,
   ValidationContext,
   WritableIssue,
-} from './types.js';
+} from '../models/index.js';
+import type { ValidatedConfig } from '../validation/schema.js';
 
 const ERROR_CODES = {
   CHECK_FAILED: 'check-failed',
@@ -95,6 +96,10 @@ function runSemanticChecks(
       run: () => validatePaths(validated, context, basePath).issues,
     },
     { name: 'rules', run: () => validateRules(validated, basePath).issues },
+    {
+      name: 'baseline',
+      run: () => validateBaseline(validated, context, basePath).issues,
+    },
     {
       name: 'extends-chain',
       run: () => validateExtendsChain(validated, basePath, context.cwd).issues,

@@ -46,8 +46,9 @@ jobs:
           mkdir -p "$PACKS_DIR" "$SMOKE_DIR"
 
 
-          for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
-                     packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
+          for pkg in packages/ast packages/baseline packages/cache packages/cli packages/common \
+                     packages/config packages/engine packages/planner packages/reporters \
+                     packages/rules packages/scanner; do
             (cd "$pkg" && pnpm pack --pack-destination "$PACKS_DIR")
           done
 
@@ -76,6 +77,9 @@ jobs:
 
           echo "--- ngcompass cache info ---"
           ngcompass cache info
+
+          echo "--- ngcompass baseline --help ---"
+          ngcompass baseline --help
 
       - name: Verify shebang preserved in dist
         shell: bash
@@ -229,8 +233,9 @@ jobs:
         run: |
           pnpm exec turbo build:prod
 
-          for pkg in packages/ast packages/cache packages/cli packages/common packages/config \
-                     packages/engine packages/planner packages/reporters packages/rules packages/scanner; do
+          for pkg in packages/ast packages/baseline packages/cache packages/cli packages/common \
+                     packages/config packages/engine packages/planner packages/reporters \
+                     packages/rules packages/scanner; do
             echo "=== $pkg ==="
             (cd "$pkg" && npm publish --dry-run 2>&1)
           done

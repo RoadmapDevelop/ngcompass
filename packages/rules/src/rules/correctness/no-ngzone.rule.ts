@@ -3,7 +3,10 @@ import { AnyAngularClassNode } from '@ngcompass/ast';
 import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations.js';
-import { AstNode, getNodeStart } from '../../rule-utils.js';
+import {
+  getNodeStart,
+} from '../../rule-utils.js';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'no-ngzone';
 

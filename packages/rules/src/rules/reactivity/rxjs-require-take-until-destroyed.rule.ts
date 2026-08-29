@@ -4,7 +4,6 @@ import { CallExpression } from '@ngcompass/ast';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   ensureRuleSourceFile,
   findObservableSourceCall,
   getNodeStart,
@@ -15,6 +14,7 @@ import {
   isSubscribeCall,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const manualTeardownCache = new Map<string, boolean>();
 const CACHE_LIMIT = 500;

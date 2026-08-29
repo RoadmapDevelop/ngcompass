@@ -2,14 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { debug } from '@ngcompass/common';
 import { extractStyleUrls, extractTemplateUrl } from '@ngcompass/planner';
-import type { LaneStatus } from './unit-graph.js';
-
-export interface DiscoveredFile {
-  readonly filePath: string | null;
-  readonly status: LaneStatus;
-  readonly content: string | null;
-}
-
+import type { DiscoveredFile } from '../models/index.js';
 const SPEC_SUFFIX = '.spec';
 const TEMPLATE_EXTENSION = '.html';
 const STYLE_EXTENSIONS: readonly string[] = ['.scss', '.css', '.sass', '.less'];

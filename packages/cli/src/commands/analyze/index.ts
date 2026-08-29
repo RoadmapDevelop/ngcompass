@@ -5,7 +5,8 @@ import { CacheContext, createRuntimeCache } from '@ngcompass/cache';
 import { getReporter, type ResultSummary } from '@ngcompass/reporters';
 import { Spinner } from '../../spinner.js';
 import { exitWithError } from '../exit.js';
-import { resolvePerformanceOptions, type AnalyzeOptions } from './options.js';
+import { resolvePerformanceOptions } from './options.js';
+import type { AnalyzeOptions } from '../../models/index.js';
 import {
   formatAnalysisProgressMessage,
   normalizeReporterFormat,
@@ -22,6 +23,7 @@ import {
   saveToCacheStep,
 } from './steps.js';
 import { createFileProgressLogger } from './progress.js';
+import { applyBaselineStep } from './baseline.js';
 
 export function registerAnalyzeCommand(
   program: Command,
@@ -52,6 +54,11 @@ export function registerAnalyzeCommand(
       '--rule <id>',
       'Run only one rule (useful for debugging or focused checks)'
     )
+    .option(
+      '--baseline [path]',
+      'Hide violations recorded in a baseline file and report only new ones'
+    )
+    .option('--no-baseline', 'Ignore the configured baseline for this run')
     .option(
       '--max-workers <n>',
       'Cap the number of worker threads (lower = less memory, e.g. --max-workers 2)'
@@ -171,6 +178,21 @@ export function registerAnalyzeCommand(
           return;
         }
 
+        const baselined = await applyBaselineStep(
+          analysis,
+          plan,
+          files,
+          enabledRules,
+          config,
+          options,
+          reporter,
+          process.cwd()
+        );
+        if (!baselined) {
+          exitCode = 1;
+          return;
+        }
+
         const duration = performance.now() - startTime;
         const scannedFiles = new Set([
           ...plan.tasks.map((t) => t.filePath),
@@ -180,13 +202,15 @@ export function registerAnalyzeCommand(
         const summary: ResultSummary = {
           scannedFiles,
           discoveredFiles: files.length,
-          totalFiles: analysis.stats.totalFiles,
+          totalFiles: baselined.stats.totalFiles,
           totalTasks: plan.tasks.length + (plan.skippedTasks?.length ?? 0),
           cachedTasks: plan.precomputedAnalysis ? plan.tasks.length : undefined,
-          totalErrors: analysis.stats.totalErrors,
-          totalWarnings: analysis.stats.totalWarnings,
+          totalErrors: baselined.stats.totalErrors,
+          totalWarnings: baselined.stats.totalWarnings,
           failOnSeverity: config.failOnSeverity,
           maxWarnings: config.maxWarnings,
+          suppressedByBaseline: baselined.suppressedCount || undefined,
+          baselineStaleEntries: baselined.staleCount || undefined,
           skippedFiles: skippedFiles.length || undefined,
           skippedFilePaths: skippedFiles.length ? skippedFiles : undefined,
           duration,
@@ -196,7 +220,7 @@ export function registerAnalyzeCommand(
         }
 
         reporter.parseErrors(analysis.parseErrors);
-        reporter.report(analysis.results);
+        reporter.report(baselined.results);
 
         if (reporterFormat !== 'console') {
           reporter.step('❯ Writing report...');
@@ -212,7 +236,10 @@ export function registerAnalyzeCommand(
           );
         }
 
-        if (shouldFailAnalysis(config, analysis.stats)) {
+        if (
+          shouldFailAnalysis(config, baselined.stats) ||
+          baselined.failedOnStale
+        ) {
           exitCode = 1;
         }
       } catch (error: unknown) {

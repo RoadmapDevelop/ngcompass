@@ -1,33 +1,17 @@
 import { Locator } from '@ngcompass/common';
 import {
-  type AstNodeLike,
   MEMBER_TYPES,
   isNode,
   keyName,
   spanOffset,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import { typeReferenceName } from './ts-members.js';
-
-export interface SpecTest {
-  readonly title: string;
-  readonly line: number;
-  readonly column: number;
-  readonly start: number;
-  readonly end: number;
-}
-
-export interface SpecRef {
-  readonly testTitle: string;
-  readonly testLine: number;
-  readonly memberName: string;
-  readonly weight: number;
-}
-
-export interface SpecAnalysis {
-  readonly tests: readonly SpecTest[];
-  readonly refs: readonly SpecRef[];
-}
+import type {
+  AstNodeLike,
+  SpecAnalysis,
+  SpecTest,
+} from '../models/index.js';
 
 const TEST_CALLEES: ReadonlySet<string> = new Set(['it', 'test']);
 const COMPONENT_INSTANCE = 'componentInstance';

@@ -2,42 +2,36 @@
 import process from 'node:process';
 import { RuleFailure, RuleResult, formatDuration } from '@ngcompass/common';
 import pc from 'picocolors';
-import { getAnalysisStatus } from '../analysis-status.js';
+import { getAnalysisStatus } from '../formatting/analysis-status.js';
+import {
+  buildFileBadge,
+  buildIndexedSeparator,
+  buildLabeledDivider,
+} from '../formatting/blocks.js';
 import {
   defaultSourceReader,
   renderCodeFrame,
-  type SourceReader,
-} from '../code-frame.js';
-import { processOutput, type ReporterOutput } from '../output.js';
-import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
+} from '../formatting/code-frame.js';
+import type { SourceReader } from '../models/index.js';
+import { processOutput } from '../formatting/output.js';
+import type { ReporterOutput } from '../models/index.js';
+import {
+  compareByPosition,
+  isErrorSeverity,
+} from '../formatting/severity-utils.js';
 import type {
   ConsoleReporterOptions,
   ParseError,
   Reporter,
   ResultSummary,
-} from '../types.js';
+} from '../models/index.js';
 
 const TYPE_WIDTH_COMPACT = 5;
 
 const TRAILING_PERIOD_RE = /\.$/;
 
 function buildViolationsDivider(): string {
-  const visibleLabel = '   Violations   ';
-  const styledLabel = '  ' + pc.bgRed(pc.white(pc.bold(' Violations '))) + '  ';
-  const width = process.stdout.columns ?? 80;
-  const sides = Math.max(0, width - visibleLabel.length);
-  const left = Math.floor(sides / 2);
-  const right = sides - left;
-  return pc.red('·'.repeat(left)) + styledLabel + pc.red('·'.repeat(right));
-}
-
-function buildIndexedSeparator(index: number, total: number): string {
-  const visibleLabel = ` ${index}/${total} `;
-  const styledLabel = '  ' + pc.bgWhite(pc.black(pc.bold(visibleLabel))) + '  ';
-  const visibleWidth = visibleLabel.length + 4;
-  const width = process.stdout.columns ?? 80;
-  const dotCount = Math.max(0, width - visibleWidth);
-  return pc.dim('·'.repeat(dotCount)) + styledLabel;
+  return buildLabeledDivider('Violations', 'error');
 }
 
 interface SeverityCounts {
@@ -111,8 +105,16 @@ function buildSummaryLine(
     `${statusColor(statusIcon)} ` +
     `${total} violation${total !== 1 ? 's' : ''} ` +
     `(${errorText}, ${warningText})  ` +
-    statusLabel
+    statusLabel +
+    buildBaselineSuffix(stats)
   );
+}
+
+function buildBaselineSuffix(stats?: ResultSummary): string {
+  const suppressed = stats?.suppressedByBaseline ?? 0;
+  if (suppressed === 0) return '';
+
+  return pc.dim(` · ${suppressed.toLocaleString()} hidden by baseline`);
 }
 
 function buildProblemNextAction(): string {
@@ -143,9 +145,16 @@ function buildAnalysisSummary(stats: ResultSummary): string {
   );
 }
 
-function buildPassLine(): string {
+function buildPassLine(stats?: ResultSummary): string {
   const status = getAnalysisStatus({ totalErrors: 0, totalWarnings: 0 });
-  return `${pc.green('❯')} ${pc.green(pc.bold('No violations found'))} ${pc.dim('·')} ${pc.green(pc.bold(status.label))}`;
+  const label = stats?.suppressedByBaseline
+    ? 'No new violations found'
+    : 'No violations found';
+
+  return (
+    `${pc.green('❯')} ${pc.green(pc.bold(label))} ${pc.dim('·')} ` +
+    `${pc.green(pc.bold(status.label))}${buildBaselineSuffix(stats)}`
+  );
 }
 
 function formatStepMessage(message: string): string {
@@ -213,12 +222,11 @@ function buildCompactRecommendationLine(
 }
 
 function buildCardHeader(failure: RuleFailure, filePath: string): string {
-  const isError = isErrorSeverity(failure.severity);
-  const badge = isError
-    ? pc.bgRed(pc.white(pc.bold(' FAIL ')))
-    : pc.bgYellow(pc.white(pc.bold(' WARN ')));
+  if (isErrorSeverity(failure.severity)) {
+    return buildFileBadge('FAIL', 'error', filePath);
+  }
 
-  return `${badge} ${filePath}`;
+  return `${pc.bgYellow(pc.white(pc.bold(' WARN ')))} ${filePath}`;
 }
 
 function buildCardMessageLine(failure: RuleFailure): string {
@@ -288,7 +296,7 @@ export class ConsoleReporter implements Reporter {
         this.out.write(pc.green('❯ No violations found'));
       }
       if (this.lastSummary) {
-        this.out.write(buildPassLine());
+        this.out.write(buildPassLine(this.lastSummary));
       }
       return;
     }

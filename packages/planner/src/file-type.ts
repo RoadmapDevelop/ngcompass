@@ -1,5 +1,5 @@
 import path from 'node:path';
-import type { FileType } from './types.js';
+import type { FileType } from './models/index.js';
 
 export const ANGULAR_DECORATOR_RE =
   /\@(Component|Directive|Pipe|Injectable|NgModule)\s*[\(\{]/;

@@ -1,90 +1,84 @@
 import ts from 'typescript';
+import type { LocationMap } from '../models/source-location.js';
 
-export interface Location {
-  line: number;
-  column: number;
-}
+const DEFAULT_SOURCE_FILE_NAME = 'config.ts';
 
-export type LocationMap = Record<string, Location>;
-
-export class ASTUtils {
-  static parse(content: string, fileName = 'config.ts'): ts.SourceFile {
-    return ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest, true);
+const getPropertyName = (name: ts.PropertyName): string | null => {
+  if (ts.isIdentifier(name)) {
+    return name.text;
   }
+  if (ts.isStringLiteral(name)) {
+    return name.text;
+  }
+  return null;
+};
 
-  static generateLocationMap(sourceFile: ts.SourceFile): LocationMap {
-    const map: LocationMap = {};
+export const parseSourceFile = (
+  content: string,
+  fileName: string
+): ts.SourceFile =>
+  ts.createSourceFile(fileName, content, ts.ScriptTarget.Latest, true);
 
-    const visit = (node: ts.Node, currentPath: string[]) => {
-      if (ts.isPropertyAssignment(node) && node.name) {
-        const name = this.getPropertyName(node.name);
-        if (name) {
-          const newPath = [...currentPath, name];
-          const pathKey = newPath.join('.');
+export const generateLocationMap = (sourceFile: ts.SourceFile): LocationMap => {
+  const map: LocationMap = {};
 
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
-            node.name.getStart()
-          );
-          map[pathKey] = {
-            line: line + 1,
-            column: character + 1,
-          };
+  const record = (node: ts.Node, path: readonly string[]): void => {
+    const { line, character } = sourceFile.getLineAndCharacterOfPosition(
+      node.getStart()
+    );
+    map[path.join('.')] = { line: line + 1, column: character + 1 };
+  };
 
-          visit(node.initializer, newPath);
-          return;
-        }
-      }
-
-      if (ts.isObjectLiteralExpression(node)) {
-        node.properties.forEach((prop) => visit(prop, currentPath));
+  const visit = (node: ts.Node, currentPath: string[]): void => {
+    if (ts.isPropertyAssignment(node) && node.name) {
+      const name = getPropertyName(node.name);
+      if (name) {
+        const newPath = [...currentPath, name];
+        record(node.name, newPath);
+        visit(node.initializer, newPath);
         return;
       }
+    }
 
-      if (ts.isArrayLiteralExpression(node)) {
-        node.elements.forEach((elem, idx) => {
-          const newPath = [...currentPath, String(idx)];
-          const pathKey = newPath.join('.');
+    if (ts.isObjectLiteralExpression(node)) {
+      node.properties.forEach((prop) => visit(prop, currentPath));
+      return;
+    }
 
-          const { line, character } = sourceFile.getLineAndCharacterOfPosition(
-            elem.getStart()
-          );
-          map[pathKey] = {
-            line: line + 1,
-            column: character + 1,
-          };
+    if (ts.isArrayLiteralExpression(node)) {
+      node.elements.forEach((elem, idx) => {
+        const newPath = [...currentPath, String(idx)];
+        record(elem, newPath);
+        visit(elem, newPath);
+      });
+      return;
+    }
 
-          visit(elem, newPath);
-        });
-        return;
-      }
+    if (ts.isExportAssignment(node)) {
+      visit(node.expression, currentPath);
+      return;
+    }
 
-      if (ts.isExportAssignment(node)) {
+    if (ts.isExpressionStatement(node)) {
+      if (ts.isParenthesizedExpression(node.expression)) {
+        visit(node.expression.expression, currentPath);
+      } else {
         visit(node.expression, currentPath);
-        return;
       }
-      if (ts.isExpressionStatement(node)) {
-        if (ts.isParenthesizedExpression(node.expression)) {
-          visit(node.expression.expression, currentPath);
-        } else {
-          visit(node.expression, currentPath);
-        }
-        return;
-      }
-
-      ts.forEachChild(node, (child) => visit(child, currentPath));
-    };
-
-    visit(sourceFile, []);
-    return map;
-  }
-
-  private static getPropertyName(name: ts.PropertyName): string | null {
-    if (ts.isIdentifier(name)) {
-      return name.text;
+      return;
     }
-    if (ts.isStringLiteral(name)) {
-      return name.text;
-    }
-    return null;
-  }
-}
+
+    ts.forEachChild(node, (child) => visit(child, currentPath));
+  };
+
+  visit(sourceFile, []);
+  return map;
+};
+
+export const ASTUtils = {
+  parse: (
+    content: string,
+    fileName: string = DEFAULT_SOURCE_FILE_NAME
+  ): ts.SourceFile => parseSourceFile(content, fileName),
+  generateLocationMap,
+};

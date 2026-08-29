@@ -4,14 +4,13 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
-  MaybeAstNode,
   childNodes,
   getStaticPropertyName,
   isMemberExpressionLike,
   unwrapNode,
   getTemplateAbsoluteOffset,
 } from '../../rule-utils';
+import type { AstNode, MaybeAstNode } from '../../models/index.js';
 
 const RULE_NAME = 'template-no-call-expression';
 

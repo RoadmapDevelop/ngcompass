@@ -33,6 +33,7 @@ flowchart TB
     AST["@ngcompass/ast<br/>Oxc TS parser, Angular HTML parser, CSS parser, streams"]
     CACHE["@ngcompass/cache<br/>Memory/disk drivers and cache services"]
     REPORTERS["@ngcompass/reporters<br/>Console, JSON, HTML/UI, SARIF"]
+    BASELINE["@ngcompass/baseline<br/>Baseline file format, post-analysis suppression"]
     COMMON["@ngcompass/common<br/>Shared types, constants, errors, logging"]
     SITE["@ngcompass/site<br/>Documentation/site package"]
 
@@ -42,6 +43,7 @@ flowchart TB
     CLI --> PLANNER
     CLI --> ENGINE
     CLI --> REPORTERS
+    CLI --> BASELINE
     CLI --> CACHE
 
     CONFIG --> COMMON
@@ -57,6 +59,7 @@ flowchart TB
     SCANNER --> CACHE
     SCANNER --> COMMON
     REPORTERS --> COMMON
+    BASELINE --> COMMON
     CACHE --> COMMON
 ```
 
@@ -64,7 +67,7 @@ flowchart TB
 
 | Package                | Primary Responsibility                                         | Key Artifacts                                                         |
 | ---------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `ngcompass`            | User-facing command line orchestration                         | `ngcompass analyze`, `init`, `config`, `cache`, `rules`               |
+| `ngcompass`            | User-facing command line orchestration                         | `ngcompass analyze`, `init`, `config`, `cache`, `rules`, `baseline`   |
 | `@ngcompass/config`    | Discover, load, normalize, validate, and profile configuration | `resolveConfig`, config health checks, plugin loader                  |
 | `@ngcompass/scanner`   | Discover source files from Git or glob patterns                | `scan`, git discovery, filters, stats                                 |
 | `@ngcompass/rules`     | Built-in rules, presets, rule registry, rule resolution        | `registerAllBuiltinRules`, `resolveRules`, presets                    |
@@ -73,7 +76,23 @@ flowchart TB
 | `@ngcompass/ast`       | Parse and traverse source artifacts                            | Oxc TypeScript AST, Angular HTML AST, CSS parser, node streams        |
 | `@ngcompass/cache`     | Provide durable and memory caches                              | config, file, plan, result, analysis, AST, metadata caches            |
 | `@ngcompass/reporters` | Render results for humans and machines                         | console, JSON, SARIF, HTML/UI reporters                               |
+| `@ngcompass/baseline`  | Suppress violations recorded at adoption time                  | `loadBaseline`, `applyBaseline`, `mergeIntoBaseline`, `pruneBaseline` |
 | `@ngcompass/common`    | Shared domain model and utilities                              | `AnalyzerConfig`, `RuleResult`, `RuleContext`, `ProjectContext`       |
+
+### Internal Package Layout
+
+Each package has one public interface at `src/index.ts`. Its implementation is organized by capability instead of generic technical roles: for example, `engine` contains `execution`, `context`, `project-graph`, and `analysis`; `planner` contains `plan-building`, `task-identity`, `resource-discovery`, and `incremental-analysis`.
+
+```text
+packages/<name>/src/
+├── index.ts
+├── <capability>/
+│   └── <implementation>.ts
+└── models/
+    └── <shared-domain-type>.ts
+```
+
+Capability folders are introduced only when multiple files share a responsibility. Package-local types stay with their capability; `models/` contains only types shared across capabilities. Generic catch-all folders such as `utils`, `helpers`, `shared`, and `services` are not used for new code.
 
 ## 4. End-to-End Analysis Lifecycle
 
@@ -90,6 +109,7 @@ sequenceDiagram
     participant Rules as Rule Resolver
     participant Planner as Planner
     participant Engine as Engine
+    participant Baseline as Baseline
     participant Reporter as Reporter
 
     User->>CLI: ngcompass analyze
@@ -109,21 +129,64 @@ sequenceDiagram
     Engine->>Cache: retrieve skipped results
     Engine->>Cache: persist global analysis result
     Engine-->>CLI: AnalysisResult
+    CLI->>Baseline: applyBaseline(results, scope) when enabled
+    Baseline-->>CLI: Filtered results, suppressed and stale counts
     CLI->>Reporter: summary, parseErrors, report
     CLI->>Cache: save per-task results and flush
     Reporter-->>User: Console, JSON, HTML/UI, or SARIF output
 ```
 
-The lifecycle is implemented in `packages/cli/src/commands/analyze.ts` as these conceptual stages:
+The lifecycle is implemented in `packages/cli/src/commands/analyze/index.ts` as these conceptual stages:
 
 1. Load configuration and plugins.
 2. Discover files.
 3. Resolve enabled rules.
 4. Build an execution plan.
 5. Run analysis.
-6. Emit reports.
-7. Save and flush caches.
-8. Decide process exit code from configured failure policy.
+6. Apply the baseline filter when one is enabled.
+7. Emit reports.
+8. Save and flush caches.
+9. Decide process exit code from configured failure policy.
+
+### 4.1 Baseline Filtering
+
+A baseline records how many violations existed for each `(file, rule)` pair when a
+team adopted ngcompass, so that `analyze` reports only violations introduced since.
+`@ngcompass/baseline` implements it as a **post-analysis filter on results**, applied
+between the engine and the reporters:
+
+```
+runAnalysis -> applyBaseline -> recalculateStats -> reporters -> exit policy
+```
+
+That placement is the load-bearing decision, and three invariants follow from it:
+
+- **A baseline never enters a cache key.** Task IDs are content-addressed from file
+  hashes plus rule options. If the baseline influenced rule execution, editing it would
+  invalidate the result cache. Filtering afterwards makes it free, and no
+  `CACHE_SCHEMA_VERSION` or `PLAN_CACHE_VERSION` bump is required.
+- **Filtered results must never reach a cache write.** The engine persists the full
+  analysis by `globalHash` and `saveToCacheStep` persists raw per-task results, both
+  before filtering. Passing filtered results to either would bake the baseline into the
+  result cache permanently. Filtered results exist only for reporting and exit codes.
+- **Stats are recomputed, never hand-adjusted.** `calculateStats` derives every counter
+  from `results`, so it is re-run over the filtered set before `shouldFailAnalysis`.
+  Otherwise CI would fail on counts that include violations the baseline just hid.
+
+The filter is scoped by a `BaselineScope` — the set of files and rules the run actually
+covered, derived from `plan.tasks` and `plan.skippedTasks`. The scope is what makes a
+narrowed run safe: `analyze --rule X` must not report every other rule's entries as
+stale, and `baseline update --rule X` must not delete entries for rules it never ran.
+On a full-analysis cache hit the plan carries no tasks, so the scope falls back to the
+scanned files crossed with the enabled rules.
+
+`@ngcompass/baseline` imports only `@ngcompass/common`. It must never import `planner`,
+`engine`, or `cli` — it filters results and knows nothing about plans, tasks, or
+execution.
+
+Writes go through the `ngcompass baseline` command (`create`, `update`, `prune`,
+`show`), which always bypasses the result cache, so a baseline can never be written from
+partially restored cached results.
 
 ## 5. CLI Startup and Command Orchestration
 
@@ -760,7 +823,7 @@ ngcompass analyze --skip-type-check # syntax-only, fastest, lowest memory
 
 ## 12. Single-Pass Analysis Engine
 
-The single-pass engine is the high-throughput path for rule execution. It appears in `packages/engine/src/single-pass-engine.ts`.
+The single-pass engine is the high-throughput path for rule execution. It appears in `packages/engine/src/execution/single-pass-engine.ts`.
 
 Rules declare a `streamType`, such as:
 
@@ -1238,11 +1301,13 @@ flowchart TD
     U["Merge executed and cached results"]
     V["Compute stats and failure status"]
     W["Persist result and analysis caches"]
+    W2{"Baseline enabled?"}
+    W3["applyBaseline filters results and recomputes stats"]
     X["Reporter emits console/json/html/sarif"]
     Y["CLI exits according to fail policy"]
 
     A --> B --> C --> D --> E --> F --> G --> H --> I
-    I -- yes --> J --> X --> Y
+    I -- yes --> J --> W2
     I -- no --> K
     K -- yes --> M
     K -- no --> L --> M
@@ -1253,7 +1318,10 @@ flowchart TD
     P --> R --> S
     S --> T --> U
     O --> U
-    U --> V --> W --> X --> Y
+    U --> V --> W --> W2
+    W2 -- yes --> W3 --> X
+    W2 -- no --> X
+    X --> Y
 ```
 
 ## 24. Summary

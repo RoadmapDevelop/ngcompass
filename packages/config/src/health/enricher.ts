@@ -1,16 +1,19 @@
 import type { AstCache } from '@ngcompass/cache';
-import { ASTUtils, CACHE_VERSION } from '@ngcompass/common';
+import {
+  CACHE_VERSION,
+  generateLocationMap,
+  parseSourceFile,
+} from '@ngcompass/common';
 import type { ConfigIssue, LocationMap } from '@ngcompass/common';
 import { sha1Hex } from '../utils/hash.js';
-import type { WritableIssue } from './types.js';
+import type { WritableIssue } from '../models/index.js';
 
 function buildVersionedCacheKey(contentHash: string): string {
   return `v${CACHE_VERSION}:${contentHash}`;
 }
 
 function buildLocationMap(fileContent: string, filePath: string): LocationMap {
-  const sourceFile = ASTUtils.parse(fileContent, filePath);
-  return ASTUtils.generateLocationMap(sourceFile);
+  return generateLocationMap(parseSourceFile(fileContent, filePath));
 }
 
 function isLocationMap(value: unknown): value is LocationMap {

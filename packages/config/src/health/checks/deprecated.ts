@@ -1,6 +1,6 @@
 import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
-import type { ConfigBlockValidation } from '../types.js';
+import type { ConfigBlockValidation } from '../../models/index.js';
 
 export function validateDeprecatedFields(
   rawConfig: unknown,

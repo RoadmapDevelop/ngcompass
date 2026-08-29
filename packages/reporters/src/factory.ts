@@ -1,7 +1,8 @@
 import process from 'node:process';
 import type { RuleResult } from '@ngcompass/common';
 import pc from 'picocolors';
-import { getAnalysisStatus } from './analysis-status.js';
+import { getAnalysisStatus } from './formatting/analysis-status.js';
+import { TextBaselineReporter } from './reporters/baseline.js';
 import { TextCacheReporter } from './reporters/cache.js';
 import { TextConfigReporter } from './reporters/config.js';
 import { ConsoleReporter } from './reporters/console-reporter.js';
@@ -9,10 +10,12 @@ import { HtmlReporter } from './reporters/html-reporter.js';
 import { JsonReporter } from './reporters/json-reporter.js';
 import {
   RulesReporter,
-  type RulesReporterOptions,
+  
 } from './reporters/rules-reporter.js';
+import type { RulesReporterOptions } from './models/index.js';
 import { SarifReporter } from './reporters/sarif-reporter.js';
 import type {
+  BaselineReporter,
   CacheReporter,
   ConfigReporter,
   ConsoleReporterOptions,
@@ -20,7 +23,7 @@ import type {
   Reporter,
   ReporterFormat,
   ResultSummary,
-} from './types.js';
+} from './models/index.js';
 
 class CompoundReporter implements Reporter {
   private readonly progress: ConsoleReporter;
@@ -37,7 +40,7 @@ class CompoundReporter implements Reporter {
     this.progress = new ConsoleReporter(stderrOutput, {
       ...options,
       compact: false,
-      phaseStream: process.stderr as NodeJS.WriteStream,
+      phaseStream: process.stderr,
     });
   }
 
@@ -137,7 +140,7 @@ export function getReporter(
       );
     default: {
       const exhaustive: never = format;
-      throw new Error(`Unknown reporter format: "${exhaustive as string}"`);
+      throw new Error(`Unknown reporter format: "${String(exhaustive)}"`);
     }
   }
 }
@@ -148,6 +151,10 @@ export function getConfigReporter(): ConfigReporter {
 
 export function getCacheReporter(): CacheReporter {
   return new TextCacheReporter();
+}
+
+export function getBaselineReporter(): BaselineReporter {
+  return new TextBaselineReporter();
 }
 
 export function getRulesReporter(

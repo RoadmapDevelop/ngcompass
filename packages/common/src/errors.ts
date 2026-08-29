@@ -1,3 +1,8 @@
+import type {
+  InfrastructureError,
+  InfrastructureErrorType,
+} from './models/infrastructure-error.js';
+
 export class AnalyzerError extends Error {
   constructor(
     message: string,
@@ -58,30 +63,11 @@ export class RuleExecutionError extends AnalyzerError {
   }
 }
 
-export type InfrastructureErrorType =
-  | 'ParseError'
-  | 'IOError'
-  | 'WorkerCrash'
-  | 'CacheCorruption'
-  | 'SerializationError'
-  | 'RuleExecutionError';
-
-export interface InfrastructureError {
-  readonly type: InfrastructureErrorType;
-  readonly filePath?: string;
-  readonly cause: string;
-  readonly timestamp: number;
-  readonly recoverable: boolean;
-  readonly phase: 'config' | 'planner' | 'engine';
-  readonly details?: Readonly<Record<string, unknown>>;
-}
-
-export function createInfrastructureError(
+export const createInfrastructureError = (
   type: InfrastructureErrorType,
   fields: Omit<InfrastructureError, 'type' | 'timestamp'>
-): InfrastructureError {
-  return Object.freeze({ type, timestamp: Date.now(), ...fields });
-}
+): InfrastructureError =>
+  Object.freeze({ type, timestamp: Date.now(), ...fields });
 
 export class InfrastructureErrorCollector {
   private readonly _errors: InfrastructureError[] = [];

@@ -5,10 +5,10 @@ import type {
 } from '@ngcompass/common';
 import { normalizeRuleConfig } from './normalize.js';
 
-export const mergeRuleConfig = (
+export function mergeRuleConfig(
   base: RuleConfig,
   override: RuleConfig
-): RuleConfigFull => {
+): RuleConfigFull {
   const baseNormalized = normalizeRuleConfig(base);
   const overrideNormalized = normalizeRuleConfig(override);
 
@@ -19,11 +19,11 @@ export const mergeRuleConfig = (
       ...overrideNormalized.options,
     },
   };
-};
+}
 
-export const mergeRulesConfigs = (
+export function mergeRulesConfigs(
   configs: ReadonlyArray<RulesConfig>
-): ReadonlyMap<string, RuleConfigFull> => {
+): ReadonlyMap<string, RuleConfigFull> {
   const merged = new Map<string, RuleConfigFull>();
 
   for (const config of configs) {
@@ -39,12 +39,12 @@ export const mergeRulesConfigs = (
   }
 
   return merged;
-};
+}
 
-export const applyOverrides = (
+export function applyOverrides(
   base: ReadonlyMap<string, RuleConfigFull>,
   overrides: RulesConfig
-): ReadonlyMap<string, RuleConfigFull> => {
+): ReadonlyMap<string, RuleConfigFull> {
   const result = new Map(base);
 
   for (const [ruleName, ruleConfig] of Object.entries(overrides)) {
@@ -58,4 +58,4 @@ export const applyOverrides = (
   }
 
   return result;
-};
+}

@@ -153,6 +153,10 @@ export default defineConfig({
 | `ngcompass cache info`    | Show cache status            |
 | `ngcompass cache clear`   | Clear cached analysis data   |
 | `ngcompass cache path`    | Print the cache directory    |
+| `ngcompass baseline create` | Record existing violations as the baseline |
+| `ngcompass baseline update` | Refresh counts for the rules and files scanned |
+| `ngcompass baseline prune`  | Lower counts to reality and drop stale entries |
+| `ngcompass baseline show`   | List what the baseline is hiding |
 
 ### Analyze Options
 
@@ -168,6 +172,40 @@ export default defineConfig({
 | `-p, --profile <name>`         | Run a named config profile                              |
 | `--max-workers <n>`            | Limit worker threads                                    |
 | `--skip-type-check`            | Skip rules that require TypeScript type checking        |
+| `--baseline [path]`            | Hide violations recorded in a baseline file             |
+| `--no-baseline`                | Ignore the configured baseline for this run             |
+
+## Baseline (Gradual Adoption)
+
+Adopting strict rules on an existing codebase usually means thousands of violations on day one. A baseline records what already exists so CI fails only on **newly introduced** violations.
+
+```bash
+ngcompass baseline create   # record today's violations
+git add .ngcompass/baseline.json
+```
+
+```ts
+export default {
+  baseline: { enabled: true },
+};
+```
+
+From then on `ngcompass analyze` reports only what is new. Existing debt stays silent until someone fixes it:
+
+```bash
+ngcompass baseline show    # what is currently hidden, worst files first
+ngcompass baseline prune   # tighten the baseline after cleanup
+```
+
+The baseline records a count per file and rule, so it survives line shifts and reformatting. Adopt one rule at a time with `ngcompass baseline update --rule <id>` — entries for other rules are left untouched.
+
+| Option              | Default                    | Description                                                     |
+| ------------------- | -------------------------- | --------------------------------------------------------------- |
+| `baseline.enabled`  | `false`                    | Apply the baseline during `analyze`                             |
+| `baseline.path`     | `.ngcompass/baseline.json` | Where the baseline lives                                        |
+| `baseline.onStale`  | `warn`                     | What to do when violations were fixed: `ignore`, `warn`, `error` |
+
+Note that `maxWarnings` counts warnings **after** the baseline is applied, so already-recorded warnings no longer consume the budget.
 
 ## CI
 

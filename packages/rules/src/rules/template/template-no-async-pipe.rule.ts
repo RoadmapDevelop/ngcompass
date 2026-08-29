@@ -2,7 +2,11 @@ import { TemplateExpressionNode } from '@ngcompass/ast';
 import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { createTemplateExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations.js';
-import { AstNode, unwrapNode, getTemplateAbsoluteOffset } from '../../rule-utils.js';
+import {
+  unwrapNode,
+  getTemplateAbsoluteOffset,
+} from '../../rule-utils.js';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'template-no-async-pipe';
 

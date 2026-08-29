@@ -4,10 +4,11 @@ import process from 'node:process';
 import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import type { RuleResult, RuleFailure } from '@ngcompass/common';
-import type { Reporter, ResultSummary, ParseError } from '../types.js';
-import { isErrorSeverity, severityRank, compareByPosition } from '../severity-utils.js';
-import { processOutput, type ReporterOutput } from '../output.js';
-import { getAnalysisStatus } from '../analysis-status.js';
+import type { Reporter, ResultSummary, ParseError } from '../models/index.js';
+import { isErrorSeverity, severityRank, compareByPosition } from '../formatting/severity-utils.js';
+import { processOutput } from '../formatting/output.js';
+import type { ReporterOutput } from '../models/index.js';
+import { getAnalysisStatus } from '../formatting/analysis-status.js';
 
 const DEFAULT_OUTPUT_PATH = 'ngcompass-report.html';
 const SEVERITY_ORDER = ['critical', 'high', 'error', 'moderate', 'warn', 'low', 'info', 'hint'] as const;
@@ -1661,10 +1662,16 @@ function buildHtml(
     const cachedCopy = typeof summary.cachedTasks === 'number' && summary.cachedTasks > 0
         ? `${summary.cachedTasks.toLocaleString()} cached`
         : 'No cache';
+    const suppressedByBaseline = summary.suppressedByBaseline ?? 0;
+    const baselineCopy = suppressedByBaseline > 0
+        ? `${suppressedByBaseline.toLocaleString()} violation${suppressedByBaseline === 1 ? '' : 's'} hidden by baseline.`
+        : '';
+    const baselineSuffix = baselineCopy === '' ? '' : ` ${baselineCopy}`;
+    const passedCopy = suppressedByBaseline > 0 ? 'No new violations found' : 'No violations found';
 
     const subtitle = passed
-        ? `No violations found across ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}.${skippedSuffix}`
-        : `${totalViolations.toLocaleString()} violation${totalViolations === 1 ? '' : 's'} in ${affectedFiles.toLocaleString()} of ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}. ${parseErrors.length > 0 ? `${parseErrors.length.toLocaleString()} parse error${parseErrors.length === 1 ? '' : 's'}. ` : ''}${cachedCopy}.${skippedSuffix}`;
+        ? `${passedCopy} across ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}.${skippedSuffix}${baselineSuffix}`
+        : `${totalViolations.toLocaleString()} violation${totalViolations === 1 ? '' : 's'} in ${affectedFiles.toLocaleString()} of ${totalFiles.toLocaleString()} file${totalFiles === 1 ? '' : 's'}. ${parseErrors.length > 0 ? `${parseErrors.length.toLocaleString()} parse error${parseErrors.length === 1 ? '' : 's'}. ` : ''}${cachedCopy}.${skippedSuffix}${baselineSuffix}`;
 
     const rulesHtml = topRules.length > 0
         ? topRules.map(([ruleName, count]) => `
@@ -1724,8 +1731,8 @@ function buildHtml(
 <div class="empty">
   <div>
     <div class="empty-icon">${iconFile()}</div>
-    <div class="empty-title">No violations found</div>
-    <div class="empty-sub">This scan completed cleanly.</div>
+    <div class="empty-title">${passedCopy}</div>
+    <div class="empty-sub">${baselineCopy === '' ? 'This scan completed cleanly.' : escapeHtml(baselineCopy)}</div>
   </div>
 </div>`;
 
@@ -1800,6 +1807,13 @@ function buildHtml(
             </div>
             <div class="stat-value${skippedFileCount > 0 ? ' warning' : ''}">${skippedFileCount.toLocaleString()}</div>
           </div>
+          ${suppressedByBaseline > 0 ? `<div class="card stat-card">
+            <div class="stat-top">
+              <div class="stat-label">Hidden by baseline</div>
+              <div class="stat-icon">${iconList()}</div>
+            </div>
+            <div class="stat-value">${suppressedByBaseline.toLocaleString()}</div>
+          </div>` : ''}
         </div>
       </div>
 

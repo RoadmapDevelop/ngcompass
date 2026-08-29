@@ -2,7 +2,10 @@ import { createRequire } from 'node:module';
 import nodePath from 'node:path';
 import type { ConfigIssue } from '@ngcompass/common';
 import { MESSAGES } from '../messages.js';
-import type { ConfigBlockValidation, ValidatedConfig } from '../types.js';
+import type {
+  ConfigBlockValidation,
+} from '../../models/index.js';
+import type { ValidatedConfig } from '../../validation/schema.js';
 
 function isSkippable(preset: string): boolean {
   if (preset.startsWith('.')) return true;
@@ -30,10 +33,9 @@ export function validateExtendsChain(
 
   if (!config.extends) return { issues };
 
-  const isArray = Array.isArray(config.extends);
-  const extendsList: unknown[] = isArray
-    ? (config.extends as unknown[])
-    : [config.extends];
+  const extendsValue = config.extends;
+  const isArray = Array.isArray(extendsValue);
+  const extendsList: unknown[] = isArray ? extendsValue : [extendsValue];
 
   for (let i = 0; i < extendsList.length; i++) {
     const preset = extendsList[i];

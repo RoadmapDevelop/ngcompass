@@ -1,9 +1,5 @@
-import { parseSync, type ParseResult, type Program } from 'oxc-parser';
-
-export interface TsParserResult {
-  program: Program;
-  errors: unknown[];
-}
+import { parseSync, type ParseResult } from 'oxc-parser';
+import type { TsParserResult } from '../models/index.js';
 
 export const parseTs = (content: string, filePath: string): TsParserResult => {
   const result = runOxcParse(filePath, content);

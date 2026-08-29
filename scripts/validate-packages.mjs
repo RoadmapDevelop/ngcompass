@@ -35,6 +35,7 @@ const EXPECTED_CLI_COMMANDS = [
   'analyze',
   'config',
   'cache',
+  'baseline',
   'rules',
   'circular',
   'graph',

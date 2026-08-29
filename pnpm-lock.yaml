@@ -85,6 +85,19 @@ importers:
         specifier: ^25.1.0
         version: 25.1.0
 
+  packages/baseline:
+    dependencies:
+      '@ngcompass/common':
+        specifier: workspace:*
+        version: link:../common
+    devDependencies:
+      '@types/node':
+        specifier: ^25.1.0
+        version: 25.1.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
   packages/cache:
     dependencies:
       '@ngcompass/common':
@@ -121,6 +134,9 @@ importers:
       '@ngcompass/ast':
         specifier: workspace:*
         version: link:../ast
+      '@ngcompass/baseline':
+        specifier: workspace:*
+        version: link:../baseline
       '@ngcompass/cache':
         specifier: workspace:*
         version: link:../cache

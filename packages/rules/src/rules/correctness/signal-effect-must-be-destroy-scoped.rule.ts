@@ -3,7 +3,6 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   findEffectCalls,
   getClassBody,
   getMethodBody,
@@ -15,6 +14,7 @@ import {
   getStaticPropertyName,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'signal-effect-must-be-destroy-scoped';
 

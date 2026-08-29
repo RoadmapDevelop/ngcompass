@@ -301,7 +301,7 @@ describe('template-trackby-required', () => {
     const result = templateTrackByRequiredRule.handle(fakeAnalysis, ctx);
     expect(result).not.toBeNull();
     const failures = Array.isArray(result) ? result : [result];
-    expect(failures[0].ruleName).toBe('template-trackby-required-for-ngfor');
+    expect(failures[0].ruleName).toBe('template-trackby-required');
     expect(failures[0].severity).toBe('error');
   });
 
@@ -336,7 +336,7 @@ describe('template-trackby-required', () => {
     const result = templateTrackByRequiredRule.handle(fakeAnalysis, ctx);
     expect(result).not.toBeNull();
     const failures = Array.isArray(result) ? result : [result];
-    expect(failures[0].ruleName).toBe('template-track-required-for-atfor');
+    expect(failures[0].ruleName).toBe('template-trackby-required');
   });
 
   it('does NOT flag @for block with track expression', () => {

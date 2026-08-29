@@ -2,22 +2,11 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { debug, Locator } from '@ngcompass/common';
 import { parseTs } from '@ngcompass/ast';
-import {
-  computeFileComplexity,
-  type FunctionComplexity,
-} from './complexity-analyzer.js';
-
-export interface ProjectComplexityOptions {
-  readonly rootDir: string;
-  readonly concurrency?: number;
-  readonly onProgress?: (parsed: number, total: number) => void;
-}
-
-export interface FileComplexity {
-  readonly filePath: string;
-  readonly functions: readonly FunctionComplexity[];
-}
-
+import { computeFileComplexity } from './complexity-analyzer.js';
+import type {
+  FileComplexity,
+  ProjectComplexityOptions,
+} from '../models/index.js';
 const DEFAULT_CONCURRENCY = 32;
 const PROGRESS_BATCH = 100;
 const TS_LIKE_EXTENSIONS: ReadonlySet<string> = new Set([

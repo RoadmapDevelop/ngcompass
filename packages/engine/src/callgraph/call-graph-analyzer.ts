@@ -1,9 +1,6 @@
 import type { Program } from 'oxc-parser';
 import { Locator } from '@ngcompass/common';
 import {
-  type AstNodeLike,
-  type FunctionKind,
-  type NamedFunction,
   ANONYMOUS_NAME,
   FUNCTION_TYPES,
   MEMBER_TYPES,
@@ -15,38 +12,16 @@ import {
   resolveFunctionName,
   spanOffset,
   walkWithParent,
-} from '../shared/ast-functions.js';
-
-export interface CallGraphNode {
-  readonly id: string;
-  readonly name: string;
-  readonly kind: FunctionKind;
-  readonly line: number;
-  readonly column: number;
-  readonly endLine: number;
-}
-
-export interface CallGraphEdge {
-  readonly from: string | null;
-  readonly to: string;
-  readonly callName: string;
-  readonly line: number;
-  readonly column: number;
-  readonly ambiguous: boolean;
-}
-
-export interface ExternalCall {
-  readonly from: string | null;
-  readonly callName: string;
-  readonly line: number;
-  readonly column: number;
-}
-
-export interface FileCallGraph {
-  readonly nodes: readonly CallGraphNode[];
-  readonly edges: readonly CallGraphEdge[];
-  readonly externalCalls: readonly ExternalCall[];
-}
+} from '../execution/ast-functions.js';
+import type {
+  AstNodeLike,
+  CallGraphEdge,
+  CallGraphNode,
+  ExternalCall,
+  FileCallGraph,
+  FunctionKind,
+  NamedFunction,
+} from '../models/index.js';
 
 interface Definition {
   readonly id: string;

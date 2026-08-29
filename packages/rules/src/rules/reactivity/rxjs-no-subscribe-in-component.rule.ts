@@ -3,7 +3,6 @@ import { CallExpression } from '@ngcompass/ast';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS, CODE_EXAMPLES } from '../../recommendations';
 import {
-  AstNode,
   findObservableSourceCall,
   getNodeStart,
   getStaticPropertyName,
@@ -14,6 +13,7 @@ import {
   isSubscribeCall,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 import { hasManualTeardownInNgOnDestroy } from './rxjs-require-take-until-destroyed.rule.js';
 
 const manualTeardownCache = new Map<string, boolean>();

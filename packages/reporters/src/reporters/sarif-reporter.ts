@@ -1,10 +1,11 @@
 import path from 'node:path';
 import process from 'node:process';
 import type { RuleFailure, RuleResult, RuleSeverity } from '@ngcompass/common';
-import { getAnalysisStatus } from '../analysis-status.js';
-import { processOutput, type ReporterOutput } from '../output.js';
-import { compareByPosition, isErrorSeverity } from '../severity-utils.js';
-import type { ParseError, Reporter, ResultSummary } from '../types.js';
+import { getAnalysisStatus } from '../formatting/analysis-status.js';
+import { processOutput } from '../formatting/output.js';
+import type { ReporterOutput } from '../models/index.js';
+import { compareByPosition, isErrorSeverity } from '../formatting/severity-utils.js';
+import type { ParseError, Reporter, ResultSummary } from '../models/index.js';
 
 const SARIF_SCHEMA = 'https://json.schemastore.org/sarif-2.1.0.json';
 const SARIF_VERSION = '2.1.0';

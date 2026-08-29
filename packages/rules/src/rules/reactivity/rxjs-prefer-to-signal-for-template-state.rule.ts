@@ -3,7 +3,11 @@ import { AnyAngularClassNode } from '@ngcompass/ast';
 import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
-import { AstNode, ensureRuleSourceFile, getNodeStart } from '../../rule-utils';
+import {
+  ensureRuleSourceFile,
+  getNodeStart,
+} from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'rxjs-prefer-toSignal-for-template-state';
 

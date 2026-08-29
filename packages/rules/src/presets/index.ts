@@ -21,14 +21,17 @@ export const builtinPresets: ReadonlyMap<BuiltinPreset, PresetConfig> = new Map(
   ]
 );
 
-const stripPrefix = (name: string): BuiltinPreset =>
-  name.replace(/^ngcompass:/, '') as BuiltinPreset;
+function stripPrefix(name: string): BuiltinPreset {
+  return name.replace(/^ngcompass:/, '') as BuiltinPreset;
+}
 
-export const isBuiltinPreset = (name: string): boolean =>
-  builtinPresets.has(stripPrefix(name));
+export function isBuiltinPreset(name: string): boolean {
+  return builtinPresets.has(stripPrefix(name));
+}
 
-export const getBuiltinPreset = (name: string): PresetConfig | undefined =>
-  builtinPresets.get(stripPrefix(name));
+export function getBuiltinPreset(name: string): PresetConfig | undefined {
+  return builtinPresets.get(stripPrefix(name));
+}
 
 export function getPresetsForRule(ruleName: string): string[] {
   const result: string[] = [];

@@ -8,57 +8,26 @@ import {
   hasDecorator,
   matchesMemberExpression,
 } from '../ast/matchers.js';
-import { nodeStart } from '../ast/types.js';
+import { isArrayExpression, isObjectExpression } from '../ast/node-guards.js';
+import { nodeStart } from '../ast/node-offsets.js';
+import { ChangeDetectionStrategy } from '../models/index.js';
 import type {
-  ArrayExpression,
   ClassDeclaration,
+  ComponentMetadata,
   Decorator,
   Expression,
+  HostDirectiveMetadata,
+  LiteralValue,
+  MetadataValue,
+  MissingValue,
+  NonLiteralValue,
   ObjectExpression,
-} from '../ast/types.js';
-
-export type LiteralValue<T> = { readonly kind: 'literal'; readonly value: T };
-export type NonLiteralValue = { readonly kind: 'non-literal' };
-export type MissingValue = { readonly kind: 'missing' };
-
-export type MetadataValue<T> = LiteralValue<T> | NonLiteralValue | MissingValue;
+} from '../models/index.js';
 
 const NON_LITERAL: NonLiteralValue = { kind: 'non-literal' };
 const MISSING: MissingValue = { kind: 'missing' };
 
 const literal = <T>(value: T): LiteralValue<T> => ({ kind: 'literal', value });
-
-export const ChangeDetectionStrategy = {
-  Default: 0,
-  OnPush: 1,
-} as const;
-
-export type ChangeDetectionStrategy =
-  (typeof ChangeDetectionStrategy)[keyof typeof ChangeDetectionStrategy];
-
-export interface HostDirectiveMetadata {
-  readonly directive: string | undefined;
-  readonly inputs: ReadonlyArray<{
-    readonly internal: string;
-    readonly external: string;
-  }>;
-  readonly outputs: ReadonlyArray<{
-    readonly internal: string;
-    readonly external: string;
-  }>;
-}
-
-export interface ComponentMetadata {
-  readonly className: string | undefined;
-  readonly selector: MetadataValue<string>;
-  readonly changeDetection: MetadataValue<ChangeDetectionStrategy>;
-  readonly standalone: MetadataValue<boolean>;
-  readonly templateUrl: MetadataValue<string>;
-  readonly template: MetadataValue<string>;
-  readonly hostDirectives: MetadataValue<ReadonlyArray<HostDirectiveMetadata>>;
-  readonly decoratorStart: number;
-  readonly type: 'Component' | 'Directive';
-}
 
 const componentCache = new WeakMap<
   ClassDeclaration,
@@ -203,9 +172,9 @@ const extractHostDirectives = (
 ): MetadataValue<ReadonlyArray<HostDirectiveMetadata>> => {
   const node = getObjectPropertyUnsafe(obj, 'hostDirectives');
   if (!node) return MISSING;
-  if (node.type !== 'ArrayExpression') return NON_LITERAL;
+  if (!isArrayExpression(node)) return NON_LITERAL;
 
-  const elements = (node as ArrayExpression).elements;
+  const elements = node.elements;
   const results: HostDirectiveMetadata[] = [];
 
   for (let i = 0; i < elements.length; i++) {
@@ -226,13 +195,12 @@ const parseHostDirectiveElement = (
     return { directive: direct, inputs: [], outputs: [] };
   }
 
-  if (el.type === 'ObjectExpression') {
-    const objExpr = el as ObjectExpression;
-    const dirNode = getObjectPropertyUnsafe(objExpr, 'directive');
+  if (isObjectExpression(el)) {
+    const dirNode = getObjectPropertyUnsafe(el, 'directive');
     return {
       directive: dirNode ? getIdentifierName(dirNode) : undefined,
-      inputs: extractRenames(getObjectPropertyUnsafe(objExpr, 'inputs')),
-      outputs: extractRenames(getObjectPropertyUnsafe(objExpr, 'outputs')),
+      inputs: extractRenames(getObjectPropertyUnsafe(el, 'inputs')),
+      outputs: extractRenames(getObjectPropertyUnsafe(el, 'outputs')),
     };
   }
 
@@ -242,8 +210,8 @@ const parseHostDirectiveElement = (
 const extractRenames = (
   node: Expression | undefined
 ): ReadonlyArray<{ internal: string; external: string }> => {
-  if (!node || node.type !== 'ArrayExpression') return [];
-  const elements = (node as ArrayExpression).elements;
+  if (!node || !isArrayExpression(node)) return [];
+  const elements = node.elements;
   const renames: { internal: string; external: string }[] = [];
   for (let i = 0; i < elements.length; i++) {
     const el = elements[i];

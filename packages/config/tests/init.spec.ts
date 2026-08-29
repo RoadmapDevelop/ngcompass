@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   detectAngularWorkspaceIncludes,
   initConfig,
-} from '../src/actions/init.js';
+} from '../src/init.js';
 
 const createdDirs: string[] = [];
 

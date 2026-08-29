@@ -2,26 +2,16 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { initHasher } from '@ngcompass/cache';
 import type { ConfigOverride, ResolvedRule } from '@ngcompass/common';
 import { detectFileType } from './file-type.js';
-import { resolveOverridesForFile } from './overrides.js';
-import {
-  buildTasksForFileTaskCentric,
-  type TaskBuilderContext,
-} from './task-builder.js';
-import type { FileType, Task, TaskInputs } from './types.js';
-
-export interface WorkerData {
-  files: string[];
-
-  rulesEntries: [string, ResolvedRule][];
-
-  fileTypeCacheEntries?: [string, FileType][];
-
-  overridesData?: ConfigOverride[];
-}
-
-export interface WorkerResult {
-  tasks: Task[];
-}
+import { resolveOverridesForFile } from './incremental-analysis/overrides.js';
+import { buildTasksForFileTaskCentric } from './plan-building/task-builder.js';
+import type {
+  FileType,
+  Task,
+  TaskBuilderContext,
+  TaskInputs,
+  WorkerData,
+  WorkerResult,
+} from './models/index.js';
 
 const main = async (): Promise<void> => {
   const port = parentPort;

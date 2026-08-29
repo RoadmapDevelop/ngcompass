@@ -3,11 +3,11 @@ import { RuleContext, RuleFailure } from '@ngcompass/common';
 import { createAnyAngularClassRule } from '@ngcompass/engine';
 import { CODE_EXAMPLES, RECOMMENDATIONS } from '../../recommendations';
 import {
-  AstNode,
   getClassBody,
   getNodeStart,
   unwrapNode,
 } from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const RULE_NAME = 'signal-prefer-input-signal';
 

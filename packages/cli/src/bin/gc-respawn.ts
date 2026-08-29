@@ -1,11 +1,7 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import process from 'node:process';
 
-export type RespawnOutcome =
-  | { readonly kind: 'exit'; readonly code: number }
-  | { readonly kind: 'crash'; readonly code: number }
-  | { readonly kind: 'fallback' };
-
+import type { RespawnOutcome } from '../models/index.js';
 const RESPAWN_GUARD_ENV = 'NGCOMPASS_GC_RESPAWNED';
 const ANALYZE_COMMAND = 'analyze';
 const HELP_VERSION_FLAGS = new Set(['--version', '-V', '--help', '-h']);
@@ -17,7 +13,7 @@ const RESPAWN_CRASH_NOTICE =
   '[ngcompass] Analysis crashed (likely out of memory); re-run with --skip-type-check or raise --max-old-space-size.';
 
 const isGarbageCollectionExposed = (): boolean =>
-  typeof (globalThis as { gc?: () => void }).gc === 'function';
+  'gc' in globalThis && typeof globalThis.gc === 'function';
 
 const isAnalyzeInvocation = (args: ReadonlyArray<string>): boolean => {
   if (!args.includes(ANALYZE_COMMAND)) return false;

@@ -6,8 +6,9 @@ import {
   type HealthReport,
   type InitResult,
 } from '@ngcompass/common';
-import { processOutput, type ReporterOutput } from '../output.js';
-import type { ConfigReporter } from '../types.js';
+import { processOutput } from '../formatting/output.js';
+import type { ReporterOutput } from '../models/index.js';
+import type { ConfigReporter } from '../models/index.js';
 
 const LOCATION_COLUMN_WIDTH = 6;
 

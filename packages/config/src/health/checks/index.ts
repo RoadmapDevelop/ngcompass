@@ -1,4 +1,5 @@
 export * from './base.js';
+export * from './baseline.js';
 export * from './cross-fields.js';
 export * from './deprecated.js';
 export * from './extends.js';

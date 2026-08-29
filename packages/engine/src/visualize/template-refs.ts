@@ -1,21 +1,15 @@
 import { type TemplateAnalysis, parseTs } from '@ngcompass/ast';
 import { Locator, debug } from '@ngcompass/common';
 import {
-  type AstNodeLike,
   MEMBER_TYPES,
   isNode,
   walkWithParent,
-} from '../shared/ast-functions.js';
+} from '../execution/ast-functions.js';
 import type { EdgeDirection } from './unit-graph.js';
-
-export interface TemplateRef {
-  readonly memberName: string;
-  readonly direction: EdgeDirection;
-  readonly line: number;
-  readonly column: number;
-  readonly weight: number;
-}
-
+import type {
+  AstNodeLike,
+  TemplateRef,
+} from '../models/index.js';
 interface DirectedRange {
   readonly start: number;
   readonly end: number;

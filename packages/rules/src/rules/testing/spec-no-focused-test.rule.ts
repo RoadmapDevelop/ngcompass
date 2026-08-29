@@ -2,7 +2,11 @@ import { RuleFailure, RuleContext } from '@ngcompass/common';
 import { CallExpression } from '@ngcompass/ast';
 import { createCallExpressionRule } from '@ngcompass/engine';
 import { RECOMMENDATIONS } from '../../recommendations';
-import { AstNode, unwrapNode, getNodeStart } from '../../rule-utils';
+import {
+  unwrapNode,
+  getNodeStart,
+} from '../../rule-utils';
+import type { AstNode } from '../../models/index.js';
 
 const FOCUSED_MAP: Record<string, string> = {
   fdescribe: 'describe',

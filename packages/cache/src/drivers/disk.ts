@@ -3,8 +3,8 @@ import zlib from 'node:zlib';
 import { promisify } from 'node:util';
 import cacache from 'cacache';
 import { debug } from '@ngcompass/common';
-import { getDirectoryStats } from '../utils/fs.js';
-import type { AsyncDriver, DiskDriverConfig } from './types.js';
+import { getDirectoryStats } from '../filesystem.js';
+import type { AsyncDriver, DiskDriverConfig } from '../models/index.js';
 
 const CACHE_GZIP_LEVEL = zlib.constants.Z_DEFAULT_COMPRESSION;
 
@@ -13,7 +13,7 @@ const gunzip = promisify(zlib.gunzip);
 
 const errorCode = (err: unknown): string | undefined => {
   if (err && typeof err === 'object' && 'code' in err) {
-    const code = (err as { code: unknown }).code;
+    const code = err.code;
     return typeof code === 'string' ? code : undefined;
   }
   return undefined;

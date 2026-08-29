@@ -1,13 +1,5 @@
 import { transform } from 'lightningcss';
-
-export interface CssParserResult {
-  code: Buffer | Uint8Array;
-  map?: Buffer | Uint8Array | void;
-}
-
-export type CssResult =
-  | { ok: true; code: Buffer | Uint8Array; map?: Buffer | Uint8Array | void }
-  | { ok: false; error: unknown };
+import type { CssParserResult, CssResult } from '../models/index.js';
 
 export const parseCss = (content: string, filePath: string): CssResult => {
   try {

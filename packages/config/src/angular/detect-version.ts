@@ -5,6 +5,7 @@ import {
   parseAngularVersion,
   type AngularVersionTuple,
 } from '@ngcompass/common';
+import type { AngularVersionDetection } from '../models/index.js';
 
 const NODE_MODULES_DIR = 'node_modules';
 const ANGULAR_CORE_PACKAGE = '@angular/core';
@@ -15,18 +16,6 @@ const DEPENDENCY_FIELDS = [
   'devDependencies',
   'peerDependencies',
 ] as const;
-
-export type AngularVersionSource =
-  | 'config'
-  | 'installed'
-  | 'declared'
-  | 'unknown';
-
-export interface AngularVersionDetection {
-  readonly version: string | null;
-  readonly source: AngularVersionSource;
-  readonly reason?: string;
-}
 
 export function detectAngularVersion(
   rootDir: string,

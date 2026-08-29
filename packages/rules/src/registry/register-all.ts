@@ -1,4 +1,4 @@
-import { registerNewEngineRule } from '../engine/adapter.js';
+import { registerNewEngineRule } from '../execution/adapter.js';
 
 import { signalNoSideEffectsInComputedRule } from '../rules/correctness/signal-no-side-effects-in-computed.rule.js';
 import { signalEffectDestroyScopedRule } from '../rules/correctness/signal-effect-must-be-destroy-scoped.rule.js';

@@ -57,6 +57,7 @@ Turborepo monorepo using pnpm workspaces. All packages are under `packages/`. Bu
 | `packages/ast`       | `@ngcompass/ast`       | Oxc TypeScript parser, Angular HTML parser, CSS parser, node stream types         |
 | `packages/cache`     | `@ngcompass/cache`     | Multi-layer cache (config, file, plan, result, analysis, AST, meta, source)       |
 | `packages/reporters` | `@ngcompass/reporters` | Console, JSON, SARIF, HTML reporters                                              |
+| `packages/baseline`  | `@ngcompass/baseline`  | Baseline file format, post-analysis suppression, scope-derived merge and prune    |
 | `packages/common`    | `@ngcompass/common`    | Shared domain types (`RuleContext`, `RuleResult`, `AnalysisResult`, `Task`, etc.) |
 
 `packages/site` is the documentation website and is not published to npm.
@@ -66,8 +67,10 @@ Turborepo monorepo using pnpm workspaces. All packages are under `packages/`. Bu
 The full lifecycle is documented in `docs/architecture.md`. The short version:
 
 ```
-CLI → resolveConfig → scan files → resolveRules → buildExecutionPlan → runAnalysis → reporters
+CLI → resolveConfig → scan files → resolveRules → buildExecutionPlan → runAnalysis → applyBaseline → reporters
 ```
+
+`applyBaseline` is a post-analysis filter on results. It runs after every cache write — the engine persists the full analysis by `globalHash`, and `saveToCacheStep` persists raw per-task results — so a baseline never enters a cache key and never reaches a cache. Filtered results are for reporting and exit-code decisions only; passing them to `saveToCacheStep` would bake the baseline into the result cache permanently.
 
 The planner is the performance center. It builds content-addressed `taskId`s from file hashes + rule options. On warm runs, the planner can short-circuit at three levels: full analysis cache hit (by `globalHash`), plan cache hit, or per-task result cache hit. Only tasks with no cached result reach the engine.
 
@@ -108,11 +111,65 @@ interface RuleHandler<TNode> {
 - Compiled with SWC (`unplugin-swc`) via tsup for packages, and via vitest for tests.
 - Each package has its own `tsconfig.json` extending the root.
 
+## Package Layout
+
+Every package is organized by capability. Its `src/index.ts` is the public interface, while implementation files live behind capability folders so files that change together remain together. `src/models/` is reserved for types shared across more than one capability.
+
+```
+packages/<name>/
+  LICENSE
+  package.json
+  tsconfig.json
+  tsup.config.ts
+  src/
+    index.ts
+    <capability>/
+      <implementation>.ts
+    models/
+      index.ts
+      <shared-domain-type>.ts
+  tests/
+    <capability>/
+      <implementation>.test.ts
+```
+
+`tests/` mirrors the capability folders under `src/`. See **Testing** for why tests import through relative `../../src/` paths.
+
+| Rule                                                                                                                                            | Rationale                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| **Create a capability folder when at least two related files share one responsibility.**                                                         | Avoids both a crowded package root and needless nesting around one-file modules.             |
+| **Name folders for behavior, such as `execution`, `loading`, or `resource-discovery`.**                                                          | Callers can locate work by what it does, not by an ambiguous technical role.                 |
+| **Do not create catch-all `utils`, `helpers`, `shared`, or `services` folders.**                                                                  | Those folders erase ownership and weaken locality.                                            |
+| **`src/index.ts` decides the public surface.** Export only names intended for consumers.**                                                       | The package interface remains small even as implementation depth grows.                      |
+| **Types shared by capabilities live in `src/models/`; capability-private types stay local.**                                                     | Shared domain types have one stable location without widening module-private interfaces.     |
+| **Group model files by domain concept, not by kind.** `models/task.ts`, never `models/interfaces.ts`.                                            | Kind-based files are a dumping ground; domain files tell you where a type belongs.           |
+| **`models/index.ts` re-exports every model file and declares nothing itself.**                                                                   | One import path per package; the barrel stays mechanical and merge-friendly.                 |
+| **Runtime values stay out of `models/`.** The one exception is a const-object enum and its derived type (`RuleCategory`), which move as a unit.  | Splitting the pair would leave the type unable to reference its own values.                  |
+| **A model file may import from another model file, never from a logic file.** The single exception is `import type` of a class whose instances appear in a model — `Locator` in `RuleContext`, `ParseError` in `AnalysisResult`. | `models/` is a leaf. A model reaching into logic means the type is in the wrong place.       |
+| **Module-private types stay in their capability file.**                                                                                         | Moving local types to `models/` widens the package surface without creating leverage.        |
+| **`src/index.ts` decides the public surface.** Star-export the barrel only when every model is already public; otherwise re-export the public model files by name (`@ngcompass/ast` hides `HostDirectiveMetadata` this way). | The barrel is the package's internal import path, not automatically its public API. |
+| **Exported-function style is per package, not repo-wide.** `common`, `ast`, `cache`, `scanner` and `planner` use `export const fn = () =>`; `baseline`, `config`, `engine`, `reporters`, `rules` and `cli` use `export function fn()`. Match the file's package. | Both forms are in use; consistency within a package is what makes a diff readable. |
+| **Relative imports carry the `.js` extension**, and type-only imports use `import type` / `export type`.                                         | `module: "Node16"` requires it, and the extension-less form fails at runtime, not at build.  |
+| **A type inferred from a zod schema moves only if that schema is already exported.** `ValidatedConfig` moves; `AnalyzerConfig` stays in `validation/schema.ts` because it infers from a module-private schema. | Widening a schema's visibility to satisfy a type move inverts the dependency.                |
+
+Moving a type is behaviour-preserving only if the public type surface is unchanged. The verification gate is the built declaration file:
+
+```bash
+pnpm build && cp packages/<name>/dist/index.d.ts /tmp/<name>-before.d.ts
+pnpm build && diff /tmp/<name>-before.d.ts packages/<name>/dist/index.d.ts
+```
+
+tsup emits declarations in module-graph order, so restructuring imports reorders the file even when nothing changed. A raw diff of ordering alone is acceptable **only** when the sorted set of top-level declarations and the trailing export list are byte-identical. Compare those two directly rather than eyeballing the raw diff.
+
+When even that compare is non-empty, the reordering has reached inside a declaration — a changed module graph can reorder union members (`'memory' | 'local'`) or object properties, which is textual noise but not a type change. Do not accept it on inspection. Escalate to a structural check: copy the reference declaration file alongside the new `dist/index.d.ts`, generate a file that asserts every exported name is mutually assignable between the two, and compile it under `tsc --strict`. Equivalence is proven when the name sets match exactly and the assignability check compiles clean; anything else is a real surface change.
+
 ## Testing
 
 Tests use Vitest with globals enabled (`describe`, `it`, `expect` without imports). Test files match `**/*.{test,spec}.ts`. Coverage thresholds are intentionally low during beta — do not lower them further.
 
-To test a rule, construct a minimal `RuleContext` stub and call the handler directly. The engine and planner have integration tests in their respective `src/` directories. Do not mock the cache or file system in integration tests — use real temp directories.
+To test a rule, construct a minimal `RuleContext` stub and call the handler directly. Do not mock the cache or file system in integration tests — use real temp directories.
+
+**Every package keeps its tests in `packages/<name>/tests/`, never in `src/`.** The `tests/` tree mirrors the capability folders it covers (`tests/matching/apply.test.ts` covers `src/matching/apply.ts`), and each package's `tsconfig.json` excludes `tests`. Tests import implementation through relative `../../src/` paths rather than the package name, because the package name resolves to `dist` and would test a stale build.
 
 ## Cache Invalidation
 
@@ -126,7 +183,7 @@ Never delete or rename a cached field without bumping the relevant version const
 
 ## Release Flow
 
-All 10 publishable packages must be released together. Versions are kept in sync manually across all `package.json` files. The `changeset publish` step reads the current version from each `package.json` and publishes.
+All 11 publishable packages must be released together. Versions are kept in sync manually across all `package.json` files. The `changeset publish` step reads the current version from each `package.json` and publishes.
 
 ```bash
 # Standard beta publish (builds, validates, publishes to beta tag, promotes latest)
@@ -146,7 +203,7 @@ npm view ngcompass dist-tags
 - Progress and debug output goes to `stderr`. Machine-readable output (JSON, SARIF) goes to `stdout`.
 - All inter-package imports use workspace package names (`@ngcompass/common`), never relative paths across package boundaries.
 - The `site` package is excluded from the build pipeline and publish step.
-- `packages/cli/src/commands/analyze.ts` is the canonical reference for the full analysis lifecycle.
+- `packages/cli/src/commands/analyze/index.ts` is the canonical reference for the full analysis lifecycle.
 
 ---
 
@@ -234,7 +291,7 @@ The package layout is the architecture. Layers may only depend inward, never out
 ```
 CLI (orchestration)
   ↓
-config / scanner / planner / engine / reporters
+config / scanner / planner / engine / reporters / baseline
   ↓
 rules / cache / ast
   ↓
@@ -247,6 +304,8 @@ common (pure types, no logic)
 | `@ngcompass/engine` importing concrete rules                               | Rules are plugins; engine must not know what they are         |
 | `@ngcompass/rules` importing from `@ngcompass/planner` or `@ngcompass/cli` | Rules are domain; planner is workflow                         |
 | Reporters reading the filesystem directly                                  | Reporters receive `AnalysisResult` — they don't go fetch data |
+| `@ngcompass/baseline` importing anything but `@ngcompass/common`           | Baseline filters results; it must not know about plans, tasks, or execution |
+| Passing baseline-filtered results to any cache write                       | The result cache would permanently absorb the baseline — filtered results are for reporting and exit codes only |
 | Anything outside CLI calling `process.exit`                                | Only the CLI decides exit codes                               |
 
 ## No Comments In Code
@@ -273,7 +332,7 @@ common (pure types, no logic)
 - **No circular package dependencies.** Run `pnpm turbo build --dry` if you suspect one — it will fail loudly.
 - **Workspace deps use `workspace:*`** in package.json. Never pin a sibling package to a specific version — that breaks monorepo versioning.
 - **Add a sibling package to `dependencies`, `peerDependencies`, or `devDependencies`** the moment you import from it. The `validate:packages` script will catch missing entries.
-- **Version bumps are atomic across all 10 packages.** Use `changeset version` or manual `pnpm` find-and-replace — never leave them out of sync.
+- **Version bumps are atomic across all 11 packages.** Use `changeset version` or manual `pnpm` find-and-replace — never leave them out of sync.
 - **One concern per package.** If a new feature spans 3 packages, ask whether one of them is the wrong place.
 
 ## Testing

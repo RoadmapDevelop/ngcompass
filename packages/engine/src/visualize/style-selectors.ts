@@ -1,11 +1,5 @@
 import { Locator } from '@ngcompass/common';
-
-export interface StyleSelector {
-  readonly name: string;
-  readonly line: number;
-  readonly column: number;
-}
-
+import type { StyleSelector } from '../models/index.js';
 const BLOCK_COMMENT_RE = /\/\*[\s\S]*?\*\//g;
 const LINE_COMMENT_RE = /(^|[^:])\/\/[^\n]*/g;
 const RULE_PRELUDE_RE = /([^{}();@]+)\{/g;

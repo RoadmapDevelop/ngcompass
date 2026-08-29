@@ -8,11 +8,11 @@ export class SerializationError extends Error {
   }
 }
 
-export function stableSerialize(
+export const stableSerialize = (
   value: unknown,
   _path: string[] = [],
   _seen: WeakSet<object> = new WeakSet()
-): string {
+): string => {
   if (value === null) return 'null';
 
   if (value === undefined) {
@@ -89,4 +89,4 @@ export function stableSerialize(
   }
 
   return JSON.stringify(value);
-}
+};

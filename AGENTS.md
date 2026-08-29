@@ -40,6 +40,10 @@ Turborepo + pnpm workspaces. All packages live in `packages/`. Root `package.jso
 
 `packages/site` is docs only — excluded from build and publish.
 
+## Internal Package Structure
+
+Each package exposes its public interface through `src/index.ts` and organizes implementation by capability. Use behavior-oriented folders such as `execution`, `loading`, `resource-discovery`, and `formatting`; avoid catch-all `utils`, `helpers`, `shared`, and `services` folders for new code. Keep capability-private types beside their implementation and place only cross-capability domain types in `src/models/`. Tests belong in `tests/`, mirroring the capability they exercise.
+
 ## Architecture in One Paragraph
 
 The CLI orchestrates a strict pipeline: load config → discover files → resolve rules → build execution plan → run analysis → emit reports. The **planner** converts files + rules into content-addressed tasks (`taskId` = hash of file content + rule options). Warm runs skip tasks whose `taskId` already exists in the result cache — sometimes the entire analysis is skipped via a full-analysis cache hit. The **engine** splits tasks into syntax-only (worker pool, parallel) and type-aware (main thread, chunked TypeScript Programs). Rules are passive stream observers registered in `RuleRegistry`; they never do their own AST traversal.

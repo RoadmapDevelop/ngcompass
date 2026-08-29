@@ -2,20 +2,20 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { Err, Locator, Ok, debug, type Result } from '@ngcompass/common';
 import { analyzeTemplate, parseHtml, parseTs } from '@ngcompass/ast';
+import { analyzeFileUnitGraph } from './file-unit-analyzer.js';
 import {
-  type SpecInput,
-  type StyleInput,
-  type TemplateInput,
-  analyzeFileUnitGraph,
-} from './file-unit-analyzer.js';
-import {
-  type DiscoveredFile,
   discoverSpec,
   discoverStyles,
   discoverTemplate,
   resolveEntryFile,
 } from './unit-discovery.js';
 import type { FileUnitGraph, VisualizeError } from './unit-graph.js';
+import type {
+  DiscoveredFile,
+  SpecInput,
+  StyleInput,
+  TemplateInput,
+} from '../models/index.js';
 
 function toLabel(filePath: string | null, fallback: string): string {
   if (!filePath) return fallback;

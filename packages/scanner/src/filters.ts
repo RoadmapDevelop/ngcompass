@@ -1,15 +1,14 @@
 import path from 'node:path';
 import { minimatch } from 'minimatch';
-import { loadAllGitignoreFilters } from './gitignore.js';
-import {
-  Err,
-  Ok,
-  type FilteredFileList,
-  type GitignoreFilter,
-  type NormalizedOptions,
-  type RawFileList,
-  type Result,
-} from './types.js';
+import { Err, Ok, type Result } from '@ngcompass/common';
+import { describeError } from './discovery/error-message.js';
+import { loadAllGitignoreFilters } from './discovery/gitignore.js';
+import type {
+  FilteredFileList,
+  GitignoreFilter,
+  NormalizedOptions,
+  RawFileList,
+} from './models/index.js';
 
 export const deduplicateFiles = (
   files: ReadonlyArray<string>
@@ -42,7 +41,7 @@ export const applyFilters = async (
 
     return Ok({ files, filtered: startCount - files.length });
   } catch (error) {
-    return Err(new Error(`Filtering failed: ${(error as Error).message}`));
+    return Err(new Error(`Filtering failed: ${describeError(error)}`));
   }
 };
 

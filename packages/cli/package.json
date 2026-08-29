@@ -1,6 +1,6 @@
 {
   "name": "ngcompass",
-  "version": "0.2.4-beta",
+  "version": "0.2.6-beta",
   "description": "Command line interface for ngcompass",
   "sideEffects": false,
   "bin": {
@@ -44,6 +44,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@ngcompass/baseline": "workspace:*",
     "@ngcompass/common": "workspace:*",
     "@ngcompass/reporters": "workspace:*",
     "@ngcompass/rules": "workspace:*",

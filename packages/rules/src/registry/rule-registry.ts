@@ -1,4 +1,5 @@
-import type { PluginManifest, RuleListEntry } from '@ngcompass/common';
+import type { RuleListEntry } from '@ngcompass/common';
+import type { RegisterOptions, RulePlugin } from '../models/index.js';
 import type { RuleHandler } from '@ngcompass/engine';
 import { RuleMetadata, RuleRegistryEntry } from '@ngcompass/common';
 import { RECOMMENDATIONS } from '../recommendations.js';
@@ -6,20 +7,6 @@ import { getPresetsForRule } from '../presets/index.js';
 import { allPreset } from '../presets/all.js';
 
 const DEFAULT_RULE_CONFIG = { severity: 'warn' as const, options: {} };
-
-export interface RulePlugin {
-  readonly name: string;
-
-  readonly handler: RuleHandler<unknown>;
-
-  readonly meta?: Partial<RuleMetadata>;
-
-  readonly manifest?: PluginManifest;
-}
-
-export interface RegisterOptions {
-  allowOverride?: boolean;
-}
 
 export class RuleRegistry {
   private readonly _handlers = new Map<string, RuleHandler<unknown>>();
@@ -94,35 +81,35 @@ export class RuleRegistry {
 
 let _globalRegistry: RuleRegistry | null = null;
 
-export const getGlobalRegistry = (): RuleRegistry => {
+export function getGlobalRegistry(): RuleRegistry {
   if (!_globalRegistry) {
     _globalRegistry = new RuleRegistry();
   }
   return _globalRegistry;
-};
+}
 
-export const resetGlobalRegistry = (): void => {
+export function resetGlobalRegistry(): void {
   _globalRegistry = null;
-};
+}
 
-export const isKnownRule = (name: string): boolean => {
+export function isKnownRule(name: string): boolean {
   return getGlobalRegistry().has(name);
-};
+}
 
-export const getRuleMetadata = (name: string): RuleMetadata | undefined => {
+export function getRuleMetadata(name: string): RuleMetadata | undefined {
   return getGlobalRegistry().getMetadata(name);
-};
+}
 
-export const getAllRuleNames = (): ReadonlyArray<string> => {
+export function getAllRuleNames(): ReadonlyArray<string> {
   return getGlobalRegistry().getRuleNames();
-};
+}
 
-export const getRuleRegistryMap = (): ReadonlyMap<
+export function getRuleRegistryMap(): ReadonlyMap<
   string,
   RuleRegistryEntry
-> => {
+> {
   return getGlobalRegistry().toReadonlyMap();
-};
+}
 
 export function getRuleListEntries(): RuleListEntry[] {
   const registry = getGlobalRegistry();

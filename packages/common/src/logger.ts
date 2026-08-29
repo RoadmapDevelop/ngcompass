@@ -1,25 +1,5 @@
 import pc from 'picocolors';
-
-export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
-
-export type Namespace =
-  | 'discovery'
-  | 'loader'
-  | 'validator'
-  | 'cache'
-  | 'scanner'
-  | 'parser'
-  | 'rules'
-  | 'workers'
-  | 'reporter'
-  | 'init'
-  | 'config'
-  | 'planner'
-  | 'incremental'
-  | 'dry-run'
-  | 'engine'
-  | 'plugin-loader'
-  | 'env-fingerprint';
+import type { LiveRedraw, LogLevel, Namespace } from './models/log.js';
 
 interface LoggerConfig {
   enabled: boolean;
@@ -51,6 +31,9 @@ const KNOWN_NAMESPACES: ReadonlySet<string> = new Set<string>([
 
 const KNOWN_NAMESPACE_LIST = [...KNOWN_NAMESPACES].join(', ');
 
+const isKnownNamespace = (value: string): value is Namespace =>
+  KNOWN_NAMESPACES.has(value);
+
 const COLORS = [
   pc.cyan,
   pc.green,
@@ -70,11 +53,6 @@ function getNamespaceColor(namespace: string) {
     hash = namespace.charCodeAt(i) + ((hash << 5) - hash);
   }
   return COLORS[Math.abs(hash) % COLORS.length];
-}
-
-export interface LiveRedraw {
-  clear(): void;
-  redraw(): void;
 }
 
 let liveRedraw: LiveRedraw | undefined;
@@ -208,8 +186,8 @@ class Logger {
 
       const ns = part.slice('ngcompass:'.length);
 
-      if (KNOWN_NAMESPACES.has(ns)) {
-        namespaces.add(ns as Namespace);
+      if (isKnownNamespace(ns)) {
+        namespaces.add(ns);
       } else if (ns.length > 0) {
         console.warn(
           `[ngcompass] Unknown debug namespace: "${ns}". ` +
